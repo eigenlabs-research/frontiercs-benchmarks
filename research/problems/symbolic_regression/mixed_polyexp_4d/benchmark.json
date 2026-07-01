@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "name": "frontiercs-research-symbolic_regression-mixed_polyexp_4d",
+  "description": "FrontierCS research problem symbolic_regression/mixed_polyexp_4d.",
+  "category": "research",
+  "direction": "+",
+  "editablePaths": [
+    "solution.py"
+  ],
+  "setupCommand": [
+    "bash",
+    "-lc",
+    ".yukon/setup.sh"
+  ],
+  "benchmarkCommand": [
+    "bash",
+    "-lc",
+    ".yukon/run.sh"
+  ],
+  "scorePath": ".yukon/score.json"
+}

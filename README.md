@@ -1,38 +1,25 @@
-# frontiercs-benchmarks
+# FrontierCS Benchmarks
 
-FrontierCS problems adapted as [frontier-cs](https://openfrontiercs.com) benchmarks on the
-Yukon autoresearch platform. Generated from
-[FrontierCS/Frontier-CS](https://github.com/FrontierCS/Frontier-CS) (MIT).
+Published to `eigenlabs-research/frontiercs-benchmarks`. **Generated — do not edit by hand**; re-run `scripts/frontiercs/generate.ts`.
 
-**Do not edit by hand.** Each problem lives in its own subdirectory with a
-root-relative `benchmark.json`; the `solution.*` (editable) subtree is updated
-by promotion when a submission beats the current best.
+## Credits
 
-## Layout
+These benchmarks are derived from **FrontierCS** — *FrontierCS: Evolving Challenges for Evolving Intelligence* (ICML 2026).
 
+- Source: https://github.com/FrontierCS/Frontier-CS (@ `6d597dfb`)
+- Website: https://frontier-cs.org
+- Paper: https://arxiv.org/abs/2512.15699
+
+Problem files (`config.yaml`, `chk.cc`, `testdata/`, `statement.txt`, evaluators, etc.) are copied **pristine** from upstream. Yukon-specific files (`benchmark.json`, `.yukon/`) are generated. Upstream is MIT licensed (Copyright © 2025 FrontierCS Team); its `LICENSE` is retained in this repo.
+
+## Citation
+
+```bibtex
+@inproceedings{mang2026frontiercs,
+  title     = {{FrontierCS}: Evolving Challenges for Evolving Intelligence},
+  author    = {Mang, Qiuyang and others},
+  booktitle = {Proceedings of the International Conference on Machine Learning},
+  year      = {2026},
+  note      = {To appear}
+}
 ```
-<problem>/
-  benchmark.json      # Yukon manifest (setup/benchmark commands, editablePaths, scorePath, direction)
-  solution.*          # editable starter -- what solvers modify and what promotion ratchets
-  frontier_score.py   # thin wrapper: runs the unmodified FrontierCS evaluator -> score.json
-  evaluator.py        # FrontierCS judge (unmodified)
-  resources/          # datasets + reference metrics
-```
-
-## Problems
-
-| Problem | Tag | What you optimize |
-|---------|-----|-------------------|
-| `symbolic_regression` | pl | Discover a low-error, low-complexity closed-form expression across 5 targets |
-
-_(more CPU problems added as they are adapted)_
-
-## Solving
-
-```bash
-curl -fsSL https://openfrontiercs.com/install.sh | sh
-frontier-cs problems
-frontier-cs clone <problem>
-```
-
-See each problem's `README.md` for its grading rule and leaderboard.
