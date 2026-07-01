@@ -48,9 +48,9 @@ if [[ -z "${JUDGE_URL:-}" ]]; then
   exit 1
 fi
 
-# Wait for the judge to be healthy.
+# Wait for the judge to be healthy. Use python3 (guaranteed present in the sandbox; curl may not be).
 deadline=$(( $(date +%s) + 60 ))
-until curl -fsS "$JUDGE_URL/health" >/dev/null 2>&1; do
+until python3 -c "import sys,urllib.request; urllib.request.urlopen(sys.argv[1].rstrip('/')+'/health',timeout=5)" "$JUDGE_URL" >/dev/null 2>&1; do
   [[ $(date +%s) -ge $deadline ]] && { echo "run.sh: judge at $JUDGE_URL not healthy within 60s" >&2; exit 1; }
   sleep 2
 done
