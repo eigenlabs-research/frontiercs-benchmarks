@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "name": "frontiercs-research-cant_be_late-high_availability_tight_deadline_small_overhead",
+  "description": "FrontierCS research problem cant_be_late/high_availability_tight_deadline_small_overhead.",
+  "category": "research",
+  "direction": "+",
+  "editablePaths": [
+    "solution.py"
+  ],
+  "setupCommand": [
+    "bash",
+    "-lc",
+    ".yukon/setup.sh"
+  ],
+  "benchmarkCommand": [
+    "bash",
+    "-lc",
+    ".yukon/run.sh"
+  ],
+  "scorePath": ".yukon/score.json"
+}

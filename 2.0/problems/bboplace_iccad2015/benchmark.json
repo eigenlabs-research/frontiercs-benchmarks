@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "name": "frontiercs-2.0-bboplace_iccad2015",
+  "description": "FrontierCS 2.0 problem bboplace_iccad2015.",
+  "category": "2.0",
+  "direction": "+",
+  "editablePaths": [
+    "solution.py"
+  ],
+  "setupCommand": [
+    "bash",
+    "-lc",
+    ".yukon/setup.sh"
+  ],
+  "benchmarkCommand": [
+    "bash",
+    "-lc",
+    ".yukon/run.sh"
+  ],
+  "scorePath": ".yukon/score.json"
+}
