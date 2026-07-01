@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "name": "frontiercs-research-symbolic_regression-sincos",
+  "description": "FrontierCS research problem symbolic_regression/sincos.",
+  "category": "research",
+  "direction": "+",
+  "editablePaths": [
+    "solution.py"
+  ],
+  "setupCommand": [
+    "bash",
+    "-lc",
+    ".yukon/setup.sh"
+  ],
+  "benchmarkCommand": [
+    "bash",
+    "-lc",
+    ".yukon/run.sh"
+  ],
+  "scorePath": ".yukon/score.json"
+}
