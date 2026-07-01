@@ -2,14 +2,19 @@
   "schemaVersion": 1,
   "name": "frontier-cs/symbolic_regression",
   "description": "Symbolic regression: discover a closed-form expression f(x1..xn) that fits each target function with low error and low complexity. Scored across 5 target families (mccormick, mixed_polyexp_4d, peaks, ripple, sincos); the reported score is the mean of the per-target scores, each 100*clamp((m_base-MSE)/(m_base-m_ref),0,1) with a 0.99^max(complexity-C_ref,0) simplicity penalty. Edit solution.py: a Solution class whose solve(X, y) returns {expression, details}.",
-  "category": "frontier-cs",
+  "category": "frontiercs",
   "direction": "+",
-  "editablePaths": ["solution.py"],
+  "editablePaths": [
+    "solution.py"
+  ],
   "setupCommand": [
     "bash",
     "-lc",
     "set -e; command -v pip3 >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq python3-pip); python3 -m pip install --quiet --break-system-packages 'numpy>=1.24' 'pandas>=2.0' 'sympy>=1.12'"
   ],
-  "benchmarkCommand": ["python3", "frontier_score.py"],
+  "benchmarkCommand": [
+    "python3",
+    "frontier_score.py"
+  ],
   "scorePath": "score.json"
 }
