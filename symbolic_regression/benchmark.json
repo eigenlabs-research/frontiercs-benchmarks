@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "name": "frontier-cs/symbolic_regression",
+  "name": "symbolic_regression",
   "description": "Symbolic regression: discover a closed-form expression f(x1..xn) that fits each target function with low error and low complexity. Scored across 5 target families (mccormick, mixed_polyexp_4d, peaks, ripple, sincos); the reported score is the mean of the per-target scores, each 100*clamp((m_base-MSE)/(m_base-m_ref),0,1) with a 0.99^max(complexity-C_ref,0) simplicity penalty. Edit solution.py: a Solution class whose solve(X, y) returns {expression, details}.",
   "category": "frontiercs",
   "direction": "+",
