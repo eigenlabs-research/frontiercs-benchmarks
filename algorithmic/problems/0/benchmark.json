@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "name": "frontiercs-algorithmic-0",
-  "description": "FrontierCS algorithmic problem 0.",
+  "name": "frontiercs-algorithmic-pack-the-polyominoes",
+  "description": "FrontierCS algorithmic problem pack-the-polyominoes (upstream id 0).",
   "category": "algorithmic",
   "direction": "+",
   "editablePaths": [
