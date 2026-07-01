@@ -1,0 +1,10 @@
+# Yukon score artifacts (regenerated every run)
+score.json
+result.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.venv_*/
+*.egg-info/
