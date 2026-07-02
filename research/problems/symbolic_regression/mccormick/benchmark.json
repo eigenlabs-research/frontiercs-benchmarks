@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "name": "frontiercs-research-symbolic_regression-mccormick",
-  "description": "FrontierCS research problem symbolic_regression/mccormick.",
+  "name": "Symbolic Regression: McCormick",
+  "description": "Learn a closed-form symbolic expression predicting y over the McCormick function surface — a smooth non-convex landscape combining a sine term with a quadratic bowl. Scored on predictive accuracy against reference metrics.",
   "category": "research",
   "direction": "+",
   "editablePaths": [
