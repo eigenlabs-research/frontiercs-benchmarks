@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "name": "frontiercs-algorithmic-0",
-  "description": "FrontierCS algorithmic problem 0.",
+  "name": "Pack the Polyominoes (Reflections Allowed)",
+  "description": "Pack a set of 100–10,000 polyominoes (each 1–10 cells) into an axis-aligned rectangle using rotations, reflections, and translations with no overlaps, minimizing the rectangle area A = W × H. Scored 0–1 by area ratio against the reference packing across 140 hidden cases. Time limit 2s, memory 256 MB.",
   "category": "algorithmic",
   "direction": "+",
   "editablePaths": [

@@ -14,7 +14,7 @@ set -euo pipefail
 LEAF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOLUTION="$LEAF_DIR/solution.cpp"
 SCORE_OUT="$LEAF_DIR/.yukon/score.json"
-PROBLEM_ID="${PROBLEM_ID:-0}"          # rendered per leaf by the generator
+PROBLEM_ID="${PROBLEM_ID:-192}"          # rendered per leaf by the generator
 MAX_POLL_TIME="${MAX_POLL_TIME:-600}"
 
 [[ -s "$SOLUTION" ]] || { echo "run.sh: missing or empty $SOLUTION" >&2; exit 1; }

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "name": "frontiercs-research-symbolic_regression-peaks",
-  "description": "FrontierCS research problem symbolic_regression/peaks.",
+  "name": "Symbolic Regression: Peaks",
+  "description": "Learn a closed-form symbolic expression f(x1, x2) predicting y for a peaks-like function — exponential terms creating localized peaks and valleys across a 2D input space, with interacting polynomial and exponential components. Scored on predictive accuracy against reference metrics.",
   "category": "research",
   "direction": "+",
   "editablePaths": [
