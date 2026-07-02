@@ -73,12 +73,21 @@ def get_result(sid):
         return json.loads(r.read())
 
 try:
+    print(f"run.sh: submitting solution ({len(code)} bytes) to {judge} for problem {pid}", file=sys.stderr)
     sid = post_submit()
+    print(f"run.sh: submission id={sid}; polling /result (timeout {timeout}s)", file=sys.stderr)
     deadline = time.time() + timeout
     result = None
+    last_status = None
+    polls = 0
     while time.time() < deadline:
         result = get_result(sid)
-        if result.get("status") in ("done", "finished", "error", "completed"):
+        polls += 1
+        st = result.get("status")
+        if st != last_status:
+            print(f"run.sh: [poll {polls}] status={st}", file=sys.stderr)
+            last_status = st
+        if st in ("done", "finished", "error", "completed"):
             break
         time.sleep(3)
     if result is None:
@@ -87,6 +96,13 @@ try:
     if raw is None:
         raise KeyError('judge result missing "score"')
     score = float(raw) / 100.0   # FrontierCS scores 0..100 -> [0,1]
+    # CI-style per-case breakdown from the judge result, so the run log shows every test case.
+    cases = result.get("cases") or (result.get("metrics") or {}).get("cases") or []
+    print(f"run.sh: ===== judge result: {raw}/100 -> {score:.4f} over {len(cases)} case(s) =====", file=sys.stderr)
+    for i, c in enumerate(cases):
+        ok = "ok" if c.get("ok") else "FAIL"
+        msg = str(c.get("msg", "")).strip().replace("\n", " ")[:80]
+        print(f"run.sh:   case {i:>3} [{ok}] time={c.get('time','?')} mem={c.get('memory','?')} | {msg}", file=sys.stderr)
     json.dump({"score": score, "metrics": result}, open(out, "w"))
 except Exception as e:  # noqa: BLE001 — fail closed with context, never a silent 0
     print(f"run.sh: judge scoring failed: {e}", file=sys.stderr)
