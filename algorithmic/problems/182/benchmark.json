@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "name": "Vertex Cover Challenge",
+  "description": "Given an undirected graph, select a minimum-size subset of vertices covering every edge. Scored 0–1 against the reference cover size across 10 hidden cases. Time limit 2s, memory 512 MB.",
+  "category": "algorithmic",
+  "direction": "+",
+  "editablePaths": [
+    "solution.cpp"
+  ],
+  "setupCommand": [
+    "bash",
+    "-lc",
+    ".yukon/setup.sh"
+  ],
+  "benchmarkCommand": [
+    "bash",
+    "-lc",
+    ".yukon/run.sh"
+  ],
+  "scorePath": ".yukon/score.json"
+}
