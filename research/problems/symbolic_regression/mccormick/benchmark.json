@@ -17,5 +17,8 @@
     "-lc",
     ".yukon/run.sh"
   ],
-  "scorePath": ".yukon/score.json"
+  "scorePath": ".yukon/score.json",
+  "runner": {
+    "provider": "frontiercs"
+  }
 }
