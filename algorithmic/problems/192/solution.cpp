@@ -1,7 +1,9 @@
-#include <cstdio>
-#include <vector>
-#include <random>
 #include <chrono>
+#include <climits>
+#include <cstdio>
+#include <random>
+#include <utility>
+#include <vector>
 using namespace std;
 
 // Max-Cut heuristic: greedy construction + iterated tabu search under a ~0.94s budget.
@@ -42,7 +44,7 @@ int main(){
 
     auto t0 = chrono::steady_clock::now();
     auto elapsed = [&]{ return chrono::duration<double>(chrono::steady_clock::now() - t0).count(); };
-    const double BUDGET = 0.90;
+    const double BUDGET = 0.96;
 
     mt19937 rng(0x9E3779B9u);
 
