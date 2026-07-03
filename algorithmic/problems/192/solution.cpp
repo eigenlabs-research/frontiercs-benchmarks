@@ -4,78 +4,156 @@
 #include <chrono>
 using namespace std;
 
-// Max-Cut: multi-restart randomized local search under a ~0.9s budget.
-// Each restart: random partition, then first-improvement flip sweeps until a
-// local optimum; plateau kicks (random flips) escape zero-gain traps.
+// Max-Cut heuristic: greedy construction + iterated tabu search under a ~0.94s budget.
+//
+// State maintained incrementally:
+//   side[v]      : 0/1 partition
+//   crossCnt[v]  : # of v's neighbors on the OTHER side
+//   gain[v]      : change in cut if v is flipped = deg[v] - 2*crossCnt[v]
+// Flipping v: cut += gain[v]; gain[v] negates; each neighbor w has crossCnt[w] shift by +-1
+// and gain[w] shift by -+2.
+//
+// Tabu search: repeatedly flip the highest-gain vertex that is not tabu (aspiration:
+// allow a tabu move if it beats the global best). Recently flipped vertices are locked
+// for a randomized tenure. On stagnation, restart from a fresh greedy/random solution.
 int main(){
     int n, m;
     if (scanf("%d %d", &n, &m) != 2) return 0;
-    vector<vector<int>> adj(n + 1);
+
+    // CSR adjacency for cache-friendly neighbor scans.
+    vector<int> deg(n, 0);
     vector<pair<int,int>> edges(m);
     for (int i = 0; i < m; i++){
         int u, v; scanf("%d %d", &u, &v);
-        adj[u].push_back(v); adj[v].push_back(u);
+        --u; --v;
         edges[i] = {u, v};
+        deg[u]++; deg[v]++;
+    }
+    vector<int> adjStart(n + 1, 0);
+    for (int v = 0; v < n; v++) adjStart[v + 1] = adjStart[v] + deg[v];
+    vector<int> adj(2 * m);
+    {
+        vector<int> pos(adjStart.begin(), adjStart.end());
+        for (auto& e : edges){
+            adj[pos[e.first]++]  = e.second;
+            adj[pos[e.second]++] = e.first;
+        }
     }
 
     auto t0 = chrono::steady_clock::now();
     auto elapsed = [&]{ return chrono::duration<double>(chrono::steady_clock::now() - t0).count(); };
     const double BUDGET = 0.90;
 
-    mt19937 rng(12345);
-    vector<int> side(n + 1), best(n + 1, 0);
-    int bestCut = -1;
+    mt19937 rng(0x9E3779B9u);
 
-    auto cutOf = [&](const vector<int>& s){
-        int c = 0;
-        for (auto& e : edges) c += s[e.first] != s[e.second];
-        return c;
+    vector<int> side(n, 0), best(n, 0);
+    vector<int> crossCnt(n, 0), gain(n, 0);
+    vector<int> tabuUntil(n, 0);
+    long long bestCut = -1;
+
+    // Recompute crossCnt/gain from scratch for the current `side`; returns the cut value.
+    auto rebuild = [&]() -> long long {
+        long long cut = 0;
+        for (int v = 0; v < n; v++){
+            int c = 0;
+            for (int i = adjStart[v]; i < adjStart[v + 1]; i++)
+                c += side[adj[i]] != side[v];
+            crossCnt[v] = c;
+            gain[v] = deg[v] - 2 * c;
+            cut += c;
+        }
+        return cut / 2; // each cut edge counted from both endpoints
     };
 
-    // cross[v] = # neighbors on the other side; flipping v changes cut by cross_after - cross_before
-    vector<int> crossCnt(n + 1);
+    // Greedy construction: place vertices in random order, each on the side that
+    // maximizes crossing edges to already-placed neighbors.
+    auto greedyInit = [&](){
+        vector<int> order(n);
+        for (int v = 0; v < n; v++) order[v] = v;
+        for (int v = n - 1; v > 0; v--) swap(order[v], order[rng() % (v + 1)]);
+        vector<char> placed(n, 0);
+        // net[v] = (#placed neighbors on side1) - (#placed neighbors on side0)
+        vector<int> net(n, 0);
+        for (int v = 0; v < n; v++) side[v] = 0;
+        for (int idx = 0; idx < n; idx++){
+            int v = order[idx];
+            // put v opposite to the majority of its placed neighbors
+            int s = (net[v] > 0) ? 0 : (net[v] < 0 ? 1 : (int)(rng() & 1));
+            side[v] = s;
+            placed[v] = 1;
+            for (int i = adjStart[v]; i < adjStart[v + 1]; i++){
+                int w = adj[i];
+                if (!placed[w]) net[w] += (s == 1 ? 1 : -1);
+            }
+        }
+    };
+
+    auto flip = [&](int v, long long& cut){
+        cut += gain[v];
+        int sv = side[v] ^= 1;
+        gain[v] = -gain[v];
+        for (int i = adjStart[v]; i < adjStart[v + 1]; i++){
+            int w = adj[i];
+            if (side[w] != sv){       // now crossing (was not) -> crossCnt[w]++
+                crossCnt[w]++;
+                gain[w] -= 2;
+            } else {                  // now same side -> crossCnt[w]--
+                crossCnt[w]--;
+                gain[w] += 2;
+            }
+        }
+    };
+
+    vector<int> ties;
+    ties.reserve(64);
+    int checkMask = 1023; // check the clock every ~1024 iterations
+
     while (elapsed() < BUDGET){
-        for (int v = 1; v <= n; v++) side[v] = rng() & 1;
-        for (int v = 1; v <= n; v++){
-            int c = 0;
-            for (int w : adj[v]) c += side[w] != side[v];
-            crossCnt[v] = c;
-        }
-        int kicks = 3;
-        while (elapsed() < BUDGET){
-            bool improved = false;
-            for (int v = 1; v <= n; v++){
-                int deg = (int)adj[v].size();
-                // gain of flipping v = (deg - cross) - cross
-                if (deg - 2 * crossCnt[v] > 0){
-                    side[v] ^= 1;
-                    crossCnt[v] = deg - crossCnt[v];
-                    for (int w : adj[v]){
-                        if (side[w] != side[v]) crossCnt[w]++;
-                        else                    crossCnt[w]--;
-                    }
-                    improved = true;
+        // --- fresh start ---
+        if (bestCut < 0 || (rng() & 3) != 0) greedyInit();
+        else { for (int v = 0; v < n; v++) side[v] = rng() & 1; }
+
+        long long cut = rebuild();
+        for (int v = 0; v < n; v++) tabuUntil[v] = 0;
+        if (cut > bestCut){ bestCut = cut; best = side; }
+
+        long long localBest = cut;
+        int iter = 0;
+        int sinceImprove = 0;
+        int stagnationLimit = 2 * n + 500;
+
+        while (true){
+            if ((iter & checkMask) == 0 && elapsed() >= BUDGET) break;
+            iter++;
+
+            // pick best-gain vertex that is allowed (not tabu, or aspiration beats global best)
+            int bestGain = INT32_MIN;
+            ties.clear();
+            for (int v = 0; v < n; v++){
+                bool allowed = tabuUntil[v] <= iter || (cut + gain[v] > bestCut);
+                if (!allowed) continue;
+                if (gain[v] > bestGain){
+                    bestGain = gain[v];
+                    ties.clear();
+                    ties.push_back(v);
+                } else if (gain[v] == bestGain){
+                    ties.push_back(v);
                 }
             }
-            if (!improved){
-                if (kicks-- <= 0) break;
-                // plateau kick: flip a few random vertices, then keep searching
-                for (int k = 0; k < 1 + n / 50; k++){
-                    int v = 1 + (int)(rng() % n);
-                    side[v] ^= 1;
-                    crossCnt[v] = (int)adj[v].size() - crossCnt[v];
-                    for (int w : adj[v]){
-                        if (side[w] != side[v]) crossCnt[w]++;
-                        else                    crossCnt[w]--;
-                    }
-                }
-            }
+            if (ties.empty()) break; // everything tabu (n==0 edge case)
+
+            int v = ties[rng() % ties.size()];
+            flip(v, cut);
+            // randomized tabu tenure
+            tabuUntil[v] = iter + 1 + (int)(rng() % 15);
+
+            if (cut > bestCut){ bestCut = cut; best = side; }
+            if (cut > localBest){ localBest = cut; sinceImprove = 0; }
+            else if (++sinceImprove >= stagnationLimit) break;
         }
-        int c = cutOf(side);
-        if (c > bestCut){ bestCut = c; best = side; }
     }
 
-    if (bestCut < 0) best.assign(n + 1, 0);
-    for (int v = 1; v <= n; v++) printf("%d%c", best[v], v == n ? '\n' : ' ');
+    if (bestCut < 0){ best.assign(n, 0); }
+    for (int v = 0; v < n; v++) printf("%d%c", best[v], v == n - 1 ? '\n' : ' ');
     return 0;
 }
