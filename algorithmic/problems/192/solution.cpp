@@ -112,9 +112,9 @@ int main() {
     while (elapsed() < BUDGET) {
         if (bestCut < 0) greedyInit();
         else {
-            int r = restart % 6;
-            if (r == 0 || r == 1) greedyInit();
-            else if (r == 2 || r == 3) randomInit();
+            int r = restart % 3;
+            if (r == 0) greedyInit();
+            else if (r == 1) randomInit();
             else perturbBestInit();
         }
         restart++;
