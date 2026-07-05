@@ -559,6 +559,205 @@ static R pack_blf3(int W, const vector<int>& order, int window, double deadlineM
     return res;
 }
 
+// ---------- capped feasibility packer: all pieces must fit with y+h <= Hcap ----------
+static vector<short> g_own;
+static vector<int> g_plSlot;
+static R pack_capped(int W, int Hcap, const vector<int>& order, int window, double deadlineMs, RNG& rng) {
+    if (W > 64 || W <= 0 || Hcap <= 0) return R{};
+    int nm = (int)order.size();
+    auto& grid = g_grid;
+    int gridH = Hcap + 12;
+    grid.assign(gridH, 0ULL);
+    const uint64_t FULLROW = (W == 64) ? ~0ULL : ((1ULL << W) - 1);
+    int y0full = 0, topY = 0;
+    vector<int> o = order;
+    vector<Pl> pl; pl.reserve(nm);
+    if ((int)b3cache.size() < nm * 8) b3cache.resize(nm * 8);
+    for (int i = 0; i < nm * 8; i++) b3cache[i].valid = false;
+    static int REPAIR = envInt("PP_REPAIR", 25); // ejection-chain depth (0 = off)
+    auto& own = g_own;
+    auto& plSlot = g_plSlot;
+    if (REPAIR > 0) {
+        own.assign((size_t)gridH * W, -1);
+        if ((int)plSlot.size() < nm) plSlot.resize(nm);
+        for (int i = 0; i < nm; i++) plSlot[i] = -1;
+    }
+    int checkCnt = 0;
+    auto place = [&](int pid, int ti, int x, int y) {
+        auto& tt = ps[pid].t[ti];
+        for (int dy = 0; dy < tt.h; dy++) grid[y + dy] |= ((uint64_t)tt.rmask[dy]) << x;
+        if (REPAIR > 0) {
+            for (auto& q : tt.c) own[(size_t)(y + q.second) * W + (x + q.first)] = (short)pid;
+        }
+        if (y + tt.h > topY) topY = min(y + tt.h, Hcap);
+        while (y0full < topY && grid[y0full] == FULLROW) y0full++;
+        if (plSlot.size() && REPAIR > 0 && plSlot[pid] >= 0) pl[plSlot[pid]] = {pid, ti, x, y};
+        else { if (REPAIR > 0) plSlot[pid] = (int)pl.size(); pl.push_back({pid, ti, x, y}); }
+    };
+    auto eject = [&](int pid) {
+        int slot = plSlot[pid];
+        Pl p = pl[slot];
+        auto& tt = ps[pid].t[p.ti];
+        for (int dy = 0; dy < tt.h; dy++) grid[p.y + dy] &= ~(((uint64_t)tt.rmask[dy]) << p.x);
+        for (auto& q : tt.c) own[(size_t)(p.y + q.second) * W + (p.x + q.first)] = -1;
+        if (p.y < y0full) y0full = p.y;
+    };
+    auto invalidateWindow = [&](int t) {
+        int lim2 = min(nm, t + max(1, window) + 1);
+        for (int pos = t; pos < lim2; pos++) {
+            int pid = o[pos];
+            for (int ti = 0; ti < (int)ps[pid].t.size(); ti++) b3cache[pid * 8 + ti].valid = false;
+        }
+    };
+    // normal lowest-fit scan for one orientation; returns y<0 if none
+    auto scanFit = [&](const T& tt) -> pair<int,int> {
+        uint64_t limMask = (W - tt.w + 1 >= 64) ? ~0ULL : ((1ULL << (W - tt.w + 1)) - 1);
+        int ymax = min(topY, Hcap - tt.h);
+        for (int y = y0full; y <= ymax; y++) {
+            uint64_t conflict = 0;
+            for (int dy = 0; dy < tt.h; dy++) {
+                uint64_t gg = grid[y + dy];
+                if (!gg) continue;
+                unsigned m = tt.rmask[dy];
+                while (m) { int b = __builtin_ctz(m); conflict |= (gg >> b); m &= m - 1; }
+            }
+            uint64_t allowed = ~conflict & limMask;
+            if (allowed) return {y, (int)__builtin_ctzll(allowed)};
+        }
+        return {-1, -1};
+    };
+    // ejection-chain repair: place `stuck` by evicting single blockers (depth-limited)
+    auto tryRepair = [&](int stuckPid, int tCur) -> bool {
+        int pending = stuckPid;
+        int lastPlaced = -1;
+        for (int depth = 0; depth <= REPAIR; depth++) {
+            auto& p = ps[pending];
+            if (depth > 0) { // pending may fit normally now
+                int bTi = -1, bYy = INT_MAX, bXx = 0;
+                for (int ti = 0; ti < (int)p.t.size(); ti++) {
+                    auto& tt = p.t[ti];
+                    if (tt.w > W || tt.h > Hcap) continue;
+                    auto [y, x] = scanFit(tt);
+                    if (y >= 0 && (y < bYy || (y == bYy && x < bXx))) { bYy = y; bXx = x; bTi = ti; }
+                }
+                if (bTi >= 0) { place(pending, bTi, bXx, bYy); return true; }
+            }
+            if (depth == REPAIR) return false;
+            // find a single-blocker position: lowest y, prefer fewer blocker cells
+            int cTi = -1, cY = -1, cX = -1; int cBlocker = -1; int cCells = INT_MAX;
+            for (int ti = 0; ti < (int)p.t.size(); ti++) {
+                auto& tt = p.t[ti];
+                if (tt.w > W || tt.h > Hcap) continue;
+                int ymax = min(topY, Hcap - tt.h);
+                for (int y = 0; y <= ymax && (cY < 0 || y <= cY); y++) {
+                    for (int x = 0; x + tt.w <= W; x++) {
+                        int blocker = -1, bcells = 0; bool bad = false;
+                        for (auto& q : tt.c) {
+                            size_t idx = (size_t)(y + q.second) * W + (x + q.first);
+                            short ow = own[idx];
+                            if (ow < 0) continue;
+                            if (ow == pending) { bad = true; break; }
+                            if (ow == lastPlaced) { bad = true; break; }
+                            if (blocker < 0) blocker = ow;
+                            else if (blocker != ow) { bad = true; break; }
+                            bcells++;
+                        }
+                        if (bad || blocker < 0) continue;
+                        if (cY < 0 || y < cY || (y == cY && bcells < cCells)) {
+                            cTi = ti; cY = y; cX = x; cBlocker = blocker; cCells = bcells;
+                        }
+                    }
+                }
+            }
+            if (cBlocker < 0) return false;
+            eject(cBlocker);
+            place(pending, cTi, cX, cY);
+            lastPlaced = pending;
+            pending = cBlocker;
+        }
+        return false;
+    };
+    for (int t = 0; t < nm; t++) {
+        if (deadlineMs > 0 && ((++checkCnt & 15) == 0) && elapsed_ms() > deadlineMs) return R{};
+        int lim = min(nm, t + max(1, window));
+        int bContact = -1, bY = INT_MAX, bX = INT_MAX, bTi = -1, bPos = -1;
+        bool redo = false;
+        for (int pos = t; pos < lim; pos++) {
+            int pid = o[pos];
+            auto& p = ps[pid];
+            bool any = false;
+            for (int ti = 0; ti < (int)p.t.size(); ti++) {
+                auto& tt = p.t[ti];
+                if (tt.w > W || tt.h > Hcap) continue;
+                B3Cache& cc = b3cache[pid * 8 + ti];
+                if (!cc.valid) {
+                    auto [yF, xF] = scanFit(tt);
+                    if (yF < 0) { cc.valid = false; continue; }
+                    int contact = 0;
+                    for (auto& nb : tt.nbr) {
+                        int cx = xF + nb.first, cy = yF + nb.second;
+                        if (cx < 0 || cx >= W || cy < 0) { contact++; continue; }
+                        if (cy >= Hcap) { contact++; continue; } // cap edge counts as wall
+                        if (cy < (int)grid.size() && (grid[cy] >> cx) & 1ULL) contact++;
+                    }
+                    cc = {yF, xF, contact, true};
+                }
+                any = true;
+                static int CAPSEL = envInt("PP_CAPSEL", 1);
+                bool take = false;
+                if (CAPSEL == 0) {
+                    if (cc.y < bY) take = true;
+                    else if (cc.y == bY) {
+                        if (cc.contact > bContact) take = true;
+                        else if (cc.contact == bContact && cc.x < bX) take = true;
+                    }
+                } else {
+                    if (cc.contact > bContact) take = true;
+                    else if (cc.contact == bContact) {
+                        if (cc.y < bY) take = true;
+                        else if (cc.y == bY && cc.x < bX) take = true;
+                    }
+                }
+                if (take) { bContact = cc.contact; bY = cc.y; bX = cc.x; bTi = ti; bPos = pos; }
+            }
+            if (!any) {
+                if (REPAIR > 0 && tryRepair(pid, t)) {
+                    // pid is placed; move it to front of order and advance
+                    if (pos != t) swap(o[t], o[pos]);
+                    invalidateWindow(t);
+                    redo = true;
+                    break;
+                }
+                return R{}; // permanently infeasible under the cap
+            }
+        }
+        if (redo) continue; // t stays: the placed piece occupies o[t]... advance below
+        if (bPos < 0) return R{};
+        int placedId = o[bPos];
+        place(placedId, bTi, bX, bY);
+        if (bPos != t) swap(o[t], o[bPos]);
+        int px0 = bX - 1, px1 = bX + ps[placedId].t[bTi].w, py0 = bY - 1, py1 = bY + ps[placedId].t[bTi].h;
+        int lim2 = min(nm, (t + 1) + max(1, window));
+        for (int pos = t + 1; pos < lim2; pos++) {
+            int pid = o[pos];
+            auto& p = ps[pid];
+            for (int ti = 0; ti < (int)p.t.size(); ti++) {
+                B3Cache& cc = b3cache[pid * 8 + ti];
+                if (!cc.valid) continue;
+                auto& ct = p.t[ti];
+                if (cc.x <= px1 && cc.x + ct.w - 1 >= px0 && cc.y <= py1 && cc.y + ct.h - 1 >= py0)
+                    cc.valid = false;
+            }
+        }
+    }
+    uint64_t colU = 0; int rows = 0;
+    for (int y = 0; y < min((int)grid.size(), Hcap); y++) if (grid[y]) { colU |= grid[y]; rows++; }
+    int Wu = __builtin_popcountll(colU);
+    R res; res.W = Wu ? Wu : 1; res.H = rows ? rows : 1;
+    res.A = (long long)res.W * res.H; res.pl = move(pl); res.ok = true; res.packW = W;
+    return res;
+}
+
 int main() {
     T0 = chrono::steady_clock::now();
     if (const char* e = getenv("POLYPACK_TL")) { double v = atof(e); if (v > 50 && v < 10000) TL_MS = v; }
@@ -571,7 +770,7 @@ int main() {
     int B3 = envInt("PP_B3", 1);             // 1: use cached blf3 instead of blf2
     int PHASE2 = envInt("PP_PHASE2", 1);     // 1: blf2 pass over best sweep Ws
     double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;  // 0 => auto by size
-    long long P2MAXS = envInt("PP_P2MAXS", 2500);    // phase2 only when S below this
+    long long P2MAXS = envInt("PP_P2MAXS", 7000);    // phase2 only when S below this
     long long B2RESTS = envInt("PP_B2RESTS", 1300);  // blf2 restarts when S below this
 
     // read all of stdin
@@ -675,11 +874,41 @@ int main() {
         sort(Ws.begin(), Ws.end(), [&](int a, int b) { int da = abs(a - base), db = abs(b - base); if (da != db) return da < db; return a < b; });
     }
 
-    bool big = S > 7000;
+    bool big = S > (long long)envInt("PP_BIGTHRESH", 7000);
     vector<int> baseOrder = ord4();
 
+    auto better = [&](const R& a, const R& b) {
+        if (!b.ok) return true;
+        if (a.A != b.A) return a.A < b.A;
+        if (a.H != b.H) return a.H < b.H;
+        return a.W < b.W;
+    };
     // ---- guaranteed fallback: cheap greedy (window=1), no deadline (bounded work) ----
     R bestR = pack(base, baseOrder, rng, false, 1, false, 0.0, -1.0);
+    // ---- W probe for big cases: quick packs pick the strongest width before the big spend ----
+    if (S > 7000 && envInt("PP_WPROBE", 0)) {
+        long long bestProbe = bestR.ok ? bestR.A : LLONG_MAX;
+        int bestW = base;
+        double probeBudget = TL_MS * 0.12;
+        for (int d = 1; d <= 4 && elapsed_ms() < probeBudget; d++) {
+            for (int sgn = -1; sgn <= 1 && elapsed_ms() < probeBudget; sgn += 2) {
+                int W = base + sgn * d;
+                if (W < minW || W > 4000) continue;
+                R pr = pack(W, baseOrder, rng, false, 1, false, 0.0, probeBudget + 50.0);
+                if (pr.ok) {
+                    if (better(pr, bestR)) { bestProbe = pr.A; bestW = W; bestR = move(pr); }
+                    else if (pr.A < bestProbe) { bestProbe = pr.A; bestW = W; }
+                }
+            }
+        }
+        base = bestW;
+        // rebuild Ws so the sweep starts at the probed width
+        if (base != Ws[0]) {
+            vector<int> W2; W2.push_back(base);
+            for (int w : Ws) if (w != base) W2.push_back(w);
+            Ws = move(W2);
+        }
+    }
     // In the pathological case even this failed, stack pieces vertically.
     if (!bestR.ok) {
         R r; r.pl.reserve(n);
@@ -692,12 +921,6 @@ int main() {
     const double SEARCH_END = TL_MS;           // hard abort for any pack
     const double SOFT_END = TL_MS - 15.0;      // don't start new work after this
 
-    auto better = [&](const R& a, const R& b) {
-        if (!b.ok) return true;
-        if (a.A != b.A) return a.A < b.A;
-        if (a.H != b.H) return a.H < b.H;
-        return a.W < b.W;
-    };
 
     // BLF/blf2 base order: big pieces first
     vector<int> ordBLF = idx;
@@ -715,7 +938,7 @@ int main() {
     double avg = 250.0; int cnt = 0;
     vector<pair<long long,int>> sweepRes; // (area, W)
     bool doPhase2 = (!big && PHASE2 && S < P2MAXS);
-    if (P2FRAC <= 0.0) P2FRAC = (S < 1300) ? 0.55 : 0.75;
+    if (P2FRAC <= 0.0) P2FRAC = 0.55;
     double sweepEnd = doPhase2 ? min(SOFT_END, TL_MS * P2FRAC) : SOFT_END;
     for (int wi = 0; wi < (skipSweep ? 0 : (int)Ws.size()); wi++) {
         double used = elapsed_ms();
@@ -759,10 +982,12 @@ int main() {
     // ---- phase 2 (small cases): deep blf2 pass over the most promising sweep widths ----
     if (doPhase2) {
         sort(sweepRes.begin(), sweepRes.end());
+        double P2END = envInt("PP_P2END", 70) / 100.0;
+        double p2Stop = min(SOFT_END, TL_MS * P2END);
         double avg2 = 20.0; int cnt2 = 0;
         for (size_t i = 0; i < sweepRes.size(); i++) {
             double used = elapsed_ms();
-            if (used + avg2 * 1.2 > SOFT_END) break;
+            if (used + avg2 * 1.2 > p2Stop) break;
             int W = sweepRes[i].second;
             double t1 = elapsed_ms();
             R r = B3 ? pack_blf3(W, ordB2, max(1, n / 4), SEARCH_END, rng, false)
@@ -777,6 +1002,7 @@ int main() {
 
     // ---- leftover budget: randomized BLF + skyline restarts near best W ----
     {
+        vector<int> ilsOrd; int ilsW = 0; (void)ilsW;
         double avgBLF = 10.0; int cntBLF = 0;
         double avgSky = avg;
         vector<int> obuf;
@@ -794,7 +1020,37 @@ int main() {
             } else if (used + avgSky * 1.3 > SOFT_END) {
                 if (used + avgBLF * 1.3 <= SOFT_END) doBLF = true; else break;
             }
-            if (doBLF) {
+            static int CAPSHARE = envInt("PP_CAPSHARE", 100);
+            bool capEligible = !big || (n <= envInt("PP_CAPBIGN", 1300));
+            if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
+                // area-driven capped attempt: pack into W' x Hcap' with W'*Hcap' < bestA
+                int W;
+                {
+                    int dw = envInt("PP_CAPDW", 2);
+                    W = bestR.packW + (dw > 0 ? (rng.rint(2 * dw + 1) - dw) : 0);
+                    if (W < minW) W = minW;
+                    if (W > 64) W = 64;
+                }
+                long long capA = bestR.A - 1;
+                int Hcap = (int)(capA / W);
+                if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
+                bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
+                obuf = fromBest ? ilsOrd : ordB2;
+                int swaps = 1 + rng.rint(6);
+                for (int sswap = 0; sswap < swaps; sswap++) {
+                    int a = rng.rint(n), b = rng.rint(n);
+                    swap(obuf[a], obuf[b]);
+                }
+                double t1 = elapsed_ms();
+                R r = pack_capped(W, Hcap, obuf, max(1, n / 4), SEARCH_END, rng);
+                double dt = elapsed_ms() - t1;
+                cntBLF++; avgBLF = (avgBLF * (cntBLF - 1) + dt) / cntBLF;
+                if (elapsed_ms() > SEARCH_END) break;
+                if (r.ok) {
+                    crownRepack(r, SEARCH_END);
+                    if (better(r, bestR)) { ilsOrd = obuf; bestR = move(r); }
+                }
+            } else if (doBLF) {
                 int W;
                 if ((int)(rng.nxt() % 100) < JUMP) {
                     double mult = 0.6 + 0.8 * rng.uni();
@@ -805,9 +1061,10 @@ int main() {
                 if (W < minW) W = minW;
                 if (W > 64) W = 64;
                 if (W < minW) break;
-                obuf = BLF2 ? ordB2 : ordBLF;
+                bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
+                obuf = fromBest ? ilsOrd : (BLF2 ? ordB2 : ordBLF);
                 if (cntBLF > 0) {
-                    int swaps = max(1, n / 6);
+                    int swaps = fromBest ? (2 + rng.rint(5)) : max(1, n / 6);
                     for (int sswap = 0; sswap < swaps; sswap++) {
                         int a = rng.rint(n), b = rng.rint(n);
                         swap(obuf[a], obuf[b]);
@@ -823,7 +1080,7 @@ int main() {
                 if (getenv("PP_DEBUG")) fprintf(stderr, "BLF W=%d dt=%.1f ok=%d A=%lld best=%lld\n", W, dt, (int)r.ok, r.ok ? r.A : -1, bestR.A);
                 if (!r.ok) break;
                 crownRepack(r, SEARCH_END);
-                if (better(r, bestR)) bestR = move(r);
+                if (better(r, bestR)) { ilsOrd = obuf; ilsW = W; bestR = move(r); }
             } else {
                 int W = bw + (rng.rint(7) - 3);
                 if (W < minW) W = minW;
