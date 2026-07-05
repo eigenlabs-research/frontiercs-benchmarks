@@ -32,7 +32,7 @@ int main() {
 
     auto t0 = chrono::steady_clock::now();
     auto elapsed = [&] { return chrono::duration<double>(chrono::steady_clock::now() - t0).count(); };
-    const double BUDGET = 0.90;
+    const double BUDGET = 0.92;
 
     mt19937 rng(0x9E3779B9u);
 
