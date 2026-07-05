@@ -6,7 +6,7 @@
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 1860.0;
+static double TL_MS = 1850.0;
 static inline double elapsed_ms() {
     return chrono::duration<double, milli>(chrono::steady_clock::now() - T0).count();
 }
@@ -631,6 +631,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
         int pending = stuckPid;
         int lastPlaced = -1;
         for (int depth = 0; depth <= REPAIR; depth++) {
+            if (deadlineMs > 0 && elapsed_ms() > deadlineMs) return false;
             auto& p = ps[pending];
             if (depth > 0) { // pending may fit normally now
                 int bTi = -1, bYy = INT_MAX, bXx = 0;
@@ -990,8 +991,10 @@ int main() {
             if (used + avg2 * 1.2 > p2Stop) break;
             int W = sweepRes[i].second;
             double t1 = elapsed_ms();
-            R r = B3 ? pack_blf3(W, ordB2, max(1, n / 4), SEARCH_END, rng, false)
-                     : pack_blf2(W, ordB2, max(1, n / 4), SEARCH_END, rng, false);
+            static int B3WINDIV = envInt("PP_B3WINDIV", 4);
+            int b3win = max(1, B3WINDIV > 0 ? n / B3WINDIV : n);
+            R r = B3 ? pack_blf3(W, ordB2, b3win, SEARCH_END, rng, false)
+                     : pack_blf2(W, ordB2, b3win, SEARCH_END, rng, false);
             double dt = elapsed_ms() - t1;
             cnt2++; avg2 = (avg2 * (cnt2 - 1) + dt) / cnt2;
             if (!r.ok) break;
@@ -1020,8 +1023,8 @@ int main() {
             } else if (used + avgSky * 1.3 > SOFT_END) {
                 if (used + avgBLF * 1.3 <= SOFT_END) doBLF = true; else break;
             }
-            static int CAPSHARE = envInt("PP_CAPSHARE", 100);
-            bool capEligible = !big || (n <= envInt("PP_CAPBIGN", 1300));
+            static int CAPSHARE = envInt("PP_CAPSHARE", 90);
+            bool capEligible = !big || (n <= envInt("PP_CAPBIGN", 2500));
             if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
                 // area-driven capped attempt: pack into W' x Hcap' with W'*Hcap' < bestA
                 int W;
@@ -1042,7 +1045,8 @@ int main() {
                     swap(obuf[a], obuf[b]);
                 }
                 double t1 = elapsed_ms();
-                R r = pack_capped(W, Hcap, obuf, max(1, n / 4), SEARCH_END, rng);
+                static int CAPWINDIV = envInt("PP_CAPWINDIV", 1);
+                R r = pack_capped(W, Hcap, obuf, max(1, CAPWINDIV > 0 ? n / CAPWINDIV : n), SEARCH_END, rng);
                 double dt = elapsed_ms() - t1;
                 cntBLF++; avgBLF = (avgBLF * (cntBLF - 1) + dt) / cntBLF;
                 if (elapsed_ms() > SEARCH_END) break;
@@ -1102,7 +1106,7 @@ int main() {
     }
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_search_done=%.1f\n", elapsed_ms());
     // final polish on the global best
-    crownRepack(bestR, TL_MS + 25.0);
+    crownRepack(bestR, TL_MS + 10.0);
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_crown_done=%.1f\n", elapsed_ms());
 
     // ---- output with column AND row compression ----
