@@ -310,6 +310,95 @@ int main() {
 
         RNG rng(0x1234abcd5678ULL ^ (unsigned long long)KN * 1000003ULL ^ (unsigned long long)KM);
 
+        // ---------- spectral candidate (planted-IS recovery) ----------
+        // Most-negative eigenvector of A separates a large planted independent set
+        // in (near-)regular graphs where degree carries no signal.
+        vector<char> specCover;
+        long long specSize = LLONG_MAX;
+        if (envInt("VC_SPECTRAL", 1) && KM >= 4 * KN) { // dense-ish kernels only
+            int maxdeg = 0;
+            for (int i = 0; i < KN; i++) maxdeg = max(maxdeg, head[i + 1] - head[i]);
+            vector<double> x(KN), y(KN);
+            {
+                RNG r2(0xC0FFEE ^ (unsigned long long)KN);
+                for (int i = 0; i < KN; i++) x[i] = (double)(r2.nxt() % 2001) / 1000.0 - 1.0;
+            }
+            double sigma = maxdeg + 1.0;
+            double specDeadline = min(TL_MS * 0.35, elapsed_ms() + 260.0);
+            int iters2 = 0;
+            while (elapsed_ms() < specDeadline && iters2 < 220) {
+                iters2++;
+                // y = sigma*x - A*x
+                for (int i = 0; i < KN; i++) {
+                    double s = sigma * x[i];
+                    for (int it = head[i]; it < head[i + 1]; it++) s -= x[nxtTo[it]];
+                    y[i] = s;
+                }
+                // deflate mean, normalize
+                double mean = 0; for (int i = 0; i < KN; i++) mean += y[i];
+                mean /= KN;
+                double nrm = 0;
+                for (int i = 0; i < KN; i++) { y[i] -= mean; nrm += y[i] * y[i]; }
+                nrm = sqrt(max(nrm, 1e-30));
+                for (int i = 0; i < KN; i++) x[i] = y[i] / nrm;
+            }
+            // candidate cuts: both tails, several sizes
+            vector<int> ord(KN); iota(ord.begin(), ord.end(), 0);
+            sort(ord.begin(), ord.end(), [&](int a, int b) { return x[a] < x[b]; });
+            vector<int> cnt(KN);
+            vector<char> inS(KN);
+            for (int tail = 0; tail < 2; tail++) {
+                for (double frac = 0.20; frac <= 0.56; frac += 0.03) {
+                    int k2 = (int)(frac * KN);
+                    if (k2 < 2 || k2 >= KN) continue;
+                    fill(inS.begin(), inS.end(), 0);
+                    if (tail == 0) for (int i = 0; i < k2; i++) inS[ord[i]] = 1;
+                    else for (int i = 0; i < k2; i++) inS[ord[KN - 1 - i]] = 1;
+                    // conflicts
+                    fill(cnt.begin(), cnt.end(), 0);
+                    for (int i = 0; i < KM; i++) {
+                        auto [a, b] = ke[i];
+                        if (inS[a] && inS[b]) { cnt[a]++; cnt[b]++; }
+                    }
+                    // evict max-conflict until independent (bucket by cnt)
+                    {
+                        int mx = 0; for (int i = 0; i < KN; i++) if (inS[i]) mx = max(mx, cnt[i]);
+                        vector<vector<int>> B(mx + 1);
+                        for (int i = 0; i < KN; i++) if (inS[i] && cnt[i] > 0) B[cnt[i]].push_back(i);
+                        for (int c2 = mx; c2 >= 1; c2--) {
+                            auto& lvl = B[c2];
+                            while (!lvl.empty()) {
+                                int v2 = lvl.back(); lvl.pop_back();
+                                if (!inS[v2] || cnt[v2] != c2) { if (inS[v2] && cnt[v2] > 0 && cnt[v2] < c2) B[cnt[v2]].push_back(v2); continue; }
+                                inS[v2] = 0;
+                                for (int it = head[v2]; it < head[v2 + 1]; it++) {
+                                    int u2 = nxtTo[it];
+                                    if (inS[u2] && cnt[u2] > 0) { cnt[u2]--; if (cnt[u2] > 0 && cnt[u2] < c2) B[cnt[u2]].push_back(u2); }
+                                }
+                                cnt[v2] = 0;
+                            }
+                        }
+                    }
+                    // extend: greedily add zero-conflict vertices (coordinate-tail order)
+                    for (int i = 0; i < KN; i++) {
+                        int v2 = (tail == 0) ? ord[i] : ord[KN - 1 - i];
+                        if (inS[v2]) continue;
+                        bool free2 = true;
+                        for (int it = head[v2]; it < head[v2 + 1]; it++) if (inS[nxtTo[it]]) { free2 = false; break; }
+                        if (free2) inS[v2] = 1;
+                    }
+                    long long csz = 0;
+                    for (int i = 0; i < KN; i++) csz += !inS[i];
+                    if (csz < specSize) {
+                        specSize = csz;
+                        specCover.assign(KN, 0);
+                        for (int i = 0; i < KN; i++) specCover[i] = !inS[i];
+                    }
+                    if (elapsed_ms() > specDeadline + 120.0) break;
+                }
+            }
+            if (getenv("VC_DEBUG")) fprintf(stderr, "spectral: iters=%d bestCover=%lld t=%.1f\n", iters2, specSize, elapsed_ms());
+        }
         // initial cover: greedy max-degree
         {
             vector<int> dg(KN, 0);
@@ -381,6 +470,12 @@ int main() {
                 else if (inC[b] && !inC[a]) score[b] -= w[i];
             }
         };
+        {
+            long long gsz = 0; for (int i = 0; i < KN; i++) gsz += inC[i];
+            if (specSize < gsz) {
+                for (int i = 0; i < KN; i++) inC[i] = specCover[i];
+            }
+        }
         rebuild();
         cl.clear(); fill(clPos.begin(), clPos.end(), -1);
         for (int i = 0; i < KN; i++) if (inC[i]) { clPos[i] = (int)cl.size(); cl.push_back(i); }
