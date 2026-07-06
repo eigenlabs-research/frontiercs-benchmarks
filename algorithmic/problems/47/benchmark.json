@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "name": "frontiercs-algorithmic-rectangle-knapsack",
+  "description": "2D rectangular knapsack with optional 90° rotations: pack a subset of rectangles into the bin to maximize packed value/area. Scored 0–1 against the reference packing across 15 hidden cases. Time limit 1s, memory 512 MB.",
+  "category": "algorithmic",
+  "direction": "+",
+  "editablePaths": [
+    "solution.cpp"
+  ],
+  "setupCommand": [
+    "bash",
+    "-lc",
+    ".yukon/setup.sh"
+  ],
+  "benchmarkCommand": [
+    "bash",
+    "-lc",
+    ".yukon/run.sh"
+  ],
+  "scorePath": ".yukon/score.json",
+  "runner": {
+    "provider": "frontiercs"
+  }
+}

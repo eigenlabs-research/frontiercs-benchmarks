@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "name": "frontiercs-algorithmic-hidden-permutation",
+  "description": "Interactive: recover a hidden permutation of 1..n using queries. Your program interacts with the judge over stdin/stdout within a bounded number of queries. Scored 0–1 across 10 hidden cases. Time limit 4s, memory 1 GB.",
+  "category": "algorithmic",
+  "direction": "+",
+  "editablePaths": [
+    "solution.cpp"
+  ],
+  "setupCommand": [
+    "bash",
+    "-lc",
+    ".yukon/setup.sh"
+  ],
+  "benchmarkCommand": [
+    "bash",
+    "-lc",
+    ".yukon/run.sh"
+  ],
+  "scorePath": ".yukon/score.json",
+  "runner": {
+    "provider": "frontiercs"
+  }
+}

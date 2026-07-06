@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "name": "frontiercs-algorithmic-number-loop-construction",
+  "description": "Fill a fixed 12×12 clue template so every clue cell holds a digit satisfying the loop-construction constraints. Scored 0–1 by a testlib checker across the hidden cases. Time limit 3s, memory 1 GB.",
+  "category": "algorithmic",
+  "direction": "+",
+  "editablePaths": [
+    "solution.cpp"
+  ],
+  "setupCommand": [
+    "bash",
+    "-lc",
+    ".yukon/setup.sh"
+  ],
+  "benchmarkCommand": [
+    "bash",
+    "-lc",
+    ".yukon/run.sh"
+  ],
+  "scorePath": ".yukon/score.json",
+  "runner": {
+    "provider": "frontiercs"
+  }
+}

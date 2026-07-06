@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "name": "frontiercs-algorithmic-rectangle-free-grid",
+  "description": "Place as many black cells as possible on an n×m grid so that no four chosen cells form the corners of an axis-parallel rectangle. Scored 0–1 by count ratio against the reference across 10 hidden cases. Time limit 1s, memory 512 MB.",
+  "category": "algorithmic",
+  "direction": "+",
+  "editablePaths": [
+    "solution.cpp"
+  ],
+  "setupCommand": [
+    "bash",
+    "-lc",
+    ".yukon/setup.sh"
+  ],
+  "benchmarkCommand": [
+    "bash",
+    "-lc",
+    ".yukon/run.sh"
+  ],
+  "scorePath": ".yukon/score.json",
+  "runner": {
+    "provider": "frontiercs"
+  }
+}
