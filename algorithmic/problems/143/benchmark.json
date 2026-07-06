@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "name": "frontiercs-algorithmic-texas-holdem-training",
+  "description": "Interactive: play Texas Hold'em training rounds over terminal I/O, responding to the judge's game state within the time budget. Scored 0–1 across 10 hidden cases. Time limit 100s, memory 512 MB.",
+  "category": "algorithmic",
+  "direction": "+",
+  "editablePaths": [
+    "solution.cpp"
+  ],
+  "setupCommand": [
+    "bash",
+    "-lc",
+    ".yukon/setup.sh"
+  ],
+  "benchmarkCommand": [
+    "bash",
+    "-lc",
+    ".yukon/run.sh"
+  ],
+  "scorePath": ".yukon/score.json",
+  "runner": {
+    "provider": "frontiercs"
+  }
+}
