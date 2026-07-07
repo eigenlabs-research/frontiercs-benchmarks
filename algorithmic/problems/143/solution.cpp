@@ -244,6 +244,12 @@ struct World {
     double bob_q;
 };
 
+static double smooth_fold_from_q(double q, int pot, int x, double sigma = 0.030) {
+    double threshold = (double)(pot + x) / (double)(pot + 2 * x);
+    double fold_prob = 0.5 * erfc((threshold - q) / (sqrt(2.0) * sigma));
+    return min(1.0, max(0.0, fold_prob));
+}
+
 static vector<World> sample_worlds(const Card alice[2], const vector<Card>& board, int round, int samples) {
     vector<Card> known = {alice[0], alice[1]};
     known.insert(known.end(), board.begin(), board.end());
@@ -394,7 +400,10 @@ static int choose_river_action(const Card alice[2], const vector<Card>& board_ve
 }
 
 static int choose_action(const Card alice[2], const vector<Card>& board, int round, int a, int pot) {
-    if (round == 1) return 0;
+    if (round == 1) {
+        if (alice[0].v == alice[1].v && alice[0].v >= 12) return min(a, 10);
+        return 0;
+    }
     if (round == 4) return choose_river_action(alice, board, a, pot);
 
     int samples;
@@ -432,9 +441,7 @@ static int choose_action(const Card alice[2], const vector<Card>& board, int rou
         double ev = 0.0;
         int folds = 0;
         for (const auto& w : worlds) {
-            double sigma = 0.030;
-            double fold_prob = 0.5 * erfc((threshold - w.bob_q) / (sqrt(2.0) * sigma));
-            fold_prob = min(1.0, max(0.0, fold_prob));
+            double fold_prob = smooth_fold_from_q(w.bob_q, pot, x);
             double fold_delta = a + pot - 100;
             double call_delta = showdown_delta_from_outcome(w.outcome, a - x, pot + 2 * x);
             ev += fold_prob * fold_delta + (1.0 - fold_prob) * call_delta;
