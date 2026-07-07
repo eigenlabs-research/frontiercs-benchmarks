@@ -272,8 +272,115 @@ static double showdown_delta_from_outcome(int outcome, int a, int pot) {
     return a - 100;
 }
 
+static pair<int, long long> score_pair(const Score& s) {
+    return {s.type, s.key};
+}
+
+static int compare_scores(const Score& a, const Score& b) {
+    if (less_score(a, b)) return -1;
+    if (less_score(b, a)) return 1;
+    return 0;
+}
+
+static int choose_river_action(const Card alice[2], const vector<Card>& board_vec, int a, int pot) {
+    array<Card, 5> board;
+    for (int i = 0; i < 5; ++i) board[i] = board_vec[i];
+
+    vector<Card> board_known = board_vec;
+    vector<int> no_board = deck_without(board_known);
+    vector<pair<int, long long>> all_scores;
+    all_scores.reserve(no_board.size() * no_board.size() / 2);
+
+    for (int i = 0; i < (int)no_board.size(); ++i) {
+        for (int j = i + 1; j < (int)no_board.size(); ++j) {
+            Card h[2] = {decode_card(no_board[i]), decode_card(no_board[j])};
+            array<Card, 7> cards = {h[0], h[1], board[0], board[1], board[2], board[3], board[4]};
+            all_scores.push_back(score_pair(eval7(cards)));
+        }
+    }
+    sort(all_scores.begin(), all_scores.end());
+
+    array<Card, 7> alice_cards = {alice[0], alice[1], board[0], board[1], board[2], board[3], board[4]};
+    Score alice_score = eval7(alice_cards);
+
+    vector<Card> known = {alice[0], alice[1]};
+    known.insert(known.end(), board_vec.begin(), board_vec.end());
+    vector<int> bob_deck = deck_without(known);
+
+    struct RiverWorld {
+        int outcome;
+        double bob_q;
+    };
+    vector<RiverWorld> worlds;
+    worlds.reserve(bob_deck.size() * bob_deck.size() / 2);
+    double check_ev = 0.0;
+    double equity = 0.0;
+
+    for (int i = 0; i < (int)bob_deck.size(); ++i) {
+        for (int j = i + 1; j < (int)bob_deck.size(); ++j) {
+            Card b0 = decode_card(bob_deck[i]);
+            Card b1 = decode_card(bob_deck[j]);
+            array<Card, 7> bob_cards = {b0, b1, board[0], board[1], board[2], board[3], board[4]};
+            Score bob_score = eval7(bob_cards);
+            int outcome = compare_scores(alice_score, bob_score);
+            auto sp = score_pair(bob_score);
+            auto lo = lower_bound(all_scores.begin(), all_scores.end(), sp);
+            auto hi = upper_bound(all_scores.begin(), all_scores.end(), sp);
+            double greater = all_scores.end() - hi;
+            double equal = hi - lo;
+            double q = (greater + 0.5 * equal) / (double)all_scores.size();
+            worlds.push_back({outcome, q});
+            check_ev += showdown_delta_from_outcome(outcome, a, pot);
+            if (outcome > 0) equity += 1.0;
+            else if (outcome == 0) equity += 0.5;
+        }
+    }
+
+    check_ev /= worlds.size();
+    equity /= worlds.size();
+
+    vector<int> cand = {1, 2, 3, 5, 8, 10, 13, 16, 20, 25, 32, 40, 50, 64, 80, 100, a};
+    cand.push_back(max(1, pot / 2));
+    cand.push_back(max(1, pot));
+    cand.push_back(max(1, min(a, pot * 2)));
+    cand.push_back(max(1, min(a, pot * 4)));
+    sort(cand.begin(), cand.end());
+    cand.erase(unique(cand.begin(), cand.end()), cand.end());
+
+    int best_x = 0;
+    double best_ev = check_ev;
+    for (int x : cand) {
+        if (x < 1 || x > a) continue;
+        double threshold = (double)(pot + x) / (double)(pot + 2 * x);
+        double ev = 0.0;
+        int folds = 0;
+        for (const auto& w : worlds) {
+            double sigma = 0.030;
+            double fold_prob = 0.5 * erfc((threshold - w.bob_q) / (sqrt(2.0) * sigma));
+            fold_prob = min(1.0, max(0.0, fold_prob));
+            double fold_delta = a + pot - 100;
+            double call_delta = showdown_delta_from_outcome(w.outcome, a - x, pot + 2 * x);
+            ev += fold_prob * fold_delta + (1.0 - fold_prob) * call_delta;
+            if (fold_prob >= 0.5) folds++;
+        }
+        ev /= worlds.size();
+
+        double fold_rate = (double)folds / worlds.size();
+        double margin = 0.45;
+        if (equity > 0.62) margin -= 0.25;
+        if (equity < 0.38 && fold_rate < 0.45) margin += 0.45;
+        if (x >= a && equity < 0.44 && fold_rate < 0.62) margin += 0.80;
+        if (ev > best_ev + margin) {
+            best_ev = ev;
+            best_x = x;
+        }
+    }
+    return best_x;
+}
+
 static int choose_action(const Card alice[2], const vector<Card>& board, int round, int a, int pot) {
     if (round == 1) return 0;
+    if (round == 4) return choose_river_action(alice, board, a, pot);
 
     int samples;
     bool large_match = match_hands >= 8000;
