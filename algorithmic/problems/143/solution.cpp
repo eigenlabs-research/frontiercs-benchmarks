@@ -309,7 +309,8 @@ static int choose_river_action(const Card alice[2], const vector<Card>& board_ve
 
     struct RiverWorld {
         int outcome;
-        double bob_q;
+        double alice_win;
+        double draw;
     };
     vector<RiverWorld> worlds;
     worlds.reserve(bob_deck.size() * bob_deck.size() / 2);
@@ -328,8 +329,8 @@ static int choose_river_action(const Card alice[2], const vector<Card>& board_ve
             auto hi = upper_bound(all_scores.begin(), all_scores.end(), sp);
             double greater = all_scores.end() - hi;
             double equal = hi - lo;
-            double q = (greater + 0.5 * equal) / (double)all_scores.size();
-            worlds.push_back({outcome, q});
+            double n = (double)all_scores.size();
+            worlds.push_back({outcome, greater / n, equal / n});
             check_ev += showdown_delta_from_outcome(outcome, a, pot);
             if (outcome > 0) equity += 1.0;
             else if (outcome == 0) equity += 0.5;
@@ -355,8 +356,22 @@ static int choose_river_action(const Card alice[2], const vector<Card>& board_ve
         double ev = 0.0;
         int folds = 0;
         for (const auto& w : worlds) {
-            double sigma = 0.030;
-            double fold_prob = 0.5 * erfc((threshold - w.bob_q) / (sqrt(2.0) * sigma));
+            double lose = w.alice_win;
+            double draw = w.draw;
+            double win = max(0.0, 1.0 - lose - draw);
+            double v_lose = -x;
+            double v_draw = pot / 2.0;
+            double v_win = pot + x;
+            double mean = lose * v_lose + draw * v_draw + win * v_win;
+            double second = lose * v_lose * v_lose + draw * v_draw * v_draw + win * v_win * v_win;
+            double var = max(0.0, second - mean * mean);
+            double fold_prob;
+            if (var < 1e-9) {
+                fold_prob = mean <= 0.0 ? 1.0 : 0.0;
+            } else {
+                double z = (0.0 - mean) / sqrt(var / 100.0);
+                fold_prob = 0.5 * erfc(-z / sqrt(2.0));
+            }
             fold_prob = min(1.0, max(0.0, fold_prob));
             double fold_delta = a + pot - 100;
             double call_delta = showdown_delta_from_outcome(w.outcome, a - x, pot + 2 * x);
