@@ -1,0 +1,3 @@
+These are SAMPLE cases for local hand-testing only (checking your program compiles and reads/writes
+the I/O format). Scoring uses a separate HIDDEN set of cases that is not shipped here. A solution
+tuned to these samples will not generalize to the graded set. See docs/frontiercs-judge.md.
