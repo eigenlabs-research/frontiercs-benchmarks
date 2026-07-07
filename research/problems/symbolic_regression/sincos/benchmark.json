@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "name": "frontiercs-research-symbolic_regression-sincos",
-  "description": "FrontierCS research problem symbolic_regression/sincos.",
+  "name": "frontiercs-research-symbolic-regression-sincos",
+  "description": "Learn a closed-form symbolic expression combining sine and cosine components. Scored on predictive accuracy against reference metrics.",
   "category": "research",
   "direction": "+",
   "editablePaths": [

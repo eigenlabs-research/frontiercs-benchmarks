@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "name": "frontiercs-research-symbolic_regression-ripple",
-  "description": "FrontierCS research problem symbolic_regression/ripple.",
+  "name": "frontiercs-research-symbolic-regression-ripple",
+  "description": "Learn a closed-form symbolic expression for a rippled surface — oscillatory terms layered on a smooth base function. Scored on predictive accuracy against reference metrics.",
   "category": "research",
   "direction": "+",
   "editablePaths": [
