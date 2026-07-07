@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 #include <iostream>
 #include <random>
 #include <string>
@@ -309,12 +310,13 @@ static int choose_action(const Card alice[2], const vector<Card>& board, int rou
         double ev = 0.0;
         int folds = 0;
         for (const auto& w : worlds) {
-            if (w.bob_q >= threshold) {
-                ev += a + pot - 100;
-                folds++;
-            } else {
-                ev += showdown_delta_from_outcome(w.outcome, a - x, pot + 2 * x);
-            }
+            double sigma = 0.030;
+            double fold_prob = 0.5 * erfc((threshold - w.bob_q) / (sqrt(2.0) * sigma));
+            fold_prob = min(1.0, max(0.0, fold_prob));
+            double fold_delta = a + pot - 100;
+            double call_delta = showdown_delta_from_outcome(w.outcome, a - x, pot + 2 * x);
+            ev += fold_prob * fold_delta + (1.0 - fold_prob) * call_delta;
+            if (fold_prob >= 0.5) folds++;
         }
         ev /= worlds.size();
 
