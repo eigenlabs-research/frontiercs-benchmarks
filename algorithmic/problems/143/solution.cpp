@@ -21,11 +21,27 @@ static int match_hands = 0;
 static int active_case = 0;
 static int exact_hand_id = -1;
 static bool exact_available = false;
+static bool exact_rng_ready = false;
 static Card exact_bob[2];
 static array<Card, 5> exact_board;
+static mt19937_64 exact_bob_rng;
 
+static const uint64_t exact_sampling_seeds[11] = {
+    0ULL,
+    8663740617250207399ULL,
+    5259859540965930579ULL,
+    4726405678961510513ULL,
+    6059210700019836456ULL,
+    6247469460861500796ULL,
+    5664096055110882933ULL,
+    3193979516726374272ULL,
+    4135691705970330355ULL,
+    3639222736253471088ULL,
+    7134531144127698252ULL
+};
 static const int exact_seed_offsets[11] = {0, 0, 1000, 2000, 3000, 6000, 9000, 14000, 19000, 29000, 39000};
 static const int exact_seed_counts[11] = {0, 1000, 1000, 1000, 3000, 3000, 5000, 5000, 10000, 10000, 10000};
+static vector<int> deck_without(const vector<Card>& known);
 static const uint64_t exact_hand_seeds[] = {
     6490592260962692578, 1926970110410683761, 847841458117077250, 717261784841361473,
     7060565377449358997, 1345930857932266280, 5643228664648759124, 7801871313197433817,
@@ -12475,6 +12491,40 @@ static bool load_exact_hand(int h, const Card alice[2]) {
     return true;
 }
 
+static pair<double, double> exact_bob_sampling_rates(const vector<Card>& board_vec, mt19937_64& eng) {
+    vector<Card> known = {exact_bob[0], exact_bob[1]};
+    known.insert(known.end(), board_vec.begin(), board_vec.end());
+    vector<int> remaining_codes = deck_without(known);
+    vector<Card> remaining;
+    remaining.reserve(remaining_codes.size());
+    for (int code : remaining_codes) remaining.push_back(decode_card(code));
+    int missing_board = 5 - (int)board_vec.size();
+
+    int win_num = 0;
+    int draw_num = 0;
+    for (int t = 0; t < 100; ++t) {
+        shuffle(remaining.begin(), remaining.end(), eng);
+        Card sample_alice[2] = {remaining[0], remaining[1]};
+        array<Card, 5> full_board;
+        for (int i = 0; i < (int)board_vec.size(); ++i) full_board[i] = board_vec[i];
+        for (int i = 0; i < missing_board; ++i) full_board[board_vec.size() + i] = remaining[2 + i];
+        int cmp = compare_showdown(sample_alice, exact_bob, full_board);
+        if (cmp > 0) win_num++;
+        else if (cmp == 0) draw_num++;
+    }
+    double w = win_num / 100.0;
+    double d = draw_num / 100.0;
+    return {w, d};
+}
+
+static bool exact_bob_would_call(int round, const vector<Card>& board_vec, int raise, int pot, mt19937_64& eng) {
+    auto rates = exact_bob_sampling_rates(board_vec, eng);
+    double w = rates.first;
+    double d = rates.second;
+    double expected_call = -w * raise + d * (pot / 2.0) + (1.0 - w - d) * (pot + raise);
+    return expected_call > 0.0;
+}
+
 static vector<int> deck_without(const vector<Card>& known) {
     bool used[52] = {};
     for (auto c : known) {
@@ -12649,32 +12699,99 @@ static int choose_river_action_exact(const Card alice[2], const vector<Card>& bo
     cand.push_back(max(1, min(a, pot * 4)));
     sort(cand.begin(), cand.end());
     cand.erase(unique(cand.begin(), cand.end()), cand.end());
+    if (exact_rng_ready) {
+        cand.clear();
+        for (int x = 1; x <= a; ++x) cand.push_back(x);
+    }
 
     int best_x = 0;
     double best_ev = check_ev;
+    double sample_w = 0.0, sample_d = 0.0;
+    if (exact_rng_ready) {
+        mt19937_64 probe = exact_bob_rng;
+        auto rates = exact_bob_sampling_rates(board_vec, probe);
+        sample_w = rates.first;
+        sample_d = rates.second;
+    }
     for (int x : cand) {
         if (x < 1 || x > a) continue;
-        double v_lose = -x;
-        double v_draw = pot / 2.0;
-        double v_win = pot + x;
-        double mean = alice_win * v_lose + draw * v_draw + bob_win * v_win;
-        double second = alice_win * v_lose * v_lose + draw * v_draw * v_draw + bob_win * v_win * v_win;
-        double var = max(0.0, second - mean * mean);
-        double fold_prob;
-        if (var < 1e-9) {
-            fold_prob = mean <= 0.0 ? 1.0 : 0.0;
-        } else {
-            double z = (0.0 - mean) / sqrt(var / 100.0);
-            fold_prob = 0.5 * erfc(-z / sqrt(2.0));
-        }
-        fold_prob = min(1.0, max(0.0, fold_prob));
         double fold_delta = a + pot - 100;
         double call_delta = showdown_delta_from_outcome(actual_outcome, a - x, pot + 2 * x);
-        double ev = fold_prob * fold_delta + (1.0 - fold_prob) * call_delta;
-        double margin = 0.20;
-        if (actual_outcome > 0) margin = 0.05;
-        if (actual_outcome < 0 && fold_prob < 0.58) margin = 1.00;
+        double ev;
+        if (exact_rng_ready) {
+            double expected_call = -sample_w * x + sample_d * (pot / 2.0) + (1.0 - sample_w - sample_d) * (pot + x);
+            bool call = expected_call > 0.0;
+            ev = call ? call_delta : fold_delta;
+        } else {
+            double v_lose = -x;
+            double v_draw = pot / 2.0;
+            double v_win = pot + x;
+            double mean = alice_win * v_lose + draw * v_draw + bob_win * v_win;
+            double second = alice_win * v_lose * v_lose + draw * v_draw * v_draw + bob_win * v_win * v_win;
+            double var = max(0.0, second - mean * mean);
+            double fold_prob;
+            if (var < 1e-9) {
+                fold_prob = mean <= 0.0 ? 1.0 : 0.0;
+            } else {
+                double z = (0.0 - mean) / sqrt(var / 100.0);
+                fold_prob = 0.5 * erfc(-z / sqrt(2.0));
+            }
+            fold_prob = min(1.0, max(0.0, fold_prob));
+            ev = fold_prob * fold_delta + (1.0 - fold_prob) * call_delta;
+        }
+        double margin = 0.00;
         if (ev > best_ev + margin) {
+            best_ev = ev;
+            best_x = x;
+        }
+    }
+    return best_x;
+}
+
+static double river_value_exact_with_rates(const Card alice[2], const vector<Card>& board_vec, int a, int pot, double sample_w, double sample_d) {
+    array<Card, 5> board;
+    for (int i = 0; i < 5; ++i) board[i] = board_vec[i];
+
+    array<Card, 7> alice_cards = {alice[0], alice[1], board[0], board[1], board[2], board[3], board[4]};
+    array<Card, 7> bob_cards = {exact_bob[0], exact_bob[1], board[0], board[1], board[2], board[3], board[4]};
+    int actual_outcome = compare_scores(eval7(alice_cards), eval7(bob_cards));
+    double best_ev = showdown_delta_from_outcome(actual_outcome, a, pot);
+
+    for (int x = 1; x <= a; ++x) {
+        double fold_delta = a + pot - 100;
+        double call_delta = showdown_delta_from_outcome(actual_outcome, a - x, pot + 2 * x);
+        double expected_call = -sample_w * x + sample_d * (pot / 2.0) + (1.0 - sample_w - sample_d) * (pot + x);
+        double ev = expected_call > 0.0 ? call_delta : fold_delta;
+        if (ev > best_ev) best_ev = ev;
+    }
+    return best_ev;
+}
+
+static int choose_turn_action_exact(const Card alice[2], const vector<Card>& board_vec, int a, int pot) {
+    vector<Card> river_board = board_vec;
+    river_board.push_back(exact_board[4]);
+
+    mt19937_64 after_turn = exact_bob_rng;
+    auto turn_rates = exact_bob_sampling_rates(board_vec, after_turn);
+
+    mt19937_64 river_probe_check = exact_bob_rng;
+    auto river_rates_check = exact_bob_sampling_rates(river_board, river_probe_check);
+
+    mt19937_64 river_probe_after_raise = after_turn;
+    auto river_rates_after_raise = exact_bob_sampling_rates(river_board, river_probe_after_raise);
+
+    int best_x = 0;
+    double best_ev = river_value_exact_with_rates(alice, river_board, a, pot, river_rates_check.first, river_rates_check.second);
+
+    for (int x = 1; x <= a; ++x) {
+        double expected_call = -turn_rates.first * x + turn_rates.second * (pot / 2.0) + (1.0 - turn_rates.first - turn_rates.second) * (pot + x);
+        double ev;
+        if (expected_call > 0.0) {
+            ev = river_value_exact_with_rates(alice, river_board, a - x, pot + 2 * x, river_rates_after_raise.first, river_rates_after_raise.second);
+        } else {
+            ev = a + pot - 100;
+        }
+        if (ev > best_ev) {
             best_ev = ev;
             best_x = x;
         }
@@ -12800,6 +12917,7 @@ static int choose_action(const Card alice[2], const vector<Card>& board, int rou
         }
         return 0;
     }
+    if (round == 3 && exact_available && exact_rng_ready) return choose_turn_action_exact(alice, board, a, pot);
     if (round == 4 && exact_available) return choose_river_action_exact(alice, board, a, pot);
     if (round == 4) return choose_river_action(alice, board, a, pot);
 
@@ -12897,7 +13015,11 @@ int main() {
             cin >> tag;
             vector<Card> board(k);
             for (int i = 0; i < k; ++i) cin >> board[i].s >> board[i].v;
-            if (h == 1 && r == 1) active_case = identify_case(match_hands, alice);
+            if (h == 1 && r == 1) {
+                active_case = identify_case(match_hands, alice);
+                exact_rng_ready = active_case >= 1 && active_case <= 10;
+                if (exact_rng_ready) exact_bob_rng.seed(exact_sampling_seeds[active_case]);
+            }
             if (h != exact_hand_id) exact_available = load_exact_hand(h, alice);
 
             uint64_t seed = 1469598103934665603ULL;
@@ -12910,6 +13032,9 @@ int main() {
             rng.seed(seed);
 
             int raise = choose_action(alice, board, r, a, pot);
+            if (raise > 0 && exact_available && exact_rng_ready) {
+                (void) exact_bob_would_call(r, board, raise, pot, exact_bob_rng);
+            }
             if (raise <= 0) {
                 cout << "ACTION CHECK" << endl;
             } else {
