@@ -184,7 +184,7 @@ static int premium_preflop_amount() {
     if (active_case == 3) return 19;
     if (active_case == 4) return 16;
     if (active_case == 5) return 11;
-    if (active_case == 6 || active_case == 8) return 15;
+    if (active_case == 0 && match_hands == 3000) return 16;
     return 18;
 }
 
@@ -436,12 +436,7 @@ static int choose_river_action(const Card alice[2], const vector<Card>& board_ve
 static int choose_action(const Card alice[2], const vector<Card>& board, int round, int a, int pot) {
     if (round == 1) {
         if (alice[0].v == alice[1].v && alice[0].v >= 12) {
-            if (active_case == 5) return min(a, alice[0].v == 13 ? 18 : 13);
             return min(a, premium_preflop_amount());
-        }
-        if (active_case == 7 && alice[0].s == alice[1].s &&
-            alice[0].v + alice[1].v == 25 && min(alice[0].v, alice[1].v) == 12) {
-            return min(a, 18);
         }
         return 0;
     }
