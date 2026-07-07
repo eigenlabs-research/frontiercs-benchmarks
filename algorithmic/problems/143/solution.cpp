@@ -401,7 +401,7 @@ static int choose_river_action(const Card alice[2], const vector<Card>& board_ve
 
 static int choose_action(const Card alice[2], const vector<Card>& board, int round, int a, int pot) {
     if (round == 1) {
-        if (alice[0].v == alice[1].v && alice[0].v >= 12) return min(a, 10);
+        if (alice[0].v == alice[1].v && alice[0].v >= 12) return min(a, 13);
         return 0;
     }
     if (round == 4) return choose_river_action(alice, board, a, pot);
