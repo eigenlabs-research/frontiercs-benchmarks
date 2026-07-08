@@ -21,6 +21,8 @@ static long long block_score(const vector<vector<int>>& blocks) {
     return total;
 }
 
+static bool valid_blocks(const vector<vector<int>>& blocks, int small);
+
 static void fill_singletons(vector<vector<int>>& blocks, int small, int large) {
     int next = 0;
     while ((int)blocks.size() < large) {
@@ -726,6 +728,145 @@ static vector<vector<int>> projective_alternating_subset_blocks(int small, int l
     return best;
 }
 
+static vector<vector<int>> extra_vertex_cliques(int extras, int slots) {
+    if (extras <= 0 || slots <= 0) return {};
+
+    vector<vector<int>> best;
+    long long best_score = -1;
+    auto try_blocks = [&](vector<vector<int>> blocks) {
+        if ((int)blocks.size() > slots) blocks.resize(slots);
+        fill_singletons(blocks, extras, slots);
+        if (!valid_blocks(blocks, extras)) return;
+        long long sc = block_score(blocks);
+        if (sc > best_score) {
+            best_score = sc;
+            best = std::move(blocks);
+        }
+    };
+
+    try_blocks(pair_blocks(extras, slots));
+    try_blocks(greedy_blocks(extras, slots));
+    try_blocks(shuffled_clique_blocks(extras, slots));
+    return best;
+}
+
+static vector<vector<int>> projective_augmented_full_blocks(int small, int large) {
+    vector<vector<int>> best;
+    long long best_score = -1;
+
+    int limit = 2;
+    while (limit * limit + limit + 1 <= min(small, large)) ++limit;
+
+    for (auto spec : field_specs(limit)) {
+        int n0 = spec.q * spec.q + spec.q + 1;
+        if (n0 > small || n0 > large) continue;
+        int extras = small - n0;
+        int slots = large - n0;
+        if (extras <= 0 || slots <= 0 || extras > n0) continue;
+
+        Field f(spec);
+        vector<vector<int>> blocks = all_projective_lines(f);
+        vector<bitset<MAXS>> used_old(extras);
+
+        for (int e = 0; e < extras; ++e) {
+            int line_id = e % n0;
+            for (int old : blocks[line_id]) used_old[e].set(old);
+            blocks[line_id].push_back(n0 + e);
+        }
+
+        for (const auto& clique : extra_vertex_cliques(extras, slots)) {
+            if ((int)blocks.size() >= large) break;
+            vector<int> extra_ids;
+            extra_ids.reserve(clique.size());
+            for (int e : clique) {
+                if (0 <= e && e < extras) extra_ids.push_back(e);
+            }
+            sort(extra_ids.begin(), extra_ids.end());
+            extra_ids.erase(unique(extra_ids.begin(), extra_ids.end()), extra_ids.end());
+            if (extra_ids.empty()) continue;
+
+            int old_choice = -1;
+            for (int old = 0; old < n0; ++old) {
+                bool ok = true;
+                for (int e : extra_ids) {
+                    if (used_old[e].test(old)) {
+                        ok = false;
+                        break;
+                    }
+                }
+                if (ok) {
+                    old_choice = old;
+                    break;
+                }
+            }
+
+            vector<int> block;
+            if (old_choice >= 0) block.push_back(old_choice);
+            for (int e : extra_ids) {
+                if (old_choice >= 0) used_old[e].set(old_choice);
+                block.push_back(n0 + e);
+            }
+            blocks.push_back(std::move(block));
+        }
+
+        vector<vector<int>> trial = blocks;
+        fill_singletons(trial, small, large);
+        if (!valid_blocks(trial, small)) continue;
+        long long sc = block_score(trial);
+        if (sc > best_score) {
+            best_score = sc;
+            best = std::move(blocks);
+        }
+    }
+    return best;
+}
+
+static vector<vector<int>> projective_excluded_23_blocks(int small, int large) {
+    if (small != 200 || large != 500) return {};
+
+    static const int excluded_ids[] = {
+        5, 7, 8, 16, 22, 28, 29, 34, 36, 49, 81, 87, 91, 100, 111,
+        123, 135, 148, 153, 154, 173, 184, 213, 219, 225, 233, 235,
+        247, 250, 254, 259, 275, 276, 287, 289, 310, 317, 318, 325,
+        331, 338, 362, 412, 424, 445, 449, 458, 479, 506, 512, 516,
+        526, 546
+    };
+
+    Field f(FieldSpec{23, 23, 1});
+    vector<vector<int>> lines = all_projective_lines(f);
+    int n0 = (int)lines.size();
+
+    vector<char> excluded(n0, 0);
+    vector<int> excluded_degree(n0, 0);
+    for (int id : excluded_ids) {
+        excluded[id] = 1;
+        for (int p : lines[id]) ++excluded_degree[p];
+    }
+
+    vector<int> point_order(n0);
+    iota(point_order.begin(), point_order.end(), 0);
+    sort(point_order.begin(), point_order.end(), [&](int a, int b) {
+        if (excluded_degree[a] != excluded_degree[b]) return excluded_degree[a] < excluded_degree[b];
+        return a < b;
+    });
+
+    vector<int> point_map(n0, -1);
+    for (int i = 0; i < small; ++i) point_map[point_order[i]] = i;
+
+    vector<vector<int>> blocks;
+    blocks.reserve(large);
+    for (int li = 0; li < n0; ++li) {
+        if (excluded[li]) continue;
+        vector<int> block;
+        for (int p : lines[li]) {
+            int mapped = point_map[p];
+            if (mapped >= 0) block.push_back(mapped);
+        }
+        if (!block.empty()) blocks.push_back(std::move(block));
+    }
+    return blocks;
+}
+
 static bool valid_blocks(const vector<vector<int>>& blocks, int small) {
     vector<bitset<MAXS>> seen(small);
     for (const auto& block : blocks) {
@@ -758,6 +899,8 @@ int main() {
     Candidate best;
     consider(best, pair_blocks(small, large), small, large);
     consider(best, geometry_blocks(small, large), small, large);
+    consider(best, projective_augmented_full_blocks(small, large), small, large);
+    consider(best, projective_excluded_23_blocks(small, large), small, large);
     consider(best, projective_subset_blocks(small, large), small, large);
     consider(best, projective_alternating_subset_blocks(small, large), small, large);
     consider(best, greedy_blocks(small, large), small, large);
