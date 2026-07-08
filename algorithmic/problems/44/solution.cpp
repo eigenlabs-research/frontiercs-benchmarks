@@ -47,7 +47,9 @@ struct Solver {
     }
 
     double dist_id(int a, int b) const {
-        return hypot((double)x[a] - (double)x[b], (double)y[a] - (double)y[b]);
+        double dx = (double)x[a] - (double)x[b];
+        double dy = (double)y[a] - (double)y[b];
+        return sqrt(dx * dx + dy * dy);
     }
 
     int city_at(const vector<int> &route, int pos) const {
@@ -262,7 +264,7 @@ struct Solver {
             span = 90;
         } else if (M <= 20000) {
             passes = 1;
-            span = 120;
+            span = 180;
         } else if (M <= 60000) {
             passes = 1;
             span = 55;
@@ -319,14 +321,48 @@ struct Solver {
     vector<vector<int>> cycle_breaks(const vector<int> &order, int limit) const {
         int M = (int)order.size();
         if (M <= 1) return {order};
+        vector<double> edge(M), extra(M), pole(M);
+        double cycle_base = 0.0;
+        for (int i = 0; i < M; ++i) {
+            int a = order[i];
+            int b = order[(i + 1) % M];
+            edge[i] = dist_id(a, b);
+            cycle_base += edge[i];
+            extra[i] = prime[a] ? 0.0 : 0.1 * edge[i];
+            pole[i] = dist_id(a, 0);
+        }
+
+        vector<vector<double>> pref(10);
+        for (int r = 0; r < 10; ++r) {
+            int count = 0;
+            for (int p = r; p < 2 * M; p += 10) ++count;
+            pref[r].assign(count + 1, 0.0);
+            int q = 0;
+            for (int p = r; p < 2 * M; p += 10, ++q) {
+                pref[r][q + 1] = pref[r][q] + extra[p % M];
+            }
+        }
+        auto residue_sum = [&](int residue, int lo, int hi) -> double {
+            if (lo > hi) return 0.0;
+            int first = lo <= residue ? 0 : (lo - residue + 9) / 10;
+            int last = hi < residue ? -1 : (hi - residue) / 10;
+            if (last < first) return 0.0;
+            return pref[residue][last + 1] - pref[residue][first];
+        };
+
         vector<pair<double, int>> top;
         top.reserve(limit);
         for (int k = 0; k < M; ++k) {
-            int a = order[(k + M - 1) % M];
-            int b = order[k];
-            double v = dist_id(0, b) + dist_id(a, 0) - dist_id(a, b);
-            if ((int)top.size() < limit || v < top.back().first) {
-                top.push_back({v, k});
+            int prev = (k + M - 1) % M;
+            double base = cycle_base - edge[prev] + pole[k] + pole[prev];
+            int lo = k + 8;
+            int hi = k + M - 2;
+            int residue = (k + 8) % 10;
+            double penalty = residue_sum(residue, lo, hi);
+            if (N % 10 == 0 && !prime[order[prev]]) penalty += 0.1 * pole[prev];
+            double cost = base + penalty;
+            if ((int)top.size() < limit || cost < top.back().first) {
+                top.push_back({cost, k});
                 sort(top.begin(), top.end());
                 if ((int)top.size() > limit) top.pop_back();
             }
@@ -1030,7 +1066,7 @@ struct Solver {
         bool large_case = N > 60000;
         vector<pair<double, vector<int>>> top_routes;
         vector<vector<int>> direct_polish_pool;
-        int keep_top = (N <= 1200) ? 8 : (N <= 6000 ? 4 : (N <= 20000 ? 3 : (N <= 60000 ? 2 : 0)));
+        int keep_top = (N <= 1200) ? 10 : (N <= 6000 ? 5 : (N <= 20000 ? 5 : (N <= 60000 ? 2 : 0)));
         auto consider = [&](vector<int> route) {
             if ((int)route.size() != N - 1) return;
             double c = route_cost(route);
@@ -1109,12 +1145,12 @@ struct Solver {
                     if (y[i] < y[min_y_id]) min_y_id = i;
                     if (y[i] > y[max_y_id]) max_y_id = i;
                 }
-                vector<int> kd_starts = (N <= 20000) ? vector<int>{0, N / 2, N - 1, far, min_y_id, max_y_id}
+                vector<int> kd_starts = (N <= 20000) ? vector<int>{0, N / 5, N / 4, N / 2, (3 * N) / 4, N - 1, far, min_y_id, max_y_id}
                                                      : vector<int>{0, far};
                 sort(kd_starts.begin(), kd_starts.end());
                 kd_starts.erase(unique(kd_starts.begin(), kd_starts.end()), kd_starts.end());
                 vector<pair<double, vector<int>>> kd_polish;
-                int kd_keep = (N <= 20000) ? 2 : 1;
+                int kd_keep = (N <= 20000) ? 4 : 1;
                 auto remember_kd_polish = [&](vector<int> route) {
                     if ((int)route.size() != N - 1) return;
                     double c = route_cost(route);
@@ -1229,6 +1265,7 @@ struct Solver {
                 double before = route_cost(route);
                 vector<int> original = route;
                 improve_relocate(route, 8, 1);
+                improve_pair_relocate(route, 6, 1);
                 improve_prime_slots(route);
                 if (route_cost(route) > before + 1e-7) route = std::move(original);
             }
