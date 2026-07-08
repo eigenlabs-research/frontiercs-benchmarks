@@ -47,7 +47,9 @@ struct Solver {
     }
 
     double dist_id(int a, int b) const {
-        return hypot((double)x[a] - (double)x[b], (double)y[a] - (double)y[b]);
+        double dx = (double)x[a] - (double)x[b];
+        double dy = (double)y[a] - (double)y[b];
+        return sqrt(dx * dx + dy * dy);
     }
 
     int city_at(const vector<int> &route, int pos) const {
