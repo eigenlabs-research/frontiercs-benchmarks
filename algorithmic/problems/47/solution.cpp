@@ -20,7 +20,7 @@ static chrono::steady_clock::time_point T_START;
 static inline double elapsed(){
     return chrono::duration<double>(chrono::steady_clock::now() - T_START).count();
 }
-static double TIME_LIMIT = 0.84;
+static double TIME_LIMIT = 0.92;
 
 // ---------------- JSON parser (minimal, schema-specific) ----------------
 struct JsonParser {
