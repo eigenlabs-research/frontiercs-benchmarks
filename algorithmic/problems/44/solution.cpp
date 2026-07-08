@@ -1449,9 +1449,22 @@ struct Solver {
                         best_route = std::move(trial);
                     }
                 };
+                auto try_combo = [&](vector<int> trial) {
+                    improve_two_opt_window(trial, 5, (int)trial.size() - 1);
+                    improve_relocate(trial, 20, 1);
+                    improve_pair_relocate(trial, 12, 1);
+                    improve_prime_slots(trial);
+                    improve_two_opt_window(trial, 2, min((int)trial.size() - 1, 260));
+                    double c = route_cost(trial);
+                    if (c < best) {
+                        best = c;
+                        best_route = std::move(trial);
+                    }
+                };
                 try_full_two_opt(original);
                 try_relocate(original, 12, 1, 8);
                 try_relocate(original, 16, 2, 10);
+                try_combo(original);
                 route = std::move(best_route);
             }
         };
