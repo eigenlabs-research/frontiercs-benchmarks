@@ -80,6 +80,32 @@ static long long evalSeq(const vector<vector<int>>& seq, bool fillCrit = false){
 
 struct Move { int m, i; };
 
+// Fast O(1) estimate of the makespan after swapping the adjacent pair (i,i+1)
+// on machine m, using heads (dist = earliest completion) and tails (tail = q)
+// from the most recent exact evalSeq(..., fillCrit=true). This is the classic
+// Nowicki-Smutnicki move value: the longest path through the two moved nodes
+// after the swap. It is a lower bound on the true new makespan and is used only
+// to rank candidate moves; the chosen move is then verified with an exact eval.
+static inline long long swapEst(const vector<vector<int>>& seq, int m, int i){
+    int a = seq[m][i], b = seq[m][i+1];
+    int ka = pos[a][m], kb = pos[b][m];
+    int ua = a*M + ka, ub = b*M + kb;
+    long long pa = pnode[ua], pb = pnode[ub];
+    long long jpCa = (ka>0)   ? dist[ua-1] : 0;   // job-pred completion of a
+    long long jpCb = (kb>0)   ? dist[ub-1] : 0;   // job-pred completion of b
+    long long jsTa = (ka<M-1) ? tail[ua+1] : 0;   // job-succ tail of a
+    long long jsTb = (kb<M-1) ? tail[ub+1] : 0;   // job-succ tail of b
+    long long mpC = 0, msT = 0;
+    if(i>0){ int mp = seq[m][i-1]; mpC = dist[mp*M + pos[mp][m]]; }        // machine pred (now precedes b)
+    if(i+2<J){ int ms = seq[m][i+2]; msT = tail[ms*M + pos[ms][m]]; }     // machine succ (now follows a)
+    // After swap the machine order is b, a.
+    long long rb = max(jpCb, mpC);   long long Cb = rb + pb;   // new head of b
+    long long ra = max(jpCa, Cb);                              // new head of a
+    long long qa = pa + max(jsTa, msT);                        // new tail of a
+    long long qb = pb + max(jsTb, qa);                         // new tail of b
+    return max(ra + qa, rb + qb);
+}
+
 // Full NS neighborhood: every adjacent pair (i,i+1) on each machine where BOTH
 // operations are critical (lie on a longest path).
 static vector<Move> genMoves(const vector<vector<int>>& seq, const vector<vector<int>>& pm){
@@ -219,26 +245,28 @@ int main(){
         for(int m=0;m<M;++m) for(int i=0;i<J;++i) pm[m][s[m][i]] = i;
     };
 
-    // Steepest descent via full NS neighborhood (runs until deadline).
+    // Steepest descent guided by the O(1) NS estimate. Each iteration: exact-eval
+    // once (heads/tails/crit), pick the adjacent-critical swap with the smallest
+    // estimated makespan, apply it. The estimate is a lower bound, so we accept a
+    // move only if its estimate is below the current exact makespan; the next
+    // iteration's exact eval keeps curC honest. Stop when no estimate improves.
     auto steepest = [&](chrono::steady_clock::time_point deadline){
         while(chrono::steady_clock::now() < deadline){
             rebuildPM(cur);
             long long c = evalSeq(cur, true);
             if(c < 0) break;
             auto moves = genMoves(cur, pm);
-            long long bestNC = -1; int bestIdx = -1;
+            long long bestEst = c; int bestIdx = -1;
             for(int idx=0; idx<(int)moves.size(); ++idx){
-                if((idx & 7)==0 && chrono::steady_clock::now() >= deadline) break;
-                auto& mv = moves[idx];
-                swap(cur[mv.m][mv.i], cur[mv.m][mv.i+1]);
-                long long nc = evalSeq(cur, false);
-                swap(cur[mv.m][mv.i], cur[mv.m][mv.i+1]);
-                if(nc > 0 && (bestIdx==-1 || nc < bestNC)){ bestNC = nc; bestIdx = idx; }
+                long long e = swapEst(cur, moves[idx].m, moves[idx].i);
+                if(e < bestEst){ bestEst = e; bestIdx = idx; }
             }
-            if(bestIdx==-1 || bestNC >= c) break;
+            if(bestIdx==-1) break;
             auto& mv = moves[bestIdx];
             swap(cur[mv.m][mv.i], cur[mv.m][mv.i+1]);
-            curC = bestNC;
+            long long nc = evalSeq(cur, false);
+            if(nc < 0 || nc >= c){ swap(cur[mv.m][mv.i], cur[mv.m][mv.i+1]); break; }
+            curC = nc;
             if(curC < bestC){ best = cur; bestC = curC; }
         }
     };
@@ -249,25 +277,31 @@ int main(){
         int iter = 0;
         int tenure = max(6, J);
         int sinceImprove = 0;
-        const int bigStuck = 1200;
+        const int bigStuck = 2000;
         while(chrono::steady_clock::now() < deadline){
             iter++;
             rebuildPM(cur);
             long long c = evalSeq(cur, true);
             if(c < 0){ cur = best; curC = bestC; continue; }
             auto moves = genMoves(cur, pm);
-            long long bestNC = -1; int bestIdx = -1;
+            // Select the best move by the O(1) NS estimate among non-tabu moves
+            // (aspiration: a move whose estimate beats bestC is always allowed).
+            long long bestEst = LLONG_MAX; int bestIdx = -1;
             for(int idx=0; idx<(int)moves.size(); ++idx){
-                if((idx & 7)==0 && chrono::steady_clock::now() >= deadline) break;
                 auto& mv = moves[idx];
+                long long e = swapEst(cur, mv.m, mv.i);
                 bool isTabu = tabuUntil[mv.m][mv.i] > iter;
-                swap(cur[mv.m][mv.i], cur[mv.m][mv.i+1]);
-                long long nc = evalSeq(cur, false);
-                swap(cur[mv.m][mv.i], cur[mv.m][mv.i+1]);
-                if(nc < 0) continue;
-                bool asp = (nc < bestC);
+                bool asp = (e < bestC);
                 if(isTabu && !asp) continue;
-                if(bestIdx==-1 || nc < bestNC){ bestNC = nc; bestIdx = idx; }
+                if(e < bestEst){ bestEst = e; bestIdx = idx; }
+            }
+            long long bestNC = -1;
+            if(bestIdx != -1){
+                auto& mv = moves[bestIdx];
+                swap(cur[mv.m][mv.i], cur[mv.m][mv.i+1]);
+                bestNC = evalSeq(cur, false);
+                swap(cur[mv.m][mv.i], cur[mv.m][mv.i+1]);
+                if(bestNC < 0) bestIdx = -1;
             }
             if(bestIdx==-1){
                 if(chrono::steady_clock::now() >= deadline) break;
