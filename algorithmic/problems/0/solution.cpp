@@ -1,6 +1,9 @@
-// v16: champion skyline packer + bulletproof timing (never TLE) + leftover-budget random restarts.
-// Judge: cpuLimit=2s. Champion lost 3/70 cases to ~2.001-2.06s overruns (zero points each).
-// Strategy: hard global deadline (default 1740ms, env POLYPACK_TL override for local testing),
+// v17: v16 + better mid-size routing and width probing.
+// - Mid-size cases (S up to ~22000) now take the small path (multi-width sweep + blf3 phase2 +
+//   capped restarts) instead of the single-width adaptive pack; big win on S~10k cases.
+// - Sweep first-pack panic guard: the first sweep width can't eat the whole budget on mid-size.
+// - Auto width-probe for big-path cases with S < 60000 picks a stronger base width first.
+// Judge: cpuLimit=2s. Hard global deadline (default 1850ms, env POLYPACK_TL override),
 // in-pack abort checks, guaranteed fast fallback computed first, fast I/O.
 #include <bits/stdc++.h>
 using namespace std;
@@ -771,7 +774,7 @@ int main() {
     int B3 = envInt("PP_B3", 1);             // 1: use cached blf3 instead of blf2
     int PHASE2 = envInt("PP_PHASE2", 1);     // 1: blf2 pass over best sweep Ws
     double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;  // 0 => auto by size
-    long long P2MAXS = envInt("PP_P2MAXS", 7000);    // phase2 only when S below this
+    long long P2MAXS = envInt("PP_P2MAXS", 22000);   // phase2 only when S below this
     long long B2RESTS = envInt("PP_B2RESTS", 1300);  // blf2 restarts when S below this
 
     // read all of stdin
@@ -875,7 +878,7 @@ int main() {
         sort(Ws.begin(), Ws.end(), [&](int a, int b) { int da = abs(a - base), db = abs(b - base); if (da != db) return da < db; return a < b; });
     }
 
-    bool big = S > (long long)envInt("PP_BIGTHRESH", 7000);
+    bool big = S > (long long)envInt("PP_BIGTHRESH", 22000);
     vector<int> baseOrder = ord4();
 
     auto better = [&](const R& a, const R& b) {
@@ -885,9 +888,13 @@ int main() {
         return a.W < b.W;
     };
     // ---- guaranteed fallback: cheap greedy (window=1), no deadline (bounded work) ----
+    double tFB0 = elapsed_ms();
     R bestR = pack(base, baseOrder, rng, false, 1, false, 0.0, -1.0);
+    double tFB = max(0.05, elapsed_ms() - tFB0); // measured window=1 pack cost
     // ---- W probe for big cases: quick packs pick the strongest width before the big spend ----
-    if (S > 7000 && envInt("PP_WPROBE", 0)) {
+    int wprobeEnv = envInt("PP_WPROBE", -1); // -1 = auto: big path but not huge
+    bool doWprobe = (wprobeEnv < 0) ? (big && S < 60000) : (wprobeEnv > 0 && S > 7000);
+    if (doWprobe) {
         long long bestProbe = bestR.ok ? bestR.A : LLONG_MAX;
         int bestW = base;
         double probeBudget = TL_MS * 0.12;
@@ -934,6 +941,21 @@ int main() {
     const vector<int>& ordB2 = BLF2ORD ? baseOrder : ordBLF;
 
     // ---- main sweep (champion behavior, deadline-guarded) ----
+    // small-path sweep window: predicted from measured window=1 pack cost so the first
+    // full-window pack completes within ~80% of the sweep budget (mid-size safety).
+    // If the environment is too slow to afford a meaningful window (< n/12), the multi-width
+    // sweep would degrade below the single-width adaptive pack: route to the big path instead.
+    int swin = max(1, n / 4);
+    if (!big && !((big && BIGBLF) || (!big && SMALLBLF))) {
+        static double SW1F = envInt("PP_SW1F", 80) / 100.0;
+        double sweepBudget = (PHASE2 && S < P2MAXS) ? min(SOFT_END, TL_MS * (P2FRAC > 0.0 ? P2FRAC : 0.55))
+                                                    : SOFT_END;
+        double budget1 = SW1F * max(50.0, sweepBudget - elapsed_ms());
+        int cap = max(24, (int)(budget1 / tFB));
+        if (cap < swin) swin = cap;
+        if (swin < max(24, n / 12) && S > 7000) big = true; // too slow for a useful sweep
+        if (getenv("PP_DEBUG")) fprintf(stderr, "tFB=%.2f swin=%d (n/4=%d) big=%d\n", tFB, swin, max(1, n / 4), (int)big);
+    }
     bool skipSweep = (big && BIGBLF) || (!big && SMALLBLF);
     int expLIM = big ? min(max(1, n / 4), (int)(350000 / max(1LL, S - 3500))) : 0;
     double avg = 250.0; int cnt = 0;
@@ -970,7 +992,11 @@ int main() {
             r = B3 ? pack_blf3(W, ordB2, max(1, n / 4), SEARCH_END, rng, false)
                    : pack_blf2(W, ordB2, max(1, n / 4), SEARCH_END, rng, false);
         } else {
-            r = pack(W, baseOrder, rng, false, max(1, n / 4), false, 0.0, SEARCH_END);
+            // panic guard: no single sweep width may eat the whole budget on mid-size cases;
+            // past panicAt the pack drops to window=1 and completes greedily instead of aborting.
+            static double PANF = envInt("PP_PANFRAC", 85) / 100.0;
+            double panicAt = min(t1 + max(150.0, PANF * (sweepEnd - t1)), SEARCH_END - 60.0);
+            r = pack(W, baseOrder, rng, false, swin, false, 0.0, SEARCH_END, panicAt);
         }
         double dt = elapsed_ms() - t1;
         cnt++; avg = (avg * (cnt - 1) + dt) / cnt;
@@ -986,10 +1012,24 @@ int main() {
         double P2END = envInt("PP_P2END", 70) / 100.0;
         double p2Stop = min(SOFT_END, TL_MS * P2END);
         double avg2 = 20.0; int cnt2 = 0;
-        for (size_t i = 0; i < sweepRes.size(); i++) {
+        // width candidates: sweep results (best area first), then unexplored neighbors of the
+        // best width — blf3 packs are cheap, so probe widths the sweep never reached.
+        vector<int> p2W;
+        {
+            unordered_set<int> seenW; seenW.reserve(64);
+            for (auto& sr : sweepRes) if (seenW.insert(sr.second).second) p2W.push_back(sr.second);
+            static int P2SPAN = envInt("PP_P2SPAN", 0);
+            int c0 = sweepRes.empty() ? base : sweepRes[0].second;
+            for (int d = 1; d <= P2SPAN; d++)
+                for (int sgn = -1; sgn <= 1; sgn += 2) {
+                    int W = c0 + sgn * d;
+                    if (W >= minW && W <= 4000 && seenW.insert(W).second) p2W.push_back(W);
+                }
+        }
+        for (size_t i = 0; i < p2W.size(); i++) {
             double used = elapsed_ms();
             if (used + avg2 * 1.2 > p2Stop) break;
-            int W = sweepRes[i].second;
+            int W = p2W[i];
             double t1 = elapsed_ms();
             static int B3WINDIV = envInt("PP_B3WINDIV", 4);
             int b3win = max(1, B3WINDIV > 0 ? n / B3WINDIV : n);
