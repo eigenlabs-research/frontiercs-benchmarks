@@ -801,13 +801,13 @@ int main(){
         int lb = 2; while(lb*lb < N) lb++;
         { int lb2=2; while(2*lb2*(lb2-1) < M) lb2++; lb=max(lb,lb2); }
         vector<vector<int>> earlyDenseGrid;
-        if(40LL*M >= 7LL*N*(N-1)){
+        if(8LL*M >= 1LL*N*(N-1)){
             auto denseDl = tStart + chrono::milliseconds(N>=35 ? 760 : 650);
             if(denseDl > HARD_DL) denseDl = HARD_DL;
             int focus = max(lb, (int)(sqrt((double)M)*1.12));
             int hi = min(N, max(lb+18, focus+7));
             for(int k=lb; k<=hi && chrono::steady_clock::now()<denseDl; k++){
-                int attempts = (k < focus) ? 35 : (N>=35 ? 700 : 900);
+                int attempts = (k < focus) ? 35 : (N>=35 ? 900 : 2600);
                 vector<vector<int>> g;
                 if(buildDenseRandomGrid(k, attempts, denseDl, g) && verifyGrid(g)){
                     earlyDenseGrid=g;
