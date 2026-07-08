@@ -1,297 +1,230 @@
-/*
-SOURCE: Shang Zhou
-IIMOC SUBMISSION #1443
-HUMAN BEST FOR POLYPACK (TRANSFORMATION OUTPUT FORMAT)
-*/
-
+// Pack the Polyominoes — bottom-left-fill over bitmask rows.
+// Sort pieces by size descending; for each, scan positions bottom-up,
+// left-to-right, trying all distinct reflect/rotate orientations, and place
+// at the first fit. Repeat for a few candidate widths, keep smallest area.
 #include <bits/stdc++.h>
 using namespace std;
-struct T{int w,h;vector<pair<int,int>> c;vector<int> lo,hi;int r,f,minx,miny;};
-struct P{int id,k;vector<pair<int,int>> b;vector<T> t;int minW=1e9,minH=1e9,minA=1e9;};
-struct Pl{int idx,ti,x,y;};
-struct R{long long A;int W,H;vector<Pl> pl;};
-struct RNG{unsigned long long s;RNG(unsigned long long x){s=x?x:1;}inline unsigned long long nxt(){s^=s<<7;s^=s>>9;return s;}inline int rint(int n){return (int)(nxt()%n);}inline bool coin(){return nxt()&1;}};
-static inline pair<int,int> rotp(pair<int,int> p,int r){if(r==0)return p; if(r==1)return make_pair(-p.second,p.first); if(r==2)return make_pair(-p.first,-p.second); return make_pair(p.second,-p.first);}
-int main(){
+typedef uint64_t u64;
+typedef long long ll;
+
+static chrono::steady_clock::time_point T0;
+static inline double elapsedSec() {
+    return chrono::duration<double>(chrono::steady_clock::now() - T0).count();
+}
+
+static inline pair<int,int> rotcw(int x, int y, int r) {
+    switch (r & 3) {
+        case 0:  return {x, y};
+        case 1:  return {y, -x};
+        case 2:  return {-x, -y};
+        default: return {-y, x};
+    }
+}
+
+struct Orient {
+    int w, h, tminx, tminy, R, F;
+    int b0; // lowest set bit of rows[0]
+    uint16_t rows[10];
+};
+
+struct Piece {
+    int k;
+    int bx, by; // base subtracted from original coords
+    vector<Orient> os;
+};
+
+struct Result {
+    ll area = LLONG_MAX;
+    int W = 0, H = 0;
+    // per piece: ox, oy, orient index
+    vector<array<int,3>> placed;
+};
+
+int main() {
+    T0 = chrono::steady_clock::now();
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
-    int n; if(!(cin>>n)) return 0;
-    vector<P> ps(n); long long S=0;
-    for(int i=0;i<n;i++){
-        int k;cin>>k; ps[i].id=i+1; ps[i].k=k; ps[i].b.resize(k);
-        for(int j=0;j<k;j++){int x,y;cin>>x>>y; ps[i].b[j]={x,y};}
-        S+=k;
-    }
-    for(int i=0;i<n;i++){
-        auto &p=ps[i]; unordered_set<string> seen; seen.reserve(32);
-        for(int rf=0;rf<2;rf++){
-            vector<pair<int,int>> src=p.b; if(rf){for(auto &q:src) q.first=-q.first;}
-            for(int r=0;r<4;r++){
-                vector<pair<int,int>> v=src; for(auto &q:v) q=rotp(q,r);
-                int minx=INT_MAX,miny=INT_MAX,maxx=INT_MIN,maxy=INT_MIN;
-                for(auto &q:v){minx=min(minx,q.first);miny=min(miny,q.second);maxx=max(maxx,q.first);maxy=max(maxy,q.second);}
-                vector<pair<int,int>> v2=v; for(auto &q:v2){q.first-=minx;q.second-=miny;}
-                sort(v2.begin(),v2.end());
-                string key; key.reserve(v2.size()*8);
-                for(auto &q:v2){key.append(to_string(q.first));key.push_back(',');key.append(to_string(q.second));key.push_back(';');}
-                if(seen.insert(key).second){
-                    T t; t.w=maxx-minx+1; t.h=maxy-miny+1; t.c=v2; t.r=r; t.f=rf; t.minx=minx; t.miny=miny;
-                    t.lo.assign(t.w,INT_MAX); t.hi.assign(t.w,INT_MIN);
-                    for(auto &q:v2){int x=q.first,y=q.second; if(t.lo[x]>y) t.lo[x]=y; if(t.hi[x]<y) t.hi[x]=y;}
-                    p.t.push_back(move(t));
+
+    int n;
+    if (!(cin >> n)) return 0;
+    vector<Piece> ps(n);
+    ll S = 0;
+    for (int i = 0; i < n; i++) {
+        int k; cin >> k;
+        ps[i].k = k;
+        S += k;
+        vector<pair<ll,ll>> raw(k);
+        ll mnx = LLONG_MAX, mny = LLONG_MAX;
+        for (auto &c : raw) { cin >> c.first >> c.second; mnx = min(mnx, c.first); mny = min(mny, c.second); }
+        ps[i].bx = (int)mnx; ps[i].by = (int)mny;
+        vector<pair<int,int>> cells(k);
+        for (int j = 0; j < k; j++) cells[j] = {(int)(raw[j].first - mnx), (int)(raw[j].second - mny)};
+
+        set<vector<pair<int,int>>> seen;
+        for (int F = 0; F < 2; F++) {
+            for (int R = 0; R < 4; R++) {
+                vector<pair<int,int>> t(k);
+                int tmnx = INT_MAX, tmny = INT_MAX, tmxx = INT_MIN, tmxy = INT_MIN;
+                for (int j = 0; j < k; j++) {
+                    int x = F ? -cells[j].first : cells[j].first;
+                    t[j] = rotcw(x, cells[j].second, R);
+                    tmnx = min(tmnx, t[j].first);  tmxx = max(tmxx, t[j].first);
+                    tmny = min(tmny, t[j].second); tmxy = max(tmxy, t[j].second);
                 }
+                vector<pair<int,int>> nm(k);
+                for (int j = 0; j < k; j++) nm[j] = {t[j].first - tmnx, t[j].second - tmny};
+                sort(nm.begin(), nm.end());
+                if (!seen.insert(nm).second) continue;
+                Orient o;
+                o.w = tmxx - tmnx + 1; o.h = tmxy - tmny + 1;
+                o.tminx = tmnx; o.tminy = tmny; o.R = R; o.F = F;
+                memset(o.rows, 0, sizeof(o.rows));
+                for (auto &p : nm) o.rows[p.second] |= (uint16_t)(1u << p.first);
+                o.b0 = __builtin_ctz((unsigned)o.rows[0]);
+                ps[i].os.push_back(o);
             }
         }
-        for(auto &t:p.t){p.minW=min(p.minW,t.w); p.minH=min(p.minH,t.h); p.minA=min(p.minA,t.w*t.h);}
-        if(p.t.empty()){T t; t.w=1;t.h=1;t.c={{0,0}};t.lo={0};t.hi={0};t.r=0;t.f=0;t.minx=0;t.miny=0;p.t.push_back(t);p.minW=1;p.minH=1;p.minA=1;}
-    }
-    vector<int> idx(n); iota(idx.begin(),idx.end(),0);
-    unsigned long long seed=((unsigned long long)chrono::high_resolution_clock::now().time_since_epoch().count()) ^ (S<<1) ^ (unsigned long long)(n*1469598103934665603ULL);
-    RNG rng(seed);
-    auto ord4 = [&]() {
-        vector<int> res = idx;
-        stable_sort(res.begin(), res.end(), [&](int a, int b) {
-            int da = min(ps[a].minW, ps[a].minH);
-            int db = min(ps[b].minW, ps[b].minH);
-            if (da != db) return da < db;
-            if (ps[a].k != ps[b].k) return ps[a].k < ps[b].k;
-            return ps[a].id > ps[b].id;
+        // prefer flat, wide orientations
+        sort(ps[i].os.begin(), ps[i].os.end(), [](const Orient &a, const Orient &b) {
+            if (a.h != b.h) return a.h < b.h;
+            return a.w > b.w;
         });
+    }
+
+    vector<int> order(n);
+    iota(order.begin(), order.end(), 0);
+    sort(order.begin(), order.end(), [&](int a, int b) {
+        if (ps[a].k != ps[b].k) return ps[a].k > ps[b].k;
+        return ps[a].os[0].w > ps[b].os[0].w;
+    });
+
+    const double HARD = 1.55;   // emergency shelf-fill beyond this
+    const double NEXT = 1.10;   // don't start another width beyond this
+
+    auto attempt = [&](int W) -> Result {
+        int words = (W + 63) >> 6;
+        int rows = 0;
+        vector<u64> g;
+        vector<int> cnt;
+        auto ensureRows = [&](int need) {
+            if (need > rows) {
+                int nr = max(need, rows + rows / 2 + 64);
+                g.resize((size_t)nr * words, 0);
+                cnt.resize(nr, 0);
+                rows = nr;
+            }
+        };
+        ensureRows((int)(S / W) + 64);
+        int topY = 0, fnf = 0;
+        Result res;
+        res.W = W;
+        res.placed.assign(n, {0,0,0});
+        bool emergency = false;
+        int shX = 0, shY = 0, shH = 0, ctr = 0;
+
+        auto orIn = [&](const Orient &o, int x, int y) {
+            int s = x & 63, wi = x >> 6;
+            for (int r = 0; r < o.h; r++) {
+                u64 m = o.rows[r];
+                size_t base = (size_t)(y + r) * words + wi;
+                g[base] |= m << s;
+                if (s) { u64 hi = m >> (64 - s); if (hi) g[base + 1] |= hi; }
+                cnt[y + r] += __builtin_popcount((unsigned)m);
+            }
+        };
+
+        for (int idx : order) {
+            Piece &p = ps[idx];
+            if (!emergency && ((++ctr & 31) == 0) && elapsedSec() > HARD) {
+                emergency = true; shY = topY; shX = 0; shH = 0;
+            }
+            if (emergency) {
+                const Orient &o = p.os[0];
+                if (shX + o.w > W) { shY += shH; shX = 0; shH = 0; }
+                ensureRows(shY + o.h);
+                orIn(o, shX, shY);
+                res.placed[idx] = {shX, shY, 0};
+                shX += o.w; shH = max(shH, o.h);
+                topY = max(topY, shY + o.h);
+                continue;
+            }
+            int bx = -1, by = -1, bo = -1;
+            for (int y = fnf; y <= topY && bo < 0; y++) {
+                if (cnt[y] == W) continue;
+                ensureRows(y + 11);
+                // scan only anchors (free cells): every valid placement puts
+                // the leftmost cell of its bottom row on a free cell
+                size_t rowBase = (size_t)y * words;
+                for (int wi = 0; wi < words && bo < 0; wi++) {
+                    u64 freeBits = ~g[rowBase + wi];
+                    int lim = W - (wi << 6);
+                    if (lim < 64) freeBits &= (lim <= 0) ? 0ULL : ((1ULL << lim) - 1);
+                    while (freeBits && bo < 0) {
+                        int b = __builtin_ctzll(freeBits);
+                        freeBits &= freeBits - 1;
+                        int ax = (wi << 6) + b;
+                        for (int oi = 0; oi < (int)p.os.size(); oi++) {
+                            const Orient &o = p.os[oi];
+                            int x = ax - o.b0;
+                            if (x < 0 || x + o.w > W) continue;
+                            int s = x & 63, xwi = x >> 6;
+                            bool ok = true;
+                            for (int r = 0; r < o.h; r++) {
+                                u64 m = o.rows[r];
+                                size_t base = (size_t)(y + r) * words + xwi;
+                                if (g[base] & (m << s)) { ok = false; break; }
+                                if (s) {
+                                    u64 hi = m >> (64 - s);
+                                    if (hi && (g[base + 1] & hi)) { ok = false; break; }
+                                }
+                            }
+                            if (ok) { bx = x; by = y; bo = oi; break; }
+                        }
+                    }
+                }
+            }
+            if (bo < 0) { bx = 0; by = topY; bo = 0; ensureRows(by + 11); }
+            const Orient &o = p.os[bo];
+            orIn(o, bx, by);
+            res.placed[idx] = {bx, by, bo};
+            topY = max(topY, by + o.h);
+            while (fnf < topY && cnt[fnf] == W) fnf++;
+        }
+        res.H = max(topY, 1);
+        res.area = (ll)W * res.H;
         return res;
     };
-    auto pack=[&](int W,const vector<int>& o0,RNG &rng,bool randtie){
-        vector<int> h(W,-1);
-        long long g=-1;
-        vector<Pl> pl; pl.reserve(o0.size());
-        vector<int> o=o0;
-        int t=0,nm=(int)o.size();
-        bool big=S>7000;
-        int maxBound=max(1,n/4);
-        int expLIM=min(maxBound,(int)(350000/max(1LL,S-3500)));
-        int dynLIM=big?expLIM:maxBound;
-        auto tStart=chrono::steady_clock::now();
-        auto batchStart=tStart;
-        long long TLms=big?1900:LLONG_MAX/4;
-        int stepCnt=0;
-        while(t<nm){
-            int limCnt=max(1,dynLIM);
-            int lim=min(nm,t+limCnt);
-            long long bestg=LLONG_MAX; int bti=-1,bx=0,by=0,bl=INT_MAX; long long bds=LLONG_MAX; long long bdr=LLONG_MAX; int by0=INT_MAX,bx0=INT_MAX; int bestpos=t; int bestid=-1;
-            for(int pos=t;pos<lim;pos++){
-                int id=o[pos];
-                auto &p=ps[id];
-                long long bestg2=LLONG_MAX; int bti2=-1,bx2=0,by2=0,bl2=INT_MAX; long long bds2=LLONG_MAX; long long bdr2=LLONG_MAX; int by02=INT_MAX,bx02=INT_MAX;
-                for(int ti=0;ti<(int)p.t.size();ti++){
-                    auto &tsh=p.t[ti]; if(tsh.w>W) continue; int Rpos=W-tsh.w+1;
-                    for(int x0=0;x0<Rpos;x0++){
-                        int y0=0;
-                        for(int j=0;j<tsh.w;j++){
-                            if(tsh.lo[j]!=INT_MAX){int v=h[x0+j]-tsh.lo[j]+1; if(v>y0) y0=v;}
-                        }
-                        int nhbuf[32];
-                        int l=-1; long long dsum=0;
-                        for(int j=0;j<tsh.w;j++){
-                            int nh=h[x0+j];
-                            if(tsh.hi[j]!=INT_MIN){
-                                int cand=y0+tsh.hi[j];
-                                if(nh<cand) nh=cand;
-                            }
-                            nhbuf[j]=nh;
-                            if(nh>l) l=nh;
-                        }
-                        for(int j=0;j<tsh.w;j++){
-                            int inc=nhbuf[j]-h[x0+j];
-                            if(inc>0) dsum+=inc;
-                        }
-                        long long dr=0;
-                        if(x0>0){
-                            long long old=llabs((long long)h[x0]-h[x0-1]);
-                            long long nw=llabs((long long)nhbuf[0]-h[x0-1]);
-                            dr+=nw-old;
-                        }
-                        for(int j=0;j<tsh.w-1;j++){
-                            long long old=llabs((long long)h[x0+j+1]-h[x0+j]);
-                            long long nw=llabs((long long)nhbuf[j+1]-nhbuf[j]);
-                            dr+=nw-old;
-                        }
-                        if(x0+tsh.w<W){
-                            long long old=llabs((long long)h[x0+tsh.w]-h[x0+tsh.w-1]);
-                            long long nw=llabs((long long)h[x0+tsh.w]-nhbuf[tsh.w-1]);
-                            dr+=nw-old;
-                        }
-                        long long gg=g; if(gg<l) gg=l;
-                        bool take=false;
-                        if(gg<bestg2) take=true;
-                        else if(gg==bestg2){
-                            if(dsum<bds2) take=true;
-                            else if(dsum==bds2){
-                                if(l<bl2) take=true;
-                                else if(l==bl2){
-                                    if(dr<bdr2) take=true;
-                                    else if(dr==bdr2){
-                                        if(y0<by02) take=true;
-                                        else if(y0==by02){
-                                            if(x0<bx02) take=true;
-                                            else if(x0==bx02 && randtie && rng.coin()) take=true;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if(take){bestg2=gg;bti2=ti;bx2=x0;by2=y0;bl2=l;bds2=dsum;bdr2=dr;by02=y0;bx02=x0;}
-                    }
-                }
-                if(bti2==-1) continue;
-                bool take=false;
-                if(bestg2<bestg) take=true;
-                else if(bestg2==bestg){
-                    if(bds2<bds) take=true;
-                    else if(bds2==bds){
-                        if(bl2<bl) take=true;
-                        else if(bl2==bl){
-                            if(bdr2<bdr) take=true;
-                            else if(bdr2==bdr){
-                                if(by02<by0) take=true;
-                                else if(by02==by0){
-                                    if(bx02<bx0) take=true;
-                                    else if(bx02==bx0 && randtie && rng.coin()) take=true;
-                                }
-                            }
-                        }
-                    }
-                }
-                if(take){bestg=bestg2;bti=bti2;bx=bx2;by=by2;bl=bl2;bds=bds2;bdr=bdr2;by0=by02;bx0=bx02;bestpos=pos;bestid=id;}
-            }
-            if(bti==-1){t++;stepCnt++;if(big&&stepCnt==5){auto now=chrono::steady_clock::now(); auto elapsed=chrono::duration<double,milli>(now-tStart).count(); auto batch=chrono::duration<double,milli>(now-batchStart).count(); double remT=max(0.0,TLms-elapsed); int remSteps=max(1,nm-t); double budget=remT*5.0/remSteps; if(batch<budget) dynLIM=min(maxBound,dynLIM+1); else dynLIM=max(1,dynLIM-1); batchStart=now; stepCnt=0;} continue;}
-            auto &tsh=ps[bestid].t[bti];
-            for(int j=0;j<tsh.w;j++){
-                int nh=h[bx+j];
-                if(tsh.hi[j]!=INT_MIN){
-                    int cand=by+tsh.hi[j];
-                    if(nh<cand) nh=cand;
-                }
-                h[bx+j]=nh;
-            }
-            if(g<bl) g=bl;
-            pl.push_back({bestid,bti,bx,by});
-            if(bestpos!=t) swap(o[t],o[bestpos]);
-            t++;
-            stepCnt++;
-            if(big&&stepCnt==5){
-                auto now=chrono::steady_clock::now();
-                auto elapsed=chrono::duration<double,milli>(now-tStart).count();
-                auto batch=chrono::duration<double,milli>(now-batchStart).count();
-                double remT=max(0.0,TLms-elapsed);
-                int remSteps=max(1,nm-t);
-                double budget=remT*5.0/remSteps;
-                if(batch<budget) dynLIM=min(maxBound,dynLIM+1); else dynLIM=max(1,dynLIM-1);
-                batchStart=now;
-                stepCnt=0;
-            }
-        }
-        int H=(int)g+1;
-        int maxX=-1;
-        for(auto &pp:pl){
-            auto &t=ps[pp.idx].t[pp.ti];
-            for(auto &q:t.c){int x=pp.x+q.first; if(x>maxX) maxX=x;}
-        }
-        int Wused=0;
-        if(maxX>=0){
-            vector<char> used(maxX+1,false);
-            for(auto &pp:pl){auto &t=ps[pp.idx].t[pp.ti]; for(auto &q:t.c){used[pp.x+q.first]=true;}}
-            for(int x=0;x<=maxX;x++) if(used[x]) Wused++;
-        }
-        int Wfinal=max(0,Wused);
-        long long A=1LL*H*max(1,Wfinal);
-        return R{A,max(1,Wfinal),H,move(pl)};
-    };
-    int minW=0; for(auto &p:ps) minW=max(minW,p.minW);
-    double factor;
-    if (S < 1000) {
-        factor = 0.4;
-    } else if (S < 3000) {
-        factor = 0.5;
-    } else if (S < 10000) {
-        factor = 0.27;
-    } else if (S < 30000) {
-        factor = 0.08;
-    } else {
-        factor = 0.01;
+
+    int base = (int)ceil(sqrt((double)S));
+    double mults[4] = {0.97, 1.00, 1.06, 1.14};
+    vector<int> widths;
+    for (double m : mults) {
+        int w = max(12, (int)ceil(base * m));
+        if (find(widths.begin(), widths.end(), w) == widths.end()) widths.push_back(w);
     }
-    int base = max(minW, (int)floor(sqrt((double)S * factor)));
-    vector<int> Ws;
-    {
-        unordered_set<int> used; used.reserve(512);
-        auto addW=[&](int w){if(w<minW) w=minW; if(used.insert(w).second) Ws.push_back(w);};
-        addW(base);
-        int span=min(96,max(20,base/2));
-        for(int d=1;d<=span;d++){addW(base-d); addW(base+d);}
-        addW(minW);
-        addW((int)max<long long>(minW,(S+base-1)/base));
-        for(int m=2;m<=6;m++){addW(base*m/3); addW((int)max<long long>(minW,S/((base*m/3)?(base*m/3):1)));}
-        sort(Ws.begin(),Ws.end(),[&](int a,int b){int da=abs(a-base),db=abs(b-base); if(da!=db) return da<db; return a<b;});
+
+    Result best;
+    for (size_t i = 0; i < widths.size(); i++) {
+        if (i > 0 && elapsedSec() > NEXT) break;
+        Result r = attempt(widths[i]);
+        if (r.area < best.area || (r.area == best.area && r.H < best.H)) best = std::move(r);
     }
-    long long bestA=LLONG_MAX; int bestW=0,bestH=0; R bestR; bool hasBestmine=false;
-    auto t0=chrono::steady_clock::now();
-    const double TL=1980.0;
-    double avg=250.0; int cnt=0;
-    for(int wi=0;wi<(int)Ws.size();wi++){
-        auto now=chrono::steady_clock::now();
-        double used=chrono::duration<double,milli>(now-t0).count();
-        if(used+avg*1.3>TL) break;
-        int W=Ws[wi];
-        vector<vector<int>> orders;
-        orders.push_back(ord4());
-        int oi=0;
-        while(oi<(int)orders.size()){
-            auto t1=chrono::steady_clock::now();
-            double used2=chrono::duration<double,milli>(t1-t0).count();
-            if(used2+avg*1.15>TL) break;
-            bool randtie=(oi>=1);
-            R r=pack(W,orders[oi],rng,randtie);
-            auto t2=chrono::steady_clock::now();
-            double dt=chrono::duration<double,milli>(t2-t1).count();
-            cnt++; avg=(avg*(cnt-1)+dt)/cnt;
-            if(!hasBestmine || r.A<bestA || (r.A==bestA && (r.H<bestH || (r.H==bestH && r.W<bestW)))){
-                bestA=r.A; bestW=r.W; bestH=r.H; bestR=r; hasBestmine=true;
-            }
-            oi++;
-        }
+
+    string out;
+    out.reserve((size_t)n * 16 + 32);
+    out += to_string(best.W); out += ' '; out += to_string(best.H); out += '\n';
+    for (int i = 0; i < n; i++) {
+        auto [ox, oy, oi] = best.placed[i];
+        const Orient &o = ps[i].os[oi];
+        int lbx = o.F ? -ps[i].bx : ps[i].bx;
+        auto lb = rotcw(lbx, ps[i].by, o.R);
+        ll X = (ll)ox - o.tminx - lb.first;
+        ll Y = (ll)oy - o.tminy - lb.second;
+        out += to_string(X); out += ' ';
+        out += to_string(Y); out += ' ';
+        out += to_string(o.R); out += ' ';
+        out += to_string(o.F); out += '\n';
     }
-    if(!hasBestmine){
-        int W=max(minW,(int)floor(sqrt((double)S)));
-        auto o=ord4();
-        R r=pack(W,o,rng,false);
-        bestA=r.A; bestW=r.W; bestH=r.H; bestR=r; hasBestmine=true;
-    }
-    int maxX=-1;
-    for(auto &p:bestR.pl){
-        auto &t=ps[p.idx].t[p.ti];
-        for(auto &q:t.c){int x=p.x+q.first; if(x>maxX) maxX=x;}
-    }
-    vector<int> mapx(maxX+1,-1);
-    if(maxX>=0){
-        vector<char> used(maxX+1,false);
-        for(auto &p:bestR.pl){
-            auto &t=ps[p.idx].t[p.ti];
-            for(auto &q:t.c){used[p.x+q.first]=true;}
-        }
-        int cur=0;
-        for(int x=0;x<=maxX;x++) if(used[x]) mapx[x]=cur++;
-    }
-    vector<array<int,4>> ans(n,{0,0,0,0});
-    for(auto &p:bestR.pl){
-        auto &t=ps[p.idx].t[p.ti];
-        int bx = (mapx.empty()?p.x:mapx[p.x]);
-        int Xi = bx - t.minx;
-        int Yi = p.y - t.miny;
-        int Ri = (4 - (t.r%4) + 4) % 4;
-        int Fi = t.f;
-        ans[p.idx]={Xi,Yi,Ri,Fi};
-    }
-    cout<<bestR.W<<" "<<bestR.H<<"\n";
-    for(int i=0;i<n;i++){
-        cout<<ans[i][0]<<" "<<ans[i][1]<<" "<<ans[i][2]<<" "<<ans[i][3]<<"\n";
-    }
+    fwrite(out.data(), 1, out.size(), stdout);
     return 0;
-}// prod perf run2 1783475714
+}
