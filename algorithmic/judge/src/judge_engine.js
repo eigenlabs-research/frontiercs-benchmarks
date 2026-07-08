@@ -3,6 +3,7 @@ import path from 'path';
 import { toNs, toBytes, fileExists } from './utils.js';
 import { GoJudgeClient } from './gojudge.js';
 import { ProblemManager } from './problem_manager.js';
+import { scoreCaseResult } from './score_parse.js';
 
 export class JudgeEngine {
     constructor(config) {
@@ -192,12 +193,16 @@ export class JudgeEngine {
         }
 
         if (runRes.status !== 'Accepted') {
-            return { 
-                ok: false, 
-                status: runRes.status, 
-                time: runRes.runTime, 
-                memory: runRes.memory, 
-                msg: (runRes.files?.stderr || '' ) + extra
+            // The contestant program failed to run to a clean exit, so the checker never scored it.
+            // `msg` here is the contestant's OWN stderr — mark it untrusted so scoreCaseResult never
+            // mines score markers from it (see score_parse.js). This run scores 0.
+            return {
+                ok: false,
+                status: runRes.status,
+                time: runRes.runTime,
+                memory: runRes.memory,
+                msg: (runRes.files?.stderr || '' ) + extra,
+                msgFromContestant: true
             };
         }
 
@@ -292,9 +297,16 @@ export class JudgeEngine {
             };
         }
         if (submissionRes.status !== 'Accepted') {
+            // Contestant program failed to run cleanly; `msg` is its OWN stderr. Untrusted → score 0.
+            // (This is the interactive form of the score-marker exploit: the checker/interactor never
+            // scored the run, so markers on the contestant's stream must not be trusted.)
             let extra = (submissionRes.status === 'Signalled') ? ` (signal=${submissionRes.error || 'unknown'})` : '';
-            return { ok: false, status: submissionRes.status, time: submissionRes.runTime, memory: submissionRes.memory, msg: (submissionRes.files?.stderr || '') + extra };
+            return { ok: false, status: submissionRes.status, time: submissionRes.runTime, memory: submissionRes.memory, msg: (submissionRes.files?.stderr || '') + extra, msgFromContestant: true };
         }
+        // `msg` below is the INTERACTOR's stderr (judge-produced, trusted). This is the legitimate
+        // partial-score path too: a testlib interactor emits "Ratio:"/"RatioUnbounded:" via quitp()
+        // and exits nonzero, so its status is not 'Accepted'. These markers ARE trusted (only the
+        // contestant's own stream is not), so do NOT flag msgFromContestant here.
         if (interactorRes.status !== 'Accepted') {
             return { ok: false, status: interactorRes.status, time: submissionRes.runTime, memory: submissionRes.memory, msg: (interactorRes.files?.stderr || '') };
         }
@@ -339,13 +351,11 @@ export class JudgeEngine {
             
             const casePromises = problem.cases.map(async (c) => {
                 const r = await this.judgeCase({ runSpec, caseItem: c, problem, checkerId });
-
-                const matchBounded = r.msg.match(/Ratio: ([\d.]+)/);
-                const matchUnbounded = r.msg.match(/RatioUnbounded: ([\d.]+)/);
-
-                r.scoreRatio = matchBounded ? parseFloat(matchBounded[1]) : (r.ok ? 1.0 : 0);
-                r.scoreRatioUnbounded = matchUnbounded ? parseFloat(matchUnbounded[1]) : r.scoreRatio;
-
+                // Score markers are trusted only from checker output, never the contestant's own
+                // stream (r.msgFromContestant). See score_parse.js.
+                const { scoreRatio, scoreRatioUnbounded } = scoreCaseResult(r);
+                r.scoreRatio = scoreRatio;
+                r.scoreRatioUnbounded = scoreRatioUnbounded;
                 return r;
             });
 
@@ -433,13 +443,11 @@ export class JudgeEngine {
 
             const casePromises = problem.cases.map(async (c) => {
                 const r = await this.judgeInteractiveCase({ runSpec, caseItem: c, problem, interactorId });
-
-                const matchBounded = r.msg.match(/Ratio: ([\d.]+)/);
-                const matchUnbounded = r.msg.match(/RatioUnbounded: ([\d.]+)/);
-
-                r.scoreRatio = matchBounded ? parseFloat(matchBounded[1]) : (r.ok ? 1.0 : 0);
-                r.scoreRatioUnbounded = matchUnbounded ? parseFloat(matchUnbounded[1]) : r.scoreRatio;
-
+                // Score markers are trusted only from interactor output, never the contestant's own
+                // stream (r.msgFromContestant). See score_parse.js.
+                const { scoreRatio, scoreRatioUnbounded } = scoreCaseResult(r);
+                r.scoreRatio = scoreRatio;
+                r.scoreRatioUnbounded = scoreRatioUnbounded;
                 return r;
             });
 
