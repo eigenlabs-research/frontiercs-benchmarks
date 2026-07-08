@@ -567,6 +567,124 @@ static bool localSearch(vector<vector<int>>& seedGrid, int K,
     vector<vector<int>> cellsOf(N+2);
     auto rebuildCellsOf=[&](){ for(int c=1;c<=N;c++) cellsOf[c].clear(); for(int p=0;p<K*K;p++) cellsOf[g[p]].push_back(p); };
     rebuildCellsOf();
+    bool mediumDense = (N>=22 && N<=26 && 4LL*M > 1LL*N*(N-1));
+    auto recolorCell=[&](int p, int x){
+        int r=p/K, c=p%K, o=g[p];
+        if(x==o) return;
+        for(int d=0;d<4;d++){
+            int nr=r+DR[d], nc=c+DC[d];
+            if(nr<0||nr>=K||nc<0||nc>=K) continue;
+            int y=g[nr*K+nc];
+            if(o!=y){
+                int a=min(o,y), b=max(o,y), oldc=cnt[a][b];
+                cnt[a][b]=oldc-1;
+                if(ADJ[a][b]){ if(oldc==1) missing++; }
+                else forbidden--;
+            }
+            if(x!=y){
+                int a=min(x,y), b=max(x,y), oldc=cnt[a][b];
+                cnt[a][b]=oldc+1;
+                if(ADJ[a][b]){ if(oldc==0) missing--; }
+                else forbidden++;
+            }
+        }
+        colorCount[o]--; if(colorCount[o]==0) missingColors++;
+        colorCount[x]++; if(colorCount[x]==1) missingColors--;
+        g[p]=x;
+        updateBad(p);
+        for(int d=0;d<4;d++){
+            int nr=r+DR[d], nc=c+DC[d];
+            if(nr<0||nr>=K||nc<0||nc>=K) continue;
+            updateBad(nr*K+nc);
+        }
+    };
+    auto tryBestPairPlant=[&]()->bool{
+        int edgeTry[10], ne=0;
+        for(int tries=0; tries<40 && ne<10; tries++){
+            int e=rng()%EDGES.size();
+            if(cnt[EDGES[e].first][EDGES[e].second]==0) edgeTry[ne++]=e;
+        }
+        if(ne==0) return false;
+        int bestScore=0, bestP1=-1, bestP2=-1, bestC1=-1, bestC2=-1;
+        auto colorDeltaOk=[&](int p1,int c1,int p2,int c2)->bool{
+            int cols[4]={g[p1],g[p2],c1,c2};
+            for(int ii=0;ii<4;ii++){
+                int col=cols[ii], d=0;
+                if(g[p1]==col) d--;
+                if(g[p2]==col) d--;
+                if(c1==col) d++;
+                if(c2==col) d++;
+                if(colorCount[col]+d<=0) return false;
+            }
+            return true;
+        };
+        for(int ei=0; ei<ne; ei++){
+            int ea=EDGES[edgeTry[ei]].first, eb=EDGES[edgeTry[ei]].second;
+            for(int p1=0; p1<K*K; p1++){
+                int r=p1/K, c=p1%K;
+                for(int dir=0; dir<2; dir++){
+                    int nr=r+(dir==0), nc=c+(dir==1);
+                    if(nr>=K || nc>=K) continue;
+                    int p2=nr*K+nc;
+                    for(int orient=0; orient<2; orient++){
+                        int c1=orient?eb:ea, c2=orient?ea:eb;
+                        if(g[p1]==c1 && g[p2]==c2) continue;
+                        if(!colorDeltaOk(p1,c1,p2,c2)) continue;
+                        int touched[16], de[16], nt=0;
+                        int seenPair[12][2], nsp=0;
+                        auto addEdgeDelta=[&](int x,int y,int delta)->bool{
+                            if(x==y) return true;
+                            int a=min(x,y), b=max(x,y);
+                            if(!ADJ[a][b]) return false;
+                            int id=a*45+b, j=0;
+                            for(; j<nt; j++) if(touched[j]==id) break;
+                            if(j==nt){ touched[nt]=id; de[nt]=0; nt++; }
+                            de[j]+=delta;
+                            return true;
+                        };
+                        bool ok=true;
+                        for(int pp=0; pp<2 && ok; pp++){
+                            int p = pp?p2:p1;
+                            int pr=p/K, pc=p%K;
+                            for(int d=0; d<4 && ok; d++){
+                                int ar=pr+DR[d], ac=pc+DC[d];
+                                if(ar<0||ar>=K||ac<0||ac>=K) continue;
+                                int q=ar*K+ac;
+                                int lo=min(p,q), hi=max(p,q);
+                                bool seen=false;
+                                for(int s=0;s<nsp;s++) if(seenPair[s][0]==lo && seenPair[s][1]==hi){ seen=true; break; }
+                                if(seen) continue;
+                                seenPair[nsp][0]=lo; seenPair[nsp][1]=hi; nsp++;
+                                int oldA=g[p], oldB=g[q];
+                                int newA=(p==p1)?c1:((p==p2)?c2:g[p]);
+                                int newB=(q==p1)?c1:((q==p2)?c2:g[q]);
+                                if(!addEdgeDelta(oldA,oldB,-1)) ok=false;
+                                if(ok && !addEdgeDelta(newA,newB,1)) ok=false;
+                            }
+                        }
+                        if(!ok) continue;
+                        int missDelta=0;
+                        for(int j=0;j<nt;j++){
+                            int id=touched[j], a=id/45, b=id%45;
+                            int oldc=cnt[a][b], newc=oldc+de[j];
+                            if(newc<0){ ok=false; break; }
+                            if(oldc>0 && newc==0) missDelta++;
+                            else if(oldc==0 && newc>0) missDelta--;
+                        }
+                        if(!ok) continue;
+                        int score = 100*missDelta + (g[p1]!=c1) + (g[p2]!=c2);
+                        if(score < bestScore){
+                            bestScore=score; bestP1=p1; bestP2=p2; bestC1=c1; bestC2=c2;
+                        }
+                    }
+                }
+            }
+        }
+        if(bestP1<0) return false;
+        recolorCell(bestP1,bestC1);
+        recolorCell(bestP2,bestC2);
+        return true;
+    };
     long long iters=0;
     auto now=[&](){ return chrono::steady_clock::now(); };
     while(true){
@@ -576,6 +694,51 @@ static bool localSearch(vector<vector<int>>& seedGrid, int K,
             result.assign(K, vector<int>(K));
             for(int r=0;r<K;r++) for(int c=0;c<K;c++) result[r][c]=g[r*K+c];
             return true;
+        }
+        if(mediumDense && missing>0 && forbidden==0 && (iters&31)==0){
+            if(tryBestPairPlant()){
+                if((iters & 127)==0) rebuildCellsOf();
+                continue;
+            }
+        }
+        if(mediumDense && missing>0 && forbidden==0 && (int)(rng()%100) < 12){
+            bool planted=false;
+            for(int tries=0; tries<16 && !planted; tries++){
+                int eidx=-1;
+                for(int eTry=0; eTry<20; eTry++){
+                    int e=rng()%EDGES.size();
+                    if(cnt[EDGES[e].first][EDGES[e].second]==0){ eidx=e; break; }
+                }
+                if(eidx<0) break;
+                int a=EDGES[eidx].first, b=EDGES[eidx].second;
+                if(rng()&1) swap(a,b);
+                int p1 = rng()%(K*K);
+                int r=p1/K, c=p1%K, dir=rng()%4;
+                int nr=r+DR[dir], nc=c+DC[dir];
+                if(nr<0||nr>=K||nc<0||nc>=K) continue;
+                int p2=nr*K+nc;
+                auto canPlace=[&](int p, int col, int mate, int mateCol)->bool{
+                    int old=g[p];
+                    if(old!=col && colorCount[old]<=1) return false;
+                    int rr=p/K, cc=p%K;
+                    for(int d=0;d<4;d++){
+                        int ar=rr+DR[d], ac=cc+DC[d];
+                        if(ar<0||ar>=K||ac<0||ac>=K) continue;
+                        int q=ar*K+ac;
+                        int y = (q==mate) ? mateCol : g[q];
+                        if(col!=y && !ADJ[min(col,y)][max(col,y)]) return false;
+                    }
+                    return true;
+                };
+                if(g[p1]==g[p2] && g[p1]!=a && g[p2]!=b && colorCount[g[p1]]<=2) continue;
+                if(canPlace(p1,a,p2,b) && canPlace(p2,b,p1,a)){
+                    recolorCell(p1,a);
+                    recolorCell(p2,b);
+                    if((iters & 127)==0) rebuildCellsOf();
+                    planted=true;
+                }
+            }
+            if(planted) continue;
         }
         int p=-1, forcedX=-1;
         if((int)(rng()%1000) < 20){
@@ -638,16 +801,7 @@ static bool localSearch(vector<vector<int>>& seedGrid, int K,
         }
         int x=bestX;
         if(!first && x!=o){
-            for(int i=0;i<nnbr;i++){
-                int nc=nbr[i];
-                if(o!=nc){ int a=min(o,nc),b=max(o,nc); int oldc=cnt[a][b]; cnt[a][b]=oldc-1; if(ADJ[a][b]){ if(oldc==1) missing++; } else forbidden--; }
-                if(x!=nc){ int a=min(x,nc),b=max(x,nc); int oldc=cnt[a][b]; cnt[a][b]=oldc+1; if(ADJ[a][b]){ if(oldc==0) missing--; } else forbidden++; }
-            }
-            colorCount[o]--; if(colorCount[o]==0) missingColors++;
-            colorCount[x]++; if(colorCount[x]==1) missingColors--;
-            g[p]=x;
-            updateBad(p);
-            for(int d=0;d<4;d++){ int nr=r+DR[d],nc=c+DC[d]; if(nr<0||nr>=K||nc<0||nc>=K)continue; updateBad(nr*K+nc); }
+            recolorCell(p,x);
             if((iters & 127)==0) rebuildCellsOf();
         }
     }
@@ -697,6 +851,224 @@ static vector<vector<int>> rescaleTo(const vector<vector<int>>& G, int K2){
     for(int r=0;r<K2;r++) for(int c=0;c<K2;c++)
         out[r][c]=G[(int)((ll)r*K/K2)][(int)((ll)c*K/K2)];
     return out;
+}
+
+static bool buildSafeRandomGrid(int K, vector<vector<int>>& out){
+    vector<int> order(N);
+    for(int i=0;i<N;i++) order[i]=i+1;
+    for(int attempt=0; attempt<10; attempt++){
+        out.assign(K, vector<int>(K, 0));
+        vector<int> cnt(N+1,0);
+        bool seen[45][45];
+        memset(seen, 0, sizeof(seen));
+        int missing=N;
+        shuffle(order.begin(), order.end(), rng);
+        bool ok=true;
+        for(int r=0;r<K && ok;r++){
+            for(int c=0;c<K;c++){
+                int cand[45], weight[45], cc=0, total=0;
+                for(int x=1;x<=N;x++){
+                    bool good=true;
+                    if(r>0){
+                        int u=out[r-1][c];
+                        if(u!=x && !ADJ[min(u,x)][max(u,x)]) good=false;
+                    }
+                    if(c>0){
+                        int u=out[r][c-1];
+                        if(u!=x && !ADJ[min(u,x)][max(u,x)]) good=false;
+                    }
+                    if(!good) continue;
+                    int w = 1;
+                    int add=0;
+                    if(r>0){
+                        int u=out[r-1][c], a=min(u,x), b=max(u,x);
+                        if(u!=x && !seen[a][b]) add++;
+                    }
+                    if(c>0){
+                        int u=out[r][c-1], a=min(u,x), b=max(u,x);
+                        if(u!=x && !seen[a][b]) add++;
+                    }
+                    if(cnt[x]==0) w += (missing>0 ? 6 : 0);
+                    w += 35*add;
+                    cand[cc]=x; weight[cc]=w; total+=w; cc++;
+                }
+                if(cc==0){ ok=false; break; }
+                int pick = (int)(rng()%total), x=cand[0];
+                for(int i=0;i<cc;i++){
+                    if(pick < weight[i]){ x=cand[i]; break; }
+                    pick -= weight[i];
+                }
+                out[r][c]=x;
+                if(cnt[x]++==0) missing--;
+                if(r>0 && out[r-1][c]!=x){
+                    int a=min(out[r-1][c],x), b=max(out[r-1][c],x);
+                    seen[a][b]=true;
+                }
+                if(c>0 && out[r][c-1]!=x){
+                    int a=min(out[r][c-1],x), b=max(out[r][c-1],x);
+                    seen[a][b]=true;
+                }
+            }
+        }
+        if(ok) return true;
+    }
+    return false;
+}
+
+static bool buildHubDominoGrid(int K, vector<vector<int>>& out){
+    int deg[45]; memset(deg,0,sizeof(deg));
+    for(auto &e: EDGES){ deg[e.first]++; deg[e.second]++; }
+    vector<pair<int,int>> hubRank;
+    for(int h=1; h<=N; h++){
+        int cover=deg[h];
+        for(auto &e: EDGES){
+            int a=e.first, b=e.second;
+            if(a==h || b==h) continue;
+            if(ADJ[h][a] && ADJ[h][b]) cover++;
+        }
+        hubRank.push_back({cover,h});
+    }
+    sort(hubRank.rbegin(), hubRank.rend());
+    int top = min(4, (int)hubRank.size());
+    int pick = ((rng()%4)==0) ? (int)(rng()%top) : 0;
+    int hub = hubRank[pick].second;
+    int bestCover = hubRank[0].first;
+    if(bestCover<=0) return false;
+    out.assign(K, vector<int>(K, hub));
+    vector<pii> spots;
+    for(int r=1; r<K; r+=2) for(int c=1; c+1<K; c+=3) spots.push_back({r,c});
+    if(spots.empty()) return false;
+    shuffle(spots.begin(), spots.end(), rng);
+    vector<pii> dom;
+    for(auto &e: EDGES){
+        int a=e.first, b=e.second;
+        if(a==hub || b==hub) continue;
+        if(ADJ[hub][a] && ADJ[hub][b]) dom.push_back(e);
+    }
+    shuffle(dom.begin(), dom.end(), rng);
+    sort(dom.begin(), dom.end(), [&](const pii& x, const pii& y){
+        return min(deg[x.first],deg[x.second]) < min(deg[y.first],deg[y.second]);
+    });
+    vector<char> present(N+1,0); present[hub]=1;
+    int si=0, placed=0;
+    for(auto &e: dom){
+        if(si >= (int)spots.size()) break;
+        int r=spots[si].first, c=spots[si].second; si++;
+        if(rng()&1){ out[r][c]=e.first; out[r][c+1]=e.second; }
+        else { out[r][c]=e.second; out[r][c+1]=e.first; }
+        present[e.first]=present[e.second]=1;
+        placed++;
+    }
+    for(int v=1; v<=N && si<(int)spots.size(); v++) if(!present[v] && ADJ[hub][v]){
+        int r=spots[si].first, c=spots[si].second; si++;
+        out[r][c]=v; present[v]=1; placed++;
+    }
+    return placed>0;
+}
+
+static bool buildHubPathGrid(int K, vector<vector<int>>& out){
+    int deg[45]; memset(deg,0,sizeof(deg));
+    for(auto &e: EDGES){ deg[e.first]++; deg[e.second]++; }
+    vector<pair<int,int>> hubRank;
+    for(int h=1; h<=N; h++){
+        int cover=deg[h];
+        for(auto &e: EDGES){
+            int a=e.first, b=e.second;
+            if(a==h || b==h) continue;
+            if(ADJ[h][a] && ADJ[h][b]) cover++;
+        }
+        hubRank.push_back({cover,h});
+    }
+    sort(hubRank.rbegin(), hubRank.rend());
+    int top=min(4,(int)hubRank.size());
+    int pick=((rng()%4)==0)?(int)(rng()%top):0;
+    int hub=hubRank[pick].second;
+    vector<int> nbr;
+    for(int v=1; v<=N; v++) if(v!=hub && ADJ[hub][v]) nbr.push_back(v);
+    if((int)nbr.size()<2) return false;
+    out.assign(K, vector<int>(K, hub));
+    bool seen[45][45]; memset(seen,0,sizeof(seen));
+    for(int v: nbr){ int a=min(hub,v), b=max(hub,v); seen[a][b]=true; }
+    vector<char> present(N+1,0); present[hub]=1;
+    int placedRows=0;
+    for(int r=1; r<K; r+=2){
+        int cur = nbr[(int)(rng()%nbr.size())];
+        out[r][0]=cur; present[cur]=1;
+        for(int c=1; c<K; c++){
+            int best=-1, bestScore=-1000000, ties=0;
+            for(int v: nbr) if(ADJ[cur][v]){
+                int a=min(cur,v), b=max(cur,v);
+                int score = (seen[a][b] ? 0 : 1000) + (present[v] ? 0 : 80) + deg[v];
+                if(v==cur) score -= 500;
+                if(score>bestScore){ bestScore=score; best=v; ties=1; }
+                else if(score==bestScore){ ties++; if((int)(rng()%ties)==0) best=v; }
+            }
+            if(best<0) best=cur;
+            out[r][c]=best; present[best]=1;
+            int a=min(cur,best), b=max(cur,best);
+            if(cur!=best) seen[a][b]=true;
+            cur=best;
+        }
+        placedRows++;
+    }
+    return placedRows>0;
+}
+
+static bool buildHubPairPathGrid(int K, vector<vector<int>>& out){
+    int deg[45]; memset(deg,0,sizeof(deg));
+    for(auto &e: EDGES){ deg[e.first]++; deg[e.second]++; }
+    out.assign(K, vector<int>(K, 1));
+    int cur=1;
+    for(int v=2; v<=N; v++) if(deg[v]>deg[cur]) cur=v;
+    if((rng()%3)==0) cur=1+(int)(rng()%N);
+    bool seen[45][45]; memset(seen,0,sizeof(seen));
+    vector<char> present(N+1,0);
+    int activeRows=0;
+    for(int r=0; r<K; r+=2){
+        for(int c=0;c<K;c++) out[r][c]=cur;
+        present[cur]=1;
+        if(r+1>=K) break;
+        vector<pair<int,int>> nxtRank;
+        for(int h=1; h<=N; h++) if(h!=cur){
+            int common=0;
+            for(int v=1; v<=N; v++) if(v!=cur && v!=h && ADJ[cur][v] && ADJ[h][v]) common++;
+            if(common>=2) nxtRank.push_back({common*100+deg[h], h});
+        }
+        if(nxtRank.empty()) break;
+        sort(nxtRank.rbegin(), nxtRank.rend());
+        int top=min(5,(int)nxtRank.size());
+        int nxt=nxtRank[(int)(rng()%top)].second;
+        vector<int> cand;
+        for(int v=1; v<=N; v++) if(v!=cur && v!=nxt && ADJ[cur][v] && ADJ[nxt][v]) cand.push_back(v);
+        if(cand.empty()) break;
+        int x=cand[(int)(rng()%cand.size())];
+        for(int c=0;c<K;c++){
+            if(c>0){
+                int best=x, bestScore=-1000000, ties=0;
+                for(int v: cand) if(v==x || ADJ[x][v]){
+                    int score=(present[v]?0:100);
+                    if(v!=x){
+                        int a=min(x,v), b=max(x,v);
+                        if(!seen[a][b]) score+=1000;
+                        score+=deg[v];
+                    } else score-=200;
+                    if(score>bestScore){ bestScore=score; best=v; ties=1; }
+                    else if(score==bestScore){ ties++; if((int)(rng()%ties)==0) best=v; }
+                }
+                x=best;
+            }
+            out[r+1][c]=x;
+            present[x]=1;
+            int a=min(cur,x), b=max(cur,x); seen[a][b]=true;
+            a=min(nxt,x); b=max(nxt,x); seen[a][b]=true;
+            if(c>0 && out[r+1][c-1]!=x){
+                a=min(out[r+1][c-1],x); b=max(out[r+1][c-1],x); seen[a][b]=true;
+            }
+        }
+        cur=nxt;
+        activeRows++;
+    }
+    return activeRows>0;
 }
 
 // verify a grid satisfies all checker conditions (defensive)
@@ -798,7 +1170,9 @@ int main(){
             if(rem < 20) break;
             long long slice = min(min(220LL, 70LL + 50LL*variant), max(30LL, rem/2));
             vector<vector<int>> seed;
-            int which = variant % 3;
+            bool mediumDenseGraph = (N>=22 && N<=26 && 4LL*M > 1LL*N*(N-1));
+            int seedModes = mediumDenseGraph ? 7 : 3;
+            int which = variant % seedModes;
             if(which==0){
                 int off = bestK - targetK;
                 int dr = (int)(rng()%(off+1)), dc = (int)(rng()%(off+1));
@@ -807,8 +1181,24 @@ int main(){
             } else if(which==1){
                 seed = shrinkByOne(bestGrid);
                 if((int)seed.size()!=targetK) seed = rescaleTo(bestGrid, targetK);
-            } else {
+            } else if(which==2) {
                 seed = rescaleTo(bestGrid, targetK);
+            } else if(which==3) {
+                if(!buildSafeRandomGrid(targetK, seed)) seed = rescaleTo(bestGrid, targetK);
+            } else if(which==4) {
+                if(N>=24){
+                    if(!buildHubPathGrid(targetK, seed)) seed = rescaleTo(bestGrid, targetK);
+                } else {
+                    if(!buildHubDominoGrid(targetK, seed)) seed = rescaleTo(bestGrid, targetK);
+                }
+            } else if(which==5) {
+                if(N>=24){
+                    if(!buildHubPairPathGrid(targetK, seed)) seed = rescaleTo(bestGrid, targetK);
+                } else {
+                    if(!buildHubDominoGrid(targetK, seed)) seed = rescaleTo(bestGrid, targetK);
+                }
+            } else {
+                if(!buildHubDominoGrid(targetK, seed)) seed = rescaleTo(bestGrid, targetK);
             }
             if(variant>=3){
                 // perturb to escape repeated failure
