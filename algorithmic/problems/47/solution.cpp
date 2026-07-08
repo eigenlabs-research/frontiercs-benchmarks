@@ -991,6 +991,16 @@ static PackResult splitMixedPlan(bool allowRot, int sw, int mask, uint32_t seed)
     return res;
 }
 
+static PackResult splitMixedPlanT(bool allowRot, int sh, int mask, uint32_t seed){
+    swap(g_bin.W, g_bin.H);
+    for(auto& it : g_items) swap(it.w, it.h);
+    PackResult r = splitMixedPlan(allowRot, sh, mask, seed);
+    for(auto& it : g_items) swap(it.w, it.h);
+    swap(g_bin.W, g_bin.H);
+    for(auto& p : r.placements) swap(p.x, p.y);
+    return r;
+}
+
 // ---------------- Beam search over shelf-height sequences ----------------
 // Greedy shelf choice can lock in a bad height partition of H. Branch on the
 // first few shelf heights (top-scoring alternatives), keep the most promising
@@ -1446,6 +1456,17 @@ int main(){
             if(elapsed() > TIME_LIMIT * 0.62) break;
             consider(polish(mixedShelfPlan(allowRot, s, 0, true)));
             ++s;
+        }
+    }
+#ifdef DIAG
+    g_label="splitT";
+#endif
+    {
+        int hs[3] = {g_bin.H/3, g_bin.H/2, (2*g_bin.H)/3};
+        for(int sh : hs){
+            for(int mask = 0; mask < 8 && elapsed() < TIME_LIMIT * 0.74; ++mask)
+                consider(polish(splitMixedPlanT(allowRot, sh, mask, 1)));
+            if(elapsed() > TIME_LIMIT * 0.74) break;
         }
     }
 
