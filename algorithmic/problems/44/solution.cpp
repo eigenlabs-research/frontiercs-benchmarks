@@ -672,7 +672,7 @@ int main() {
 
     Solver s;
     if (!(cin >> s.N)) return 0;
-    if (s.N > 60000) {
+    if (s.N > 100000) {
         return 0;
     }
     s.x.resize(s.N);
