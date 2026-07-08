@@ -96,6 +96,41 @@ static vector<Move> genMoves(const vector<vector<int>>& seq, const vector<vector
     return moves;
 }
 
+// Taillard-style O(1) lower-bound estimate of the makespan after swapping the
+// adjacent pair (a=seq[m][i], b=seq[m][i+1]) on machine m. Uses the current
+// heads (dist[] = completion times) and tails (tail[] = start-to-sink length).
+// Machine order becomes ... PM, b, a, SM ...  Returns the longest path length
+// through the two swapped nodes under the new orientation (a true lower bound
+// on the new makespan; exact for the local path). Requires dist/tail current.
+static inline long long estimateMove(const vector<vector<int>>& seq, int m, int i){
+    const auto& s = seq[m];
+    int a = s[i], b = s[i+1];
+    int ka = pos[a][m], kb = pos[b][m];
+    int ua = a*M + ka, ub = b*M + kb;
+    long long pa = pnode[ua], pb = pnode[ub];
+    // completions of job predecessors (0 if none)
+    long long c_jpa = (ka>0) ? dist[ua-1] : 0;
+    long long c_jpb = (kb>0) ? dist[ub-1] : 0;
+    // completion of machine predecessor of the pair (op at position i-1)
+    long long c_pm = 0;
+    if(i>0){ int pj = s[i-1]; c_pm = dist[pj*M + pos[pj][m]]; }
+    // tails of job successors (0 if none)
+    long long q_jsa = (ka<M-1) ? tail[ua+1] : 0;
+    long long q_jsb = (kb<M-1) ? tail[ub+1] : 0;
+    // tail of machine successor of the pair (op at position i+2)
+    long long q_sm = 0;
+    if(i+2<J){ int sj = s[i+2]; q_sm = tail[sj*M + pos[sj][m]]; }
+    // new order: PM -> b -> a -> SM
+    long long rb = (c_jpb > c_pm ? c_jpb : c_pm);          // start of b
+    long long cb = rb + pb;                                 // completion of b
+    long long ra = (c_jpa > cb ? c_jpa : cb);               // start of a
+    long long qa = pa + (q_jsa > q_sm ? q_jsa : q_sm);      // tail of a
+    long long qb = pb + (q_jsb > qa ? q_jsb : qa);          // tail of b
+    long long la = ra + qa;
+    long long lb = rb + qb;
+    return la > lb ? la : lb;
+}
+
 // Giffler-Thompson dispatch with a priority rule (active schedule generation).
 // mode: 0=MWR (most work remaining), 1=LPT (current op), 2=SPT, 3=random.
 static vector<vector<int>> seedGT(int mode, mt19937& rng){
@@ -249,22 +284,38 @@ int main(){
         int iter = 0;
         int tenure = max(6, J);
         int sinceImprove = 0;
-        const int bigStuck = 1200;
+        const int bigStuck = 700;
         while(chrono::steady_clock::now() < deadline){
             iter++;
             rebuildPM(cur);
             long long c = evalSeq(cur, true);
             if(c < 0){ cur = best; curC = bestC; continue; }
             auto moves = genMoves(cur, pm);
+            int nmv = (int)moves.size();
+            // Rank all candidate moves by an O(1) Taillard-style lower-bound
+            // estimate (uses the heads/tails just computed), then exact-eval
+            // only the most promising few. Exact evalSeq still decides
+            // acceptance and detects cycles, so feasibility is guaranteed.
+            static vector<pair<long long,int>> cand;
+            cand.clear(); cand.reserve(nmv);
+            for(int idx=0; idx<nmv; ++idx)
+                cand.push_back({estimateMove(cur, moves[idx].m, moves[idx].i), idx});
+            int SK = nmv < 20 ? nmv : 20;         // shortlist to sort
+            const int EVALCAP = 6;                 // exact evals per iteration
+            partial_sort(cand.begin(), cand.begin()+SK, cand.end());
             long long bestNC = -1; int bestIdx = -1;
-            for(int idx=0; idx<(int)moves.size(); ++idx){
-                if((idx & 7)==0 && chrono::steady_clock::now() >= deadline) break;
+            int evaluated = 0;
+            for(int t=0; t<SK && evaluated<EVALCAP; ++t){
+                int idx = cand[t].second;
                 auto& mv = moves[idx];
                 bool isTabu = tabuUntil[mv.m][mv.i] > iter;
+                bool aspEst = (cand[t].first < bestC);
+                if(isTabu && !aspEst) continue;    // prune clearly-tabu moves cheaply
                 swap(cur[mv.m][mv.i], cur[mv.m][mv.i+1]);
                 long long nc = evalSeq(cur, false);
                 swap(cur[mv.m][mv.i], cur[mv.m][mv.i+1]);
                 if(nc < 0) continue;
+                evaluated++;
                 bool asp = (nc < bestC);
                 if(isTabu && !asp) continue;
                 if(bestIdx==-1 || nc < bestNC){ bestNC = nc; bestIdx = idx; }
