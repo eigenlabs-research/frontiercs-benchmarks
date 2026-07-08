@@ -884,6 +884,61 @@ struct Solver {
         return route;
     }
 
+    vector<int> bitonic_dp_small() const {
+        int n = N;
+        if (n <= 1) return {};
+        if (n == 2) return {1};
+        const double INF = numeric_limits<double>::infinity();
+        vector<double> dp((size_t)n * n, INF);
+        vector<int> par(n, 0);
+        auto at = [&](int i, int j) -> double& { return dp[(size_t)i * n + j]; };
+        at(0, 1) = dist_id(0, 1);
+        for (int j = 2; j < n; ++j) {
+            double edge = dist_id(j - 1, j);
+            for (int i = 0; i < j - 1; ++i) at(i, j) = at(i, j - 1) + edge;
+            double best = INF;
+            int best_k = 0;
+            for (int k = 0; k < j - 1; ++k) {
+                double cand = at(k, j - 1) + dist_id(k, j);
+                if (cand < best) {
+                    best = cand;
+                    best_k = k;
+                }
+            }
+            at(j - 1, j) = best;
+            par[j] = best_k;
+        }
+        vector<vector<int>> adj(n);
+        auto add = [&](int a, int b) {
+            adj[a].push_back(b);
+            adj[b].push_back(a);
+        };
+        auto rec = [&](auto &&self, int i, int j) -> void {
+            if (i == 0 && j == 1) {
+                add(0, 1);
+            } else if (i < j - 1) {
+                self(self, i, j - 1);
+                add(j - 1, j);
+            } else {
+                int k = par[j];
+                self(self, k, j - 1);
+                add(k, j);
+            }
+        };
+        rec(rec, n - 2, n - 1);
+        add(n - 2, n - 1);
+        vector<int> route;
+        route.reserve(n - 1);
+        int prev = -1, cur = 0;
+        for (int step = 0; step < n - 1; ++step) {
+            int nxt = adj[cur][0] == prev ? adj[cur][1] : adj[cur][0];
+            route.push_back(nxt);
+            prev = cur;
+            cur = nxt;
+        }
+        return route;
+    }
+
     vector<int> frontier_greedy(int window) const {
         list<int> remaining;
         for (int i = 1; i < N; ++i) remaining.push_back(i);
@@ -1233,66 +1288,6 @@ struct Solver {
         return route;
     }
 
-    vector<int> exact_small() const {
-        int M = N - 1;
-        if (M <= 0) return {};
-        if (M > 17) return {};
-        int S = 1 << M;
-        const double INF = numeric_limits<double>::infinity();
-        vector<double> dp((size_t)S * M, INF);
-        vector<int16_t> par((size_t)S * M, -1);
-        auto at = [&](int mask, int last) -> size_t { return (size_t)mask * M + last; };
-
-        for (int i = 0; i < M; ++i) dp[at(1 << i, i)] = dist_id(0, i + 1);
-        for (int mask = 1; mask < S; ++mask) {
-            int k = __builtin_popcount((unsigned)mask);
-            int t = k + 1;
-            for (int last = 0; last < M; ++last) {
-                double cur = dp[at(mask, last)];
-                if (!isfinite(cur)) continue;
-                int a = last + 1;
-                double mult = (t % 10 == 0 && !prime[a]) ? 1.1 : 1.0;
-                int rem = (S - 1) ^ mask;
-                while (rem) {
-                    int bit = rem & -rem;
-                    int nxt = __builtin_ctz((unsigned)bit);
-                    int nmask = mask | bit;
-                    double cand = cur + mult * dist_id(a, nxt + 1);
-                    size_t idx = at(nmask, nxt);
-                    if (cand < dp[idx]) {
-                        dp[idx] = cand;
-                        par[idx] = (int16_t)last;
-                    }
-                    rem -= bit;
-                }
-            }
-        }
-
-        int full = S - 1;
-        double best = INF;
-        int last_best = 0;
-        for (int last = 0; last < M; ++last) {
-            int a = last + 1;
-            double mult = (N % 10 == 0 && !prime[a]) ? 1.1 : 1.0;
-            double cand = dp[at(full, last)] + mult * dist_id(a, 0);
-            if (cand < best) {
-                best = cand;
-                last_best = last;
-            }
-        }
-
-        vector<int> route(M);
-        int mask = full;
-        int last = last_best;
-        for (int pos = M - 1; pos >= 0; --pos) {
-            route[pos] = last + 1;
-            int prev = par[at(mask, last)];
-            mask ^= 1 << last;
-            last = prev;
-        }
-        return route;
-    }
-
     vector<vector<int>> gap_cluster_routes(int lim) const {
         vector<vector<int>> routes;
         if (N < 20 || lim <= 0) return routes;
@@ -1408,6 +1403,7 @@ struct Solver {
         if (N <= 1200) {
             auto routes = gap_cluster_routes(700);
             for (auto &r : routes) consider(std::move(r));
+            consider_path_variants(bitonic_dp_small(), 2);
         }
         if (N <= 60000) {
             vector<int> greedy_windows;
@@ -1579,7 +1575,6 @@ struct Solver {
             }
         }
         if (N <= 5000) consider(nearest_neighbor_small());
-        if (N <= 18) consider(exact_small());
 
         auto polish_basic_safe = [&](vector<int> &route) {
             double before = route_cost(route);
@@ -1595,6 +1590,13 @@ struct Solver {
                 double before = route_cost(route);
                 vector<int> original = route;
                 improve_candidate_two_opt(route, 2, N <= 6000 ? 20 : 40);
+                improve_prime_slots(route);
+                if (route_cost(route) > before + 1e-7) route = std::move(original);
+            }
+            if (20000 < N && N <= 60000) {
+                double before = route_cost(route);
+                vector<int> original = route;
+                improve_candidate_two_opt(route, 1, 8);
                 improve_prime_slots(route);
                 if (route_cost(route) > before + 1e-7) route = std::move(original);
             }
