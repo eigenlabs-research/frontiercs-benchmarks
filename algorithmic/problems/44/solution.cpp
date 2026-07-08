@@ -886,7 +886,7 @@ int main() {
 
     Solver s;
     if (!(cin >> s.N)) return 0;
-    if (s.N > 60000) {
+    if (s.N > 200000) {
         cout << s.N + 1 << '\n';
         return 0;
     }
@@ -896,8 +896,8 @@ int main() {
 
     vector<int> route = s.solve();
     cout << s.N + 1 << '\n';
-    cout << 0 << '\n';
-    for (int v : route) cout << v << '\n';
-    cout << 0 << '\n';
+    cout << 0;
+    for (int v : route) cout << ' ' << v;
+    cout << ' ' << 0 << '\n';
     return 0;
 }
