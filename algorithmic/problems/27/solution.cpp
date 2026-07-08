@@ -611,6 +611,121 @@ static vector<vector<int>> projective_subset_blocks(int small, int large) {
     return best;
 }
 
+static uint64_t mix_key(uint64_t x) {
+    x += 0x9e3779b97f4a7c15ULL;
+    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
+    return x ^ (x >> 31);
+}
+
+static vector<vector<int>> projective_alternating_subset_blocks(int small, int large) {
+    if (small <= 1 || large >= choose2(small)) return {};
+
+    int target = max(small, large);
+    int limit = 2;
+    while (limit * limit + limit + 1 < target) ++limit;
+    limit += 8;
+
+    vector<vector<int>> best;
+    long long best_score = -1;
+
+    for (auto spec : field_specs(limit)) {
+        Field f(spec);
+        auto lines = all_projective_lines(f);
+        int n_points = f.q * f.q + f.q + 1;
+        int want_points = min(small, n_points);
+        int want_lines = min(large, (int)lines.size());
+        if (want_points <= 0 || want_lines <= 0) continue;
+
+        vector<vector<int>> point_to_lines(n_points);
+        for (int li = 0; li < (int)lines.size(); ++li) {
+            for (int p : lines[li]) point_to_lines[p].push_back(li);
+        }
+
+        int seed_count = 20;
+        for (int seed = 0; seed < seed_count; ++seed) {
+            vector<char> selected_points(n_points, 0), selected_lines(lines.size(), 0);
+            vector<int> point_ids(n_points);
+            iota(point_ids.begin(), point_ids.end(), 0);
+
+            if (seed == 0) {
+                for (int i = 0; i < want_points; ++i) selected_points[i] = 1;
+            } else {
+                sort(point_ids.begin(), point_ids.end(), [&](int a, int b) {
+                    return mix_key((uint64_t)a ^ ((uint64_t)seed << 32)) <
+                           mix_key((uint64_t)b ^ ((uint64_t)seed << 32));
+                });
+                for (int i = 0; i < want_points; ++i) selected_points[point_ids[i]] = 1;
+            }
+
+            for (int iter = 0; iter < 12; ++iter) {
+                vector<pair<int,uint64_t>> ranked_lines;
+                ranked_lines.reserve(lines.size());
+                for (int li = 0; li < (int)lines.size(); ++li) {
+                    int w = 0;
+                    for (int p : lines[li]) if (selected_points[p]) ++w;
+                    uint64_t tie = mix_key((uint64_t)li ^ ((uint64_t)(seed + 17 * iter) << 32));
+                    ranked_lines.push_back({w, tie});
+                }
+                vector<int> line_order(lines.size());
+                iota(line_order.begin(), line_order.end(), 0);
+                sort(line_order.begin(), line_order.end(), [&](int a, int b) {
+                    if (ranked_lines[a].first != ranked_lines[b].first) {
+                        return ranked_lines[a].first > ranked_lines[b].first;
+                    }
+                    return ranked_lines[a].second < ranked_lines[b].second;
+                });
+                fill(selected_lines.begin(), selected_lines.end(), 0);
+                for (int i = 0; i < want_lines; ++i) selected_lines[line_order[i]] = 1;
+
+                vector<pair<int,uint64_t>> ranked_points;
+                ranked_points.reserve(n_points);
+                for (int p = 0; p < n_points; ++p) {
+                    int w = 0;
+                    for (int li : point_to_lines[p]) if (selected_lines[li]) ++w;
+                    uint64_t tie = mix_key((uint64_t)p ^ ((uint64_t)(seed + 31 * iter + 7) << 32));
+                    ranked_points.push_back({w, tie});
+                }
+                sort(point_ids.begin(), point_ids.end(), [&](int a, int b) {
+                    if (ranked_points[a].first != ranked_points[b].first) {
+                        return ranked_points[a].first > ranked_points[b].first;
+                    }
+                    return ranked_points[a].second < ranked_points[b].second;
+                });
+                fill(selected_points.begin(), selected_points.end(), 0);
+                for (int i = 0; i < want_points; ++i) selected_points[point_ids[i]] = 1;
+            }
+
+            vector<int> point_map(n_points, -1);
+            int mapped_count = 0;
+            for (int p = 0; p < n_points; ++p) {
+                if (selected_points[p]) point_map[p] = mapped_count++;
+            }
+
+            vector<vector<int>> blocks;
+            blocks.reserve(want_lines);
+            for (int li = 0; li < (int)lines.size(); ++li) {
+                if (!selected_lines[li]) continue;
+                vector<int> b;
+                for (int p : lines[li]) {
+                    int mapped = point_map[p];
+                    if (mapped >= 0) b.push_back(mapped);
+                }
+                if ((int)b.size() >= 2) blocks.push_back(std::move(b));
+            }
+
+            vector<vector<int>> trial = blocks;
+            fill_singletons(trial, small, large);
+            long long sc = block_score(trial);
+            if (sc > best_score) {
+                best_score = sc;
+                best = std::move(blocks);
+            }
+        }
+    }
+    return best;
+}
+
 static bool valid_blocks(const vector<vector<int>>& blocks, int small) {
     vector<bitset<MAXS>> seen(small);
     for (const auto& block : blocks) {
@@ -644,6 +759,7 @@ int main() {
     consider(best, pair_blocks(small, large), small, large);
     consider(best, geometry_blocks(small, large), small, large);
     consider(best, projective_subset_blocks(small, large), small, large);
+    consider(best, projective_alternating_subset_blocks(small, large), small, large);
     consider(best, greedy_blocks(small, large), small, large);
     consider(best, shuffled_clique_blocks(small, large), small, large);
 
