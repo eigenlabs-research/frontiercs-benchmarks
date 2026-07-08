@@ -884,61 +884,6 @@ struct Solver {
         return route;
     }
 
-    vector<int> bitonic_dp_small() const {
-        int n = N;
-        if (n <= 1) return {};
-        if (n == 2) return {1};
-        const double INF = numeric_limits<double>::infinity();
-        vector<double> dp((size_t)n * n, INF);
-        vector<int> par(n, 0);
-        auto at = [&](int i, int j) -> double& { return dp[(size_t)i * n + j]; };
-        at(0, 1) = dist_id(0, 1);
-        for (int j = 2; j < n; ++j) {
-            double edge = dist_id(j - 1, j);
-            for (int i = 0; i < j - 1; ++i) at(i, j) = at(i, j - 1) + edge;
-            double best = INF;
-            int best_k = 0;
-            for (int k = 0; k < j - 1; ++k) {
-                double cand = at(k, j - 1) + dist_id(k, j);
-                if (cand < best) {
-                    best = cand;
-                    best_k = k;
-                }
-            }
-            at(j - 1, j) = best;
-            par[j] = best_k;
-        }
-        vector<vector<int>> adj(n);
-        auto add = [&](int a, int b) {
-            adj[a].push_back(b);
-            adj[b].push_back(a);
-        };
-        auto rec = [&](auto &&self, int i, int j) -> void {
-            if (i == 0 && j == 1) {
-                add(0, 1);
-            } else if (i < j - 1) {
-                self(self, i, j - 1);
-                add(j - 1, j);
-            } else {
-                int k = par[j];
-                self(self, k, j - 1);
-                add(k, j);
-            }
-        };
-        rec(rec, n - 2, n - 1);
-        add(n - 2, n - 1);
-        vector<int> route;
-        route.reserve(n - 1);
-        int prev = -1, cur = 0;
-        for (int step = 0; step < n - 1; ++step) {
-            int nxt = adj[cur][0] == prev ? adj[cur][1] : adj[cur][0];
-            route.push_back(nxt);
-            prev = cur;
-            cur = nxt;
-        }
-        return route;
-    }
-
     vector<int> frontier_greedy(int window) const {
         list<int> remaining;
         for (int i = 1; i < N; ++i) remaining.push_back(i);
@@ -1403,7 +1348,6 @@ struct Solver {
         if (N <= 1200) {
             auto routes = gap_cluster_routes(700);
             for (auto &r : routes) consider(std::move(r));
-            consider_path_variants(bitonic_dp_small(), 2);
         }
         if (N <= 60000) {
             vector<int> greedy_windows;
@@ -1589,7 +1533,7 @@ struct Solver {
             if (1200 < N && N <= 20000) {
                 double before = route_cost(route);
                 vector<int> original = route;
-                improve_candidate_two_opt(route, 2, N <= 6000 ? 20 : 40);
+                improve_candidate_two_opt(route, 2, N <= 6000 ? 20 : 50);
                 improve_prime_slots(route);
                 if (route_cost(route) > before + 1e-7) route = std::move(original);
             }
