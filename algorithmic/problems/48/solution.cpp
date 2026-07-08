@@ -351,8 +351,8 @@ static inline void jitter(vector<array<double,3>>& p, double amp){
 static int lsRun(vector<array<double,3>>& best, double& bestR, double deadline){
     int n=(int)best.size();
     if(n<2) return 0;
-    double grow    = ENVD("GR", 1.006);   // per-attempt target growth
-    int    grS     = ENVI("SW", n>2000?3:6);   // sweeps per growth attempt
+    double grow    = ENVD("GR", 1.016);   // per-attempt target growth (tuned: larger step escapes lattice basin, esp. large/near-cube n)
+    int    grS     = ENVI("SW", 14);      // sweeps per growth attempt (tuned: more sweeps let the packing actually reach the grown target)
     int    stagMax = ENVI("KS", 40);      // stagnation before a kick
     double kick0   = ENVD("TP", 0.20);    // kick amplitude (fraction of 2r)
     double kmin    = ENVD("TF", 0.02);
