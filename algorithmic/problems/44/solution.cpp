@@ -11,8 +11,7 @@
 using namespace std;
 
 static const int HBITS = 21;
-static const uint32_t HN = 1u << HBITS;
-static const uint32_t HMASK = HN - 1u;
+static const uint32_t HMASK = (1u << HBITS) - 1u;
 
 struct Solver {
     int N = 0;
@@ -77,6 +76,17 @@ struct Solver {
         double m = (N % 10 == 0 && !prime[prev]) ? 1.1 : 1.0;
         total += m * dist_id(prev, 0);
         return total;
+    }
+
+    void init_primes() {
+        prime.assign(max(2, N), true);
+        prime[0] = false;
+        prime[1] = false;
+        for (int p = 2; 1LL * p * p < N; ++p) {
+            if (prime[p]) {
+                for (long long q = 1LL * p * p; q < N; q += p) prime[(int)q] = false;
+            }
+        }
     }
 
     double swap_delta(vector<int> &route, int i, int j) const {
@@ -1285,14 +1295,7 @@ struct Solver {
     }
 
     vector<int> solve() {
-        prime.assign(max(2, N), true);
-        prime[0] = false;
-        prime[1] = false;
-        for (int p = 2; 1LL * p * p < N; ++p) {
-            if (prime[p]) {
-                for (long long q = 1LL * p * p; q < N; q += p) prime[(int)q] = false;
-            }
-        }
+        init_primes();
 
         vector<int> best;
         double best_cost = numeric_limits<double>::infinity();
@@ -1607,15 +1610,12 @@ int main() {
 
     Solver s;
     if (!(cin >> s.N)) return 0;
-    if (s.N > 60000) {
-        cout << s.N + 1 << '\n';
-        return 0;
-    }
     s.x.resize(s.N);
     s.y.resize(s.N);
     for (int i = 0; i < s.N; ++i) cin >> s.x[i] >> s.y[i];
 
-    vector<int> route = s.solve();
+    int root = max(8, (int)(sqrt((double)max(1, s.N - 1)) + 0.5));
+    vector<int> route = (s.N > 60000) ? s.x_strip_snake(root) : s.solve();
     cout << s.N + 1 << '\n';
     cout << 0 << '\n';
     for (int v : route) cout << v << '\n';
