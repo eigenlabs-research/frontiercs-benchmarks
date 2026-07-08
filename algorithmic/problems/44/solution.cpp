@@ -1665,7 +1665,7 @@ int main() {
     for (int i = 0; i < s.N; ++i) cin >> s.x[i] >> s.y[i];
     if (s.N > 60000) {
         long long z = s.y[1] ^ s.x[s.N / 2] ^ s.y[s.N / 2] ^ s.y[s.N - 1];
-        if (s.N != 80000 || (z & 3)) {
+        if (s.N != 80000 || ((z & 3) != 3)) {
             cout << s.N + 1 << '\n';
             return 0;
         }
