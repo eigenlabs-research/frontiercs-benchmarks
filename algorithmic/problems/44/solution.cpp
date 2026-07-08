@@ -47,7 +47,9 @@ struct Solver {
     }
 
     double dist_id(int a, int b) const {
-        return hypot((double)x[a] - (double)x[b], (double)y[a] - (double)y[b]);
+        double dx = (double)x[a] - (double)x[b];
+        double dy = (double)y[a] - (double)y[b];
+        return sqrt(dx * dx + dy * dy);
     }
 
     int city_at(const vector<int> &route, int pos) const {
@@ -319,14 +321,48 @@ struct Solver {
     vector<vector<int>> cycle_breaks(const vector<int> &order, int limit) const {
         int M = (int)order.size();
         if (M <= 1) return {order};
+        vector<double> edge(M), extra(M), pole(M);
+        double cycle_base = 0.0;
+        for (int i = 0; i < M; ++i) {
+            int a = order[i];
+            int b = order[(i + 1) % M];
+            edge[i] = dist_id(a, b);
+            cycle_base += edge[i];
+            extra[i] = prime[a] ? 0.0 : 0.1 * edge[i];
+            pole[i] = dist_id(a, 0);
+        }
+
+        vector<vector<double>> pref(10);
+        for (int r = 0; r < 10; ++r) {
+            int count = 0;
+            for (int p = r; p < 2 * M; p += 10) ++count;
+            pref[r].assign(count + 1, 0.0);
+            int q = 0;
+            for (int p = r; p < 2 * M; p += 10, ++q) {
+                pref[r][q + 1] = pref[r][q] + extra[p % M];
+            }
+        }
+        auto residue_sum = [&](int residue, int lo, int hi) -> double {
+            if (lo > hi) return 0.0;
+            int first = lo <= residue ? 0 : (lo - residue + 9) / 10;
+            int last = hi < residue ? -1 : (hi - residue) / 10;
+            if (last < first) return 0.0;
+            return pref[residue][last + 1] - pref[residue][first];
+        };
+
         vector<pair<double, int>> top;
         top.reserve(limit);
         for (int k = 0; k < M; ++k) {
-            int a = order[(k + M - 1) % M];
-            int b = order[k];
-            double v = dist_id(0, b) + dist_id(a, 0) - dist_id(a, b);
-            if ((int)top.size() < limit || v < top.back().first) {
-                top.push_back({v, k});
+            int prev = (k + M - 1) % M;
+            double base = cycle_base - edge[prev] + pole[k] + pole[prev];
+            int lo = k + 8;
+            int hi = k + M - 2;
+            int residue = (k + 8) % 10;
+            double penalty = residue_sum(residue, lo, hi);
+            if (N % 10 == 0 && !prime[order[prev]]) penalty += 0.1 * pole[prev];
+            double cost = base + penalty;
+            if ((int)top.size() < limit || cost < top.back().first) {
+                top.push_back({cost, k});
                 sort(top.begin(), top.end());
                 if ((int)top.size() > limit) top.pop_back();
             }
