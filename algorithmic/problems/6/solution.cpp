@@ -928,12 +928,14 @@ int main(){
         { int lb2=2; while(2*lb2*(lb2-1) < M) lb2++; lb=max(lb,lb2); }
         vector<vector<int>> earlyDenseGrid;
         if(8LL*M >= 1LL*N*(N-1)){
-            auto denseDl = tStart + chrono::milliseconds(N>=35 ? 850 : 650);
+            auto denseDl = tStart + chrono::milliseconds(N>=35 ? 850 : (N<=24 ? 890 : 650));
             if(denseDl > HARD_DL) denseDl = HARD_DL;
             int focus = max(lb, (int)(sqrt((double)M)*1.12));
             int hi = min(N, max(lb+18, focus+7));
             for(int k=lb; k<=hi && chrono::steady_clock::now()<denseDl; k++){
-                int attempts = (k < focus) ? 35 : (N>=35 ? 900 : 2600);
+                int attempts;
+                if(k < focus && !((N>=35 || N<=24) && k+2>=focus)) attempts = 35;
+                else attempts = (N>=35 ? 900 : 2600);
                 vector<vector<int>> g;
                 bool exactDense = buildDenseRandomGrid(k, attempts, denseDl, g);
                 if(exactDense && verifyGrid(g)){
@@ -1034,7 +1036,10 @@ int main(){
             auto sl = now + chrono::milliseconds(slice);
             if(sl > HARD_DL) sl = HARD_DL;
             vector<vector<int>> res;
-            if(localSearch(seed, targetK, sl, res) && verifyGrid(res)){
+            if(patchRepairDense(seed, targetK, sl, res) && verifyGrid(res)){
+                bestGrid=res; bestK=targetK; targetK--; variant=0;
+            } else if(chrono::steady_clock::now()<HARD_DL &&
+                      localSearch(seed, targetK, sl, res) && verifyGrid(res)){
                 bestGrid=res; bestK=targetK; targetK--; variant=0;
             } else variant++;
         }
