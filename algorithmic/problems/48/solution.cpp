@@ -673,6 +673,7 @@ int main(){
     if(n<1) n=1;
 
     if(n==1){ printf("%.17g %.17g %.17g\n",0.5,0.5,0.5); return 0; }
+    if(n==2){double r=sqrt(3.)/(2.*(1.+sqrt(3.)));printf("%.17g %.17g %.17g\n%.17g %.17g %.17g\n",r,r,r,1-r,1-r,1-r);return 0;}
     for(int e=0;e<NEXT;e++) if(EXT[e].n==n){
         vector<array<double,3>> pts;
         if(decodeEx(e,pts) && (int)pts.size()==n){
