@@ -258,7 +258,7 @@ struct Solver {
             span = M;
         } else if (M <= 1200) {
             passes = 4;
-            span = 140;
+            span = 220;
         } else if (M <= 6000) {
             passes = 2;
             span = 90;
@@ -270,7 +270,7 @@ struct Solver {
             span = 55;
         } else {
             passes = 1;
-            span = 8;
+            span = 24;
         }
         improve_two_opt_window(route, passes, span);
     }
@@ -298,7 +298,7 @@ struct Solver {
     void improve_prime_slots(vector<int> &route) const {
         int M = (int)route.size();
         if (M <= 1) return;
-        int window = (N <= 1200) ? M - 1 : ((N <= 5000) ? 120 : 55);
+        int window = (N <= 1200) ? M - 1 : (N <= 5000 ? 120 : (N <= 20000 ? 140 : 80));
         for (int source_pos = 9; source_pos <= N - 1; source_pos += 10) {
             int i = source_pos - 1;
             if (i < 0 || i >= M || prime[route[i]]) continue;
@@ -653,6 +653,34 @@ struct Solver {
         return orient_bands(bands);
     }
 
+    vector<int> projected_band_dp(int block, int ax, int ay) const {
+        vector<int> ids;
+        ids.reserve(max(0, N - 1));
+        vector<long double> primary(N), secondary(N);
+        for (int i = 1; i < N; ++i) {
+            ids.push_back(i);
+            primary[i] = (long double)ax * x[i] + (long double)ay * y[i];
+            secondary[i] = (long double)(-ay) * x[i] + (long double)ax * y[i];
+        }
+        stable_sort(ids.begin(), ids.end(), [&](int a, int b) {
+            if (primary[a] != primary[b]) return primary[a] < primary[b];
+            if (secondary[a] != secondary[b]) return secondary[a] < secondary[b];
+            return a < b;
+        });
+
+        vector<vector<int>> bands;
+        for (int l = 0; l < (int)ids.size(); l += block) {
+            int r = min((int)ids.size(), l + block);
+            vector<int> part(ids.begin() + l, ids.begin() + r);
+            stable_sort(part.begin(), part.end(), [&](int a, int b) {
+                if (secondary[a] != secondary[b]) return secondary[a] < secondary[b];
+                return a < b;
+            });
+            bands.push_back(std::move(part));
+        }
+        return orient_bands(bands);
+    }
+
     vector<int> modulo_lane_snake(int lanes) const {
         vector<int> route;
         route.reserve(max(0, N - 1));
@@ -808,6 +836,7 @@ struct Solver {
         int id = 0;
         int left = -1, right = -1, parent = -1;
         int alive_count = 0;
+        int prime_alive_count = 0;
         long long minx = 0, maxx = 0, miny = 0, maxy = 0;
     };
 
@@ -831,6 +860,7 @@ struct Solver {
         node.id = ids[m];
         node.parent = parent;
         node.alive_count = 1;
+        node.prime_alive_count = prime[node.id] ? 1 : 0;
         node.minx = node.maxx = x[node.id];
         node.miny = node.maxy = y[node.id];
         city_node[node.id] = idx;
@@ -841,6 +871,7 @@ struct Solver {
         for (int child : {left, right}) {
             if (child < 0) continue;
             nodes[idx].alive_count += nodes[child].alive_count;
+            nodes[idx].prime_alive_count += nodes[child].prime_alive_count;
             nodes[idx].minx = min(nodes[idx].minx, nodes[child].minx);
             nodes[idx].maxx = max(nodes[idx].maxx, nodes[child].maxx);
             nodes[idx].miny = min(nodes[idx].miny, nodes[child].miny);
@@ -858,13 +889,13 @@ struct Solver {
         return dx * dx + dy * dy;
     }
 
-    void kd_query(int idx, int cur, const vector<KdNode> &nodes, const vector<char> &alive, int &best, long double &best_d) const {
-        if (idx < 0 || nodes[idx].alive_count == 0) return;
+    void kd_query(int idx, int cur, const vector<KdNode> &nodes, const vector<char> &alive, int &best, long double &best_d, bool need_prime = false) const {
+        if (idx < 0 || (need_prime ? nodes[idx].prime_alive_count == 0 : nodes[idx].alive_count == 0)) return;
         long double box_d = bbox_dist2(nodes[idx], cur);
         if (box_d > best_d) return;
 
         const KdNode &node = nodes[idx];
-        if (alive[node.id]) {
+        if (alive[node.id] && (!need_prime || prime[node.id])) {
             long double dx = (long double)x[cur] - x[node.id];
             long double dy = (long double)y[cur] - y[node.id];
             long double d = dx * dx + dy * dy;
@@ -875,17 +906,21 @@ struct Solver {
         }
 
         int a = node.left, b = node.right;
-        long double da = (a < 0 || nodes[a].alive_count == 0) ? numeric_limits<long double>::infinity() : bbox_dist2(nodes[a], cur);
-        long double db = (b < 0 || nodes[b].alive_count == 0) ? numeric_limits<long double>::infinity() : bbox_dist2(nodes[b], cur);
+        auto live_count = [&](int child) -> int {
+            if (child < 0) return 0;
+            return need_prime ? nodes[child].prime_alive_count : nodes[child].alive_count;
+        };
+        long double da = (live_count(a) == 0) ? numeric_limits<long double>::infinity() : bbox_dist2(nodes[a], cur);
+        long double db = (live_count(b) == 0) ? numeric_limits<long double>::infinity() : bbox_dist2(nodes[b], cur);
         if (db < da) {
             swap(a, b);
             swap(da, db);
         }
-        if (da <= best_d) kd_query(a, cur, nodes, alive, best, best_d);
-        if (db <= best_d) kd_query(b, cur, nodes, alive, best, best_d);
+        if (da <= best_d) kd_query(a, cur, nodes, alive, best, best_d, need_prime);
+        if (db <= best_d) kd_query(b, cur, nodes, alive, best, best_d, need_prime);
     }
 
-    vector<int> kd_nearest_route(int start) const {
+    vector<int> kd_nearest_route(int start, bool prefer_prime_slots = false) const {
         int M = N - 1;
         vector<int> route;
         route.reserve(M);
@@ -901,7 +936,10 @@ struct Solver {
         auto erase_city = [&](int v) {
             if (v <= 0 || v >= N || !alive[v]) return;
             alive[v] = 0;
-            for (int p = city_node[v]; p >= 0; p = nodes[p].parent) --nodes[p].alive_count;
+            for (int p = city_node[v]; p >= 0; p = nodes[p].parent) {
+                --nodes[p].alive_count;
+                if (prime[v]) --nodes[p].prime_alive_count;
+            }
         };
 
         int cur = 0;
@@ -913,7 +951,12 @@ struct Solver {
         while ((int)route.size() < M) {
             int best = -1;
             long double best_d = numeric_limits<long double>::infinity();
-            kd_query(root, cur, nodes, alive, best, best_d);
+            bool need_prime = prefer_prime_slots && ((int)route.size() % 10 == 8);
+            kd_query(root, cur, nodes, alive, best, best_d, need_prime);
+            if (best < 0 && need_prime) {
+                best_d = numeric_limits<long double>::infinity();
+                kd_query(root, cur, nodes, alive, best, best_d, false);
+            }
             if (best < 0) break;
             route.push_back(best);
             erase_city(best);
@@ -951,6 +994,69 @@ struct Solver {
             double best_near = -1.0;
             for (int i = 1; i < N; ++i) {
                 if (!used[i] && near[i] > best_near) {
+                    best_near = near[i];
+                    v = i;
+                }
+            }
+            if (v < 0) break;
+            int best_pos = 0;
+            double best_inc = numeric_limits<double>::infinity();
+            int C = (int)cycle.size();
+            for (int p = 0; p < C; ++p) {
+                int a = cycle[p];
+                int b = cycle[(p + 1) % C];
+                double inc = dist_id(a, v) + dist_id(v, b) - dist_id(a, b);
+                if (inc < best_inc) {
+                    best_inc = inc;
+                    best_pos = p + 1;
+                }
+            }
+            cycle.insert(cycle.begin() + best_pos, v);
+            used[v] = 1;
+            for (int i = 1; i < N; ++i) {
+                if (!used[i]) near[i] = min(near[i], dist_id(i, v));
+            }
+        }
+
+        int zero = 0;
+        for (int i = 0; i < (int)cycle.size(); ++i) {
+            if (cycle[i] == 0) {
+                zero = i;
+                break;
+            }
+        }
+        vector<int> route;
+        route.reserve(N - 1);
+        for (int k = 1; k < (int)cycle.size(); ++k) {
+            int v = cycle[(zero + k) % cycle.size()];
+            if (v != 0) route.push_back(v);
+        }
+        return route;
+    }
+
+    vector<int> insertion_small(int seed, bool farthest_pick) const {
+        if (N <= 2) {
+            vector<int> route;
+            for (int i = 1; i < N; ++i) route.push_back(i);
+            return route;
+        }
+        if (seed <= 0 || seed >= N) seed = 1;
+        vector<char> used(N, 0);
+        used[0] = 1;
+        used[seed] = 1;
+        vector<int> cycle = {0, seed};
+        vector<double> near(N, numeric_limits<double>::infinity());
+        for (int i = 1; i < N; ++i) {
+            if (!used[i]) near[i] = min(dist_id(i, 0), dist_id(i, seed));
+        }
+
+        for (int inserted = 2; inserted < N; ++inserted) {
+            int v = -1;
+            double best_near = farthest_pick ? -1.0 : numeric_limits<double>::infinity();
+            for (int i = 1; i < N; ++i) {
+                if (used[i]) continue;
+                if ((farthest_pick && near[i] > best_near) ||
+                    (!farthest_pick && near[i] < best_near)) {
                     best_near = near[i];
                     v = i;
                 }
@@ -1145,7 +1251,7 @@ struct Solver {
                     if (y[i] < y[min_y_id]) min_y_id = i;
                     if (y[i] > y[max_y_id]) max_y_id = i;
                 }
-                vector<int> kd_starts = (N <= 20000) ? vector<int>{0, N / 5, N / 4, N / 2, (3 * N) / 4, N - 1, far, min_y_id, max_y_id}
+                vector<int> kd_starts = (N <= 20000) ? vector<int>{0, N / 5, N / 4, N / 3, N / 2, (2 * N) / 3, (3 * N) / 4, N - 1, far, min_y_id, max_y_id}
                                                      : vector<int>{0, far};
                 sort(kd_starts.begin(), kd_starts.end());
                 kd_starts.erase(unique(kd_starts.begin(), kd_starts.end()), kd_starts.end());
@@ -1170,9 +1276,41 @@ struct Solver {
                     consider_direct(kd_route);
                     remember_kd_polish(std::move(kd_route));
                 }
+                vector<int> prime_kd_starts = (N <= 20000) ? vector<int>{0} : vector<int>{0, far};
+                sort(prime_kd_starts.begin(), prime_kd_starts.end());
+                prime_kd_starts.erase(unique(prime_kd_starts.begin(), prime_kd_starts.end()), prime_kd_starts.end());
+                for (int st : prime_kd_starts) {
+                    vector<int> kd_route = kd_nearest_route(st, true);
+                    consider_direct(kd_route);
+                    remember_kd_polish(kd_route);
+                    reverse(kd_route.begin(), kd_route.end());
+                    consider_direct(kd_route);
+                    remember_kd_polish(std::move(kd_route));
+                }
                 for (auto &item : kd_polish) {
                     direct_polish_pool.push_back(std::move(item.second));
                 }
+            }
+        } else if (large_case) {
+            int far = 1, min_y_id = 1, max_y_id = 1;
+            double far_d = -1.0;
+            for (int i = 1; i < N; ++i) {
+                double d = dist_id(0, i);
+                if (d > far_d) {
+                    far_d = d;
+                    far = i;
+                }
+                if (y[i] < y[min_y_id]) min_y_id = i;
+                if (y[i] > y[max_y_id]) max_y_id = i;
+            }
+            vector<int> kd_starts = {0, N - 1, far, min_y_id, max_y_id};
+            sort(kd_starts.begin(), kd_starts.end());
+            kd_starts.erase(unique(kd_starts.begin(), kd_starts.end()), kd_starts.end());
+            for (int st : kd_starts) {
+                vector<int> kd_route = kd_nearest_route(st);
+                consider_direct(kd_route);
+                reverse(kd_route.begin(), kd_route.end());
+                consider_direct(std::move(kd_route));
             }
         }
         if (!large_case) {
@@ -1187,8 +1325,31 @@ struct Solver {
                     consider_path_variants(angle_radius_dp(b, true), 1);
                 }
             }
+            if (N <= 60000) {
+                vector<int> proj_blocks = {root, root * 2, (N <= 20000 ? 384 : 512)};
+                sort(proj_blocks.begin(), proj_blocks.end());
+                proj_blocks.erase(unique(proj_blocks.begin(), proj_blocks.end()), proj_blocks.end());
+                const int dirs[4][2] = {{1, 1}, {1, -1}, {2, 1}, {2, -1}};
+                int dir_limit = (N <= 20000) ? 4 : 2;
+                for (int di = 0; di < dir_limit; ++di) {
+                    const int *dir = dirs[di];
+                    for (int b : proj_blocks) {
+                        if (b > 1) consider_path_variants(projected_band_dp(b, dir[0], dir[1]), 1);
+                    }
+                }
+            }
             for (int lanes = 2; lanes <= 10; ++lanes) {
                 consider_path_variants(modulo_lane_snake(lanes), 2);
+            }
+        } else {
+            vector<int> proj_blocks = {root, root * 2, 512};
+            sort(proj_blocks.begin(), proj_blocks.end());
+            proj_blocks.erase(unique(proj_blocks.begin(), proj_blocks.end()), proj_blocks.end());
+            const int dirs[2][2] = {{1, 1}, {1, -1}};
+            for (const auto &dir : dirs) {
+                for (int b : proj_blocks) {
+                    if (b > 1) consider_path_variants(projected_band_dp(b, dir[0], dir[1]), 1);
+                }
             }
         }
 
@@ -1245,7 +1406,11 @@ struct Solver {
             sort(starts.begin(), starts.end());
             starts.erase(unique(starts.begin(), starts.end()), starts.end());
             for (int st : starts) {
-                if (0 < st && st < N) consider_path_variants(nearest_neighbor_from(st), 1);
+                if (0 < st && st < N) {
+                    consider_path_variants(nearest_neighbor_from(st), 1);
+                    consider_path_variants(insertion_small(st, true), 1);
+                    consider_path_variants(insertion_small(st, false), 1);
+                }
             }
         }
         if (N <= 5000) consider(nearest_neighbor_small());
@@ -1262,12 +1427,32 @@ struct Solver {
         auto polish_final_safe = [&](vector<int> &route) {
             polish_basic_safe(route);
             if (N <= 1200) {
-                double before = route_cost(route);
                 vector<int> original = route;
-                improve_relocate(route, 8, 1);
-                improve_pair_relocate(route, 6, 1);
-                improve_prime_slots(route);
-                if (route_cost(route) > before + 1e-7) route = std::move(original);
+                vector<int> best_route = route;
+                double best = route_cost(route);
+                auto try_full_two_opt = [&](vector<int> trial) {
+                    improve_two_opt_window(trial, 5, (int)trial.size() - 1);
+                    improve_prime_slots(trial);
+                    double c = route_cost(trial);
+                    if (c < best) {
+                        best = c;
+                        best_route = std::move(trial);
+                    }
+                };
+                auto try_relocate = [&](vector<int> trial, int single_window, int single_passes, int pair_window) {
+                    improve_relocate(trial, single_window, single_passes);
+                    improve_pair_relocate(trial, pair_window, 1);
+                    improve_prime_slots(trial);
+                    double c = route_cost(trial);
+                    if (c < best) {
+                        best = c;
+                        best_route = std::move(trial);
+                    }
+                };
+                try_full_two_opt(original);
+                try_relocate(original, 12, 1, 8);
+                try_relocate(original, 16, 2, 10);
+                route = std::move(best_route);
             }
         };
 
