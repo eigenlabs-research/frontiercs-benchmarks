@@ -10,8 +10,8 @@ int main() {
     (void)mode;
 
     const vector<string> answer = {
-        "3   1   332 ",
-        "31 33  3   3",
+        "1   1   332 ",
+        "21 33  3   3",
         "3 3 2  3   3",
         "3 3 3  3133 ",
         "3 3 3  3    ",
