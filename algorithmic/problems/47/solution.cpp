@@ -20,7 +20,7 @@ static chrono::steady_clock::time_point T_START;
 static inline double elapsed(){
     return chrono::duration<double>(chrono::steady_clock::now() - T_START).count();
 }
-static double TIME_LIMIT = 0.72;
+static double TIME_LIMIT = 0.68;
 
 // ---------------- JSON parser (minimal, schema-specific) ----------------
 struct JsonParser {
@@ -556,118 +556,6 @@ static PackResult shelfPack(const vector<int>& order, bool allowRotate, bool ori
     return res;
 }
 
-// ---------------- Orderings ----------------
-// For a chosen shelf-height sequence, fill each shelf with all items whose (oriented) height
-// <= shelf height, highest density first, respecting limits. Shelf heights are chosen greedily
-// as we go: at each new shelf, pick the shelf height that maximizes value-per-area of the
-// items that can fit in it (considering remaining counts and width-packing within shelf).
-// Simpler: try shelf height = each item's height (in both orientations if rotation); pick best overall.
-struct ShelfFiller {
-    int W, H;
-    bool allowRot;
-    // Place items into shelves. For each shelf, given a target height Hshelf, iterate items
-    // (in 'order') whose oriented height <= Hshelf and oriented width fits remaining shelf width,
-    // place them, highest density first. Returns placements and used counts.
-    PackResult fillWithShelfHeights(const vector<int>& order, const vector<int>& shelfHeights){
-        PackResult res;
-        res.totalValue = 0;
-        res.used.assign(g_items.size(), 0);
-        vector<int> rem(g_items.size());
-        for(size_t i=0;i<g_items.size();++i) rem[i] = g_items[i].limit;
-        int curY = 0;
-        int si = 0;
-        while(curY < g_bin.H && si < (int)shelfHeights.size()){
-            int sh = shelfHeights[si++];
-            if(sh <= 0 || sh > g_bin.H - curY) continue;
-            int curX = 0;
-            // Repeatedly fill this shelf: scan order, place any item whose oriented height <= sh
-            // and width <= W - curX. Prefer higher density (order is already density-sorted).
-            bool prog = true;
-            while(prog){
-                prog = false;
-                for(int t : order){
-                    if(rem[t] <= 0) continue;
-                    const ItemType& it = g_items[t];
-                    // try orientation 0
-                    int rw0=it.w, rh0=it.h;
-                    int rw1=it.h, rh1=it.w;
-                    int candRot=-1, crw=0, crh=0;
-                    bool fit0 = (rh0 <= sh && rw0 <= g_bin.W - curX);
-                    bool fit1 = allowRot && (rh1 <= sh && rw1 <= g_bin.W - curX);
-                    if(fit0 && fit1){
-                        // pick higher density orientation (same density since area same & v same),
-                        // so pick the one with smaller height (less waste) then larger width to fill.
-                        if(rh0 <= rh1){ candRot=0; crw=rw0; crh=rh0; }
-                        else { candRot=1; crw=rw1; crh=rh1; }
-                    } else if(fit0){ candRot=0; crw=rw0; crh=rh0; }
-                    else if(fit1){ candRot=1; crw=rw1; crh=rh1; }
-                    if(candRot >= 0){
-                        Placed p; p.typeId=t; p.x=curX; p.y=curY; p.rot=candRot;
-                        res.placements.push_back(p);
-                        res.totalValue += it.v;
-                        res.used[t]++; rem[t]--;
-                        curX += crw;
-                        prog = true;
-                    }
-                }
-            }
-            curY += sh;
-        }
-        return res;
-    }
-};
-
-// Generate a shelf-height plan: greedily pick next shelf height as the height (over orientations)
-// of the highest-density item that still has remaining copies and fits, considering what fits in it.
-// This produces a list of shelf heights.
-static vector<int> greedyShelfHeights(const vector<int>& order, bool allowRot){
-    vector<int> rem(g_items.size());
-    for(size_t i=0;i<g_items.size();++i) rem[i] = g_items[i].limit;
-    vector<int> heights;
-    int curY = 0;
-    while(curY < g_bin.H){
-        // Pick shelf height: the oriented height of the first (in order) item with rem>0 that fits.
-        int sh = -1;
-        for(int t : order){
-            if(rem[t] <= 0) continue;
-            const ItemType& it = g_items[t];
-            // choose oriented height that fits and is smallest (to leave room)
-            int h0 = it.h, h1 = it.w;
-            int cand = -1;
-            // need at least one copy to fit width-wise
-            if(it.w <= g_bin.W && h0 <= g_bin.H - curY) cand = h0;
-            if(allowRot && it.h <= g_bin.W && h1 <= g_bin.H - curY){
-                if(cand < 0 || h1 < cand) cand = h1;
-            }
-            if(cand > 0){ sh = cand; break; }
-        }
-        if(sh < 0) break;
-        heights.push_back(sh);
-        // simulate filling this shelf to update rem (so next shelf height choice reflects leftovers)
-        int curX = 0;
-        bool prog = true;
-        while(prog){
-            prog = false;
-            for(int t : order){
-                if(rem[t] <= 0) continue;
-                const ItemType& it = g_items[t];
-                int rw0=it.w, rh0=it.h, rw1=it.h, rh1=it.w;
-                int candRot=-1, crw=0, crh=0;
-                bool fit0 = (rh0 <= sh && rw0 <= g_bin.W - curX);
-                bool fit1 = allowRot && (rh1 <= sh && rw1 <= g_bin.W - curX);
-                if(fit0 && fit1){ if(rh0<=rh1){candRot=0;crw=rw0;crh=rh0;} else {candRot=1;crw=rw1;crh=rh1;} }
-                else if(fit0){candRot=0;crw=rw0;crh=rh0;}
-                else if(fit1){candRot=1;crw=rw1;crh=rh1;}
-                if(candRot>=0){
-                    rem[t]--; curX += crw; prog = true;
-                }
-            }
-        }
-         curY += sh;
-     }
-     return heights;
-}
-
 // ---------------- Single-item-per-shelf knapsack planner ----------------
 // For each item type, choose an orientation (rot 0 or 1), then a number of shelves of that orientation.
 // Each shelf holds perShelf = W // rw copies (last shelf may be partial). Bounded knapsack over height H.
@@ -864,6 +752,390 @@ static PackResult knapsackColumnPlan(bool allowRot){
     return r;
 }
 
+// ---------------- Mixed-shelf (3-stage guillotine) planner ----------------
+// A shelf of height Hs spanning the full bin width is filled with vertical
+// "columns"; each column stacks copies of a single item type (one orientation).
+// Column choice = bounded knapsack over the shelf width (exact, binary-encoded).
+// Shelves are chosen greedily by value-per-height with exact remaining-limit
+// tracking, which lets several item types mix inside one shelf.
+struct MSUnit {
+    int typeId, rot;
+    int wOr, hOr;    // oriented item size
+    int perCol;      // items per full column
+    int nItems;      // total items in this unit
+    int nCols;       // columns in this unit (width = wOr*nCols)
+    ll val;
+};
+
+static void buildShelfUnits(int Hs, int W, const vector<int>& rem, bool allowRot,
+                            uint32_t flipMask, vector<MSUnit>& units){
+    units.clear();
+    int M = (int)g_items.size();
+    for(int t = 0; t < M; ++t){
+        if(rem[t] <= 0) continue;
+        const ItemType& it = g_items[t];
+        // pick orientation with best value density per width (optionally flipped)
+        double bestD = -1, secD = -1;
+        int bw=0,bh=0,bk=0,brot=-1, sw=0,sh=0,sk=0,srot=-1;
+        for(int rot = 0; rot <= (allowRot ? 1 : 0); ++rot){
+            int w_or = rot ? it.h : it.w;
+            int h_or = rot ? it.w : it.h;
+            if(h_or > Hs || w_or > W) continue;
+            if(rot == 1 && it.w == it.h) continue;
+            int k = Hs / h_or; if(k > rem[t]) k = rem[t];
+            double d = (double)k * (double)it.v / (double)w_or;
+            if(d > bestD){
+                secD=bestD; sw=bw; sh=bh; sk=bk; srot=brot;
+                bestD=d; bw=w_or; bh=h_or; bk=k; brot=rot;
+            } else if(d > secD){ secD=d; sw=w_or; sh=h_or; sk=k; srot=rot; }
+        }
+        if(brot < 0) continue;
+        if(((flipMask >> t) & 1u) && srot >= 0){ bw=sw; bh=sh; bk=sk; brot=srot; }
+        int maxCols = W / bw;
+        if(maxCols <= 0) continue;
+        int fullCols = rem[t] / bk;
+        bool capped = false;
+        if(fullCols > maxCols){ fullCols = maxCols; capped = true; }
+        int k2 = fullCols, p = 1;
+        while(k2 > 0){
+            int take = min(p, k2);
+            units.push_back({t, brot, bw, bh, bk, bk*take, take, (ll)bk*take*it.v});
+            k2 -= take; p *= 2;
+        }
+        if(!capped){
+            int partial = rem[t] - fullCols * bk;
+            if(partial > 0 && fullCols < maxCols)
+                units.push_back({t, brot, bw, bh, bk, partial, 1, (ll)partial*it.v});
+        }
+    }
+}
+
+// Value-only 0/1 knapsack over width (units already binary-encoded).
+static ll msKnapValue(const vector<MSUnit>& units, int W){
+    static vector<ll> dp;
+    dp.assign(W + 1, 0);
+    for(const MSUnit& u : units){
+        int uw = u.wOr * u.nCols;
+        if(uw > W || uw <= 0) continue;
+        ll uv = u.val;
+        for(int c = W; c >= uw; --c){
+            ll v = dp[c - uw] + uv;
+            if(v > dp[c]) dp[c] = v;
+        }
+    }
+    return dp[W];
+}
+
+// Knapsack with reconstruction (snapshot rows). Returns chosen unit indices.
+static ll msKnapChoose(const vector<MSUnit>& units, int W, vector<int>& chosen){
+    int U = (int)units.size();
+    static vector<ll> snap;
+    snap.assign((size_t)(U + 1) * (W + 1), 0);
+    for(int u = 0; u < U; ++u){
+        const ll* prev = &snap[(size_t)u * (W + 1)];
+        ll* cur = &snap[(size_t)(u + 1) * (W + 1)];
+        int uw = units[u].wOr * units[u].nCols;
+        ll uv = units[u].val;
+        for(int c = 0; c <= W; ++c){
+            ll b = prev[c];
+            if(uw > 0 && uw <= W && c >= uw){
+                ll v = prev[c - uw] + uv;
+                if(v > b) b = v;
+            }
+            cur[c] = b;
+        }
+    }
+    chosen.clear();
+    int c = W;
+    for(int u = U - 1; u >= 0; --u){
+        const ll* prev = &snap[(size_t)u * (W + 1)];
+        const ll* cur = &snap[(size_t)(u + 1) * (W + 1)];
+        if(cur[c] != prev[c]){
+            chosen.push_back(u);
+            c -= units[u].wOr * units[u].nCols;
+        }
+    }
+    return snap[(size_t)U * (W + 1) + W];
+}
+
+// score exponent for shelf selection: score = value / Hs^alpha
+static double g_msAlpha = 1.0;
+
+// Fill a sub-region [x0,x0+RW) x [y0,y0+RH) with horizontal mixed shelves,
+// consuming 'rem' and appending placements/value to res.
+static void mixedShelfFillRegion(int x0, int y0, int RW, int RH, vector<int>& rem,
+                                 bool allowRot, uint32_t seed, PackResult& res, mt19937& rng){
+    int M = (int)g_items.size();
+    int y = 0;
+    vector<MSUnit> units;
+    vector<int> cands, chosen;
+    while(y < RH){
+        if(elapsed() > TIME_LIMIT) break;
+        int Hrem = RH - y;
+        cands.clear();
+        for(int t = 0; t < M; ++t){
+            if(rem[t] <= 0) continue;
+            const ItemType& it = g_items[t];
+            for(int rot = 0; rot <= (allowRot ? 1 : 0); ++rot){
+                int h_or = rot ? it.w : it.h;
+                int w_or = rot ? it.h : it.w;
+                if(w_or > RW || h_or > Hrem) continue;
+                int kmax = Hrem / h_or;
+                if(kmax > rem[t]) kmax = rem[t];
+                if(kmax > 6) kmax = 6;
+                for(int k = 1; k <= kmax; ++k) cands.push_back(k * h_or);
+            }
+        }
+        cands.push_back(Hrem);
+        sort(cands.begin(), cands.end());
+        cands.erase(unique(cands.begin(), cands.end()), cands.end());
+        if(cands.empty()) break;
+        uint32_t flipMask = 0;
+        if(seed && allowRot){
+            flipMask = rng() & rng() & rng(); // ~12.5% of bits
+            flipMask &= (M >= 32) ? 0xFFFFFFFFu : ((1u << M) - 1u);
+        }
+        double bestScore = -1; int bestH = -1;
+        for(int Hs : cands){
+            buildShelfUnits(Hs, RW, rem, allowRot, flipMask, units);
+            if(units.empty()) continue;
+            ll v = msKnapValue(units, RW);
+            if(v <= 0) continue;
+            double score = (g_msAlpha == 1.0) ? (double)v / (double)Hs
+                                              : (double)v / pow((double)Hs, g_msAlpha);
+            if(seed) score *= 1.0 + 0.05 * (((double)(rng() % 2001) / 1000.0) - 1.0);
+            if(score > bestScore){ bestScore = score; bestH = Hs; }
+        }
+        if(bestH < 0) break;
+        buildShelfUnits(bestH, RW, rem, allowRot, flipMask, units);
+        msKnapChoose(units, RW, chosen);
+        if(chosen.empty()) break;
+        int x = 0;
+        for(int idx : chosen){
+            const MSUnit& u = units[idx];
+            int itemsLeft = u.nItems;
+            for(int cc = 0; cc < u.nCols && itemsLeft > 0; ++cc){
+                int inCol = min(u.perCol, itemsLeft);
+                for(int j = 0; j < inCol; ++j){
+                    Placed p; p.typeId = u.typeId; p.x = x0 + x; p.y = y0 + y + j * u.hOr; p.rot = u.rot;
+                    res.placements.push_back(p);
+                    res.totalValue += g_items[u.typeId].v;
+                    res.used[u.typeId]++;
+                }
+                itemsLeft -= inCol;
+                x += u.wOr;
+            }
+            rem[u.typeId] -= u.nItems;
+        }
+        y += bestH;
+    }
+}
+
+// Fill a sub-region with vertical mixed shelves (transposed): swap item dims,
+// fill the transposed region, then map placements back.
+static void mixedShelfFillRegionT(int x0, int y0, int RW, int RH, vector<int>& rem,
+                                  bool allowRot, uint32_t seed, PackResult& res, mt19937& rng){
+    size_t before = res.placements.size();
+    for(auto& it : g_items) swap(it.w, it.h);
+    mixedShelfFillRegion(0, 0, RH, RW, rem, allowRot, seed, res, rng);
+    for(auto& it : g_items) swap(it.w, it.h);
+    for(size_t i = before; i < res.placements.size(); ++i){
+        Placed& p = res.placements[i];
+        int nx = x0 + p.y, ny = y0 + p.x;
+        p.x = nx; p.y = ny;
+        // footprint in transposed space with swapped dims equals real footprint
+        // with the same rot flag (see knapsackColumnPlan derivation).
+    }
+}
+
+// Build one mixed-shelf plan over the whole bin. stripW > 0 reserves a vertical
+// band of that width on the right, filled with transposed (vertical) shelves —
+// good for tall narrow leftovers that horizontal shelves waste.
+static PackResult mixedShelfPlan(bool allowRot, uint32_t seed, int stripW, bool transposedMain){
+    PackResult res;
+    res.totalValue = 0;
+    res.used.assign(g_items.size(), 0);
+    int M = (int)g_items.size();
+    vector<int> rem(M);
+    for(int i = 0; i < M; ++i) rem[i] = g_items[i].limit;
+    mt19937 rng(seed * 2654435761u + 12345u);
+    int W = g_bin.W, H = g_bin.H;
+    if(!transposedMain){
+        if(stripW >= W) stripW = 0;
+        mixedShelfFillRegion(0, 0, W - stripW, H, rem, allowRot, seed, res, rng);
+        if(stripW > 0)
+            mixedShelfFillRegionT(W - stripW, 0, stripW, H, rem, allowRot, seed, res, rng);
+    } else {
+        // vertical shelves over the whole bin; optional horizontal strip on top
+        if(stripW >= H) stripW = 0;
+        mixedShelfFillRegionT(0, 0, W, H - stripW, rem, allowRot, seed, res, rng);
+        if(stripW > 0)
+            mixedShelfFillRegion(0, H - stripW, W, stripW, rem, allowRot, seed, res, rng);
+    }
+    return res;
+}
+
+// ---------------- Beam search over shelf-height sequences ----------------
+// Greedy shelf choice can lock in a bad height partition of H. Branch on the
+// first few shelf heights (top-scoring alternatives), keep the most promising
+// states (value + fractional bound on the remaining area), finish greedily.
+static vector<int> g_densOrd; // density-descending type order (filled in main)
+
+static double msFracBound(const vector<int>& rem, double area){
+    double v = 0;
+    for(int t : g_densOrd){
+        if(rem[t] <= 0) continue;
+        double a = (double)g_items[t].area * rem[t];
+        if(a >= area){ v += area * g_items[t].density; return v; }
+        v += (double)g_items[t].v * rem[t];
+        area -= a;
+    }
+    return v;
+}
+
+struct MSState {
+    vector<int> rem;
+    int y;
+    PackResult res;
+    double rank;
+};
+
+static void msCollectCands(int RW, int Hrem, const vector<int>& rem, bool allowRot,
+                           vector<int>& cands){
+    int M = (int)g_items.size();
+    cands.clear();
+    for(int t = 0; t < M; ++t){
+        if(rem[t] <= 0) continue;
+        const ItemType& it = g_items[t];
+        for(int rot = 0; rot <= (allowRot ? 1 : 0); ++rot){
+            int h_or = rot ? it.w : it.h;
+            int w_or = rot ? it.h : it.w;
+            if(w_or > RW || h_or > Hrem) continue;
+            int kmax = Hrem / h_or;
+            if(kmax > rem[t]) kmax = rem[t];
+            if(kmax > 5) kmax = 5;
+            for(int k = 1; k <= kmax; ++k) cands.push_back(k * h_or);
+        }
+    }
+    cands.push_back(Hrem);
+    sort(cands.begin(), cands.end());
+    cands.erase(unique(cands.begin(), cands.end()), cands.end());
+}
+
+// Commit the best fill for shelf height Hs onto state st (placements at y=st.y).
+static void msCommitShelf(MSState& st, int Hs, int RW, bool allowRot,
+                          vector<MSUnit>& units, vector<int>& chosen){
+    buildShelfUnits(Hs, RW, st.rem, allowRot, 0, units);
+    msKnapChoose(units, RW, chosen);
+    int x = 0;
+    for(int idx : chosen){
+        const MSUnit& u = units[idx];
+        int itemsLeft = u.nItems;
+        for(int cc = 0; cc < u.nCols && itemsLeft > 0; ++cc){
+            int inCol = min(u.perCol, itemsLeft);
+            for(int j = 0; j < inCol; ++j){
+                Placed p; p.typeId = u.typeId; p.x = x; p.y = st.y + j * u.hOr; p.rot = u.rot;
+                st.res.placements.push_back(p);
+                st.res.totalValue += g_items[u.typeId].v;
+                st.res.used[u.typeId]++;
+            }
+            itemsLeft -= inCol;
+            x += u.wOr;
+        }
+        st.rem[u.typeId] -= u.nItems;
+    }
+    st.y += Hs;
+}
+
+static PackResult beamMixedShelfPlan(bool allowRot, int beamW, int branch,
+                                     int branchDepth, double tlimit){
+    int W = g_bin.W, H = g_bin.H, M = (int)g_items.size();
+    vector<MSState> beam(1);
+    beam[0].rem.resize(M);
+    for(int i = 0; i < M; ++i) beam[0].rem[i] = g_items[i].limit;
+    beam[0].y = 0;
+    beam[0].res.totalValue = 0;
+    beam[0].res.used.assign(M, 0);
+    PackResult best; best.totalValue = -1;
+    vector<MSUnit> units; vector<int> cands, chosen;
+    int depth = 0;
+    while(!beam.empty()){
+        int nBranch = (depth < branchDepth) ? branch : 1;
+        vector<MSState> next;
+        for(MSState& st : beam){
+            if(elapsed() > tlimit){
+                if(st.res.totalValue > best.totalValue) best = st.res;
+                continue;
+            }
+            int Hrem = H - st.y;
+            bool expanded = false;
+            if(Hrem > 0){
+                msCollectCands(W, Hrem, st.rem, allowRot, cands);
+                // score candidates
+                static vector<pair<double,int>> scored;
+                scored.clear();
+                for(int Hs : cands){
+                    buildShelfUnits(Hs, W, st.rem, allowRot, 0, units);
+                    if(units.empty()) continue;
+                    ll v = msKnapValue(units, W);
+                    if(v <= 0) continue;
+                    scored.push_back({(double)v / (double)Hs, Hs});
+                }
+                sort(scored.begin(), scored.end(),
+                     [](const pair<double,int>& a, const pair<double,int>& b){ return a.first > b.first; });
+                int taken = 0;
+                static vector<int> takenH;
+                takenH.clear();
+                for(size_t si = 0; si < scored.size() && taken < nBranch; ++si){
+                    int Hs = scored[si].second;
+                    // require diversity between branched heights
+                    bool dup = false;
+                    for(int th : takenH) if(abs(th - Hs) <= 2){ dup = true; break; }
+                    if(dup) continue;
+                    takenH.push_back(Hs);
+                    MSState child = st;
+                    msCommitShelf(child, Hs, W, allowRot, units, chosen);
+                    child.rank = (double)child.res.totalValue +
+                                 msFracBound(child.rem, (double)(H - child.y) * W);
+                    next.push_back(std::move(child));
+                    ++taken;
+                    expanded = true;
+                }
+            }
+            if(!expanded){
+                if(st.res.totalValue > best.totalValue) best = st.res;
+            }
+        }
+        if(next.empty()) break;
+        sort(next.begin(), next.end(),
+             [](const MSState& a, const MSState& b){ return a.rank > b.rank; });
+        // dedupe identical (y, value) states
+        vector<MSState> pruned;
+        for(auto& s : next){
+            bool same = false;
+            for(auto& q : pruned)
+                if(q.y == s.y && q.res.totalValue == s.res.totalValue){ same = true; break; }
+            if(!same) pruned.push_back(std::move(s));
+            if((int)pruned.size() >= beamW) break;
+        }
+        beam = std::move(pruned);
+        ++depth;
+    }
+    if(best.totalValue < 0){ best.totalValue = 0; best.used.assign(M, 0); }
+    return best;
+}
+
+static PackResult beamMixedShelfPlanT(bool allowRot, int beamW, int branch,
+                                      int branchDepth, double tlimit){
+    swap(g_bin.W, g_bin.H);
+    for(auto& it : g_items) swap(it.w, it.h);
+    PackResult r = beamMixedShelfPlan(allowRot, beamW, branch, branchDepth, tlimit);
+    for(auto& it : g_items) swap(it.w, it.h);
+    swap(g_bin.W, g_bin.H);
+    for(auto& p : r.placements) swap(p.x, p.y);
+    return r;
+}
+
 // ---------------- Orderings ----------------
 static vector<int> orderByDensity(){
     vector<int> idx(g_items.size());
@@ -1037,6 +1309,20 @@ int main(){
     vector<int> ordAreaAsc = ordMinDim; // area-ascending
     sort(ordAreaAsc.begin(), ordAreaAsc.end(), [](int a,int b){ return g_items[a].area < g_items[b].area; });
     vector<vector<int>*> gapOrders = {&ordMinDim, &ordAreaAsc, &ordDens, &ordVal};
+    // Polish a candidate result: iterated MaxRects gap-filling on its leftover space.
+    auto polish = [&](PackResult r) -> PackResult {
+        ll prev = -1;
+        int rounds = 0;
+        while(r.totalValue != prev && rounds < 3){
+            prev = r.totalValue; ++rounds;
+            for(auto* op : gapOrders){
+                if(elapsed() > TIME_LIMIT) return r;
+                PackResult f = fillGaps(r, *op, allowRot, allowRot);
+                if(f.totalValue > r.totalValue) r = std::move(f);
+            }
+        }
+        return r;
+    };
     auto gapFill = [&](){
 #ifdef DIAG
         g_label="gapfill";
@@ -1052,6 +1338,78 @@ int main(){
     };
     // Fill gaps left by the knapsack shelf layout (wasted horizontal strips + top strip).
     gapFill();
+
+    // Mixed-shelf (3-stage guillotine) plans: several item types per shelf via an
+    // exact width-knapsack over stacked columns; horizontal + transposed; polished.
+#ifdef DIAG
+    g_label="mixed";
+#endif
+    consider(polish(mixedShelfPlan(allowRot, 0, 0, false)));
+    consider(polish(mixedShelfPlan(allowRot, 0, 0, true)));
+    // Beam search over shelf-height partitions (branch early shelves, greedy tail).
+#ifdef DIAG
+    g_label="beam";
+#endif
+    g_densOrd = orderByDensity();
+#ifdef DIAG
+    {
+        PackResult b1 = beamMixedShelfPlan(allowRot, 4, 3, 5, TIME_LIMIT * 0.55);
+        fprintf(stderr, "[beamH] raw=%lld @%.3fs\n", b1.totalValue, elapsed());
+        consider(polish(std::move(b1)));
+        PackResult b2 = beamMixedShelfPlanT(allowRot, 4, 3, 5, TIME_LIMIT * 0.7);
+        fprintf(stderr, "[beamT] raw=%lld @%.3fs\n", b2.totalValue, elapsed());
+        consider(polish(std::move(b2)));
+    }
+#else
+    if(elapsed() < TIME_LIMIT * 0.55)
+        consider(polish(beamMixedShelfPlan(allowRot, 4, 3, 5, TIME_LIMIT * 0.55)));
+    if(elapsed() < TIME_LIMIT * 0.7)
+        consider(polish(beamMixedShelfPlanT(allowRot, 4, 3, 5, TIME_LIMIT * 0.7)));
+#endif
+    // Hybrid plans: reserve a narrow band (right side / top) for perpendicular
+    // shelves — plugs tall narrow leftovers that one-directional shelves waste.
+#ifdef DIAG
+    g_label="hybrid";
+#endif
+    {
+        // candidate strip widths from slender item dimensions
+        vector<int> stripCands;
+        for(const ItemType& it : g_items){
+            if(it.h >= 2 * it.w && it.w <= g_bin.W / 6) stripCands.push_back(it.w);
+            if((allowRot || true) && it.w >= 2 * it.h && it.h <= g_bin.W / 6) stripCands.push_back(it.h);
+        }
+        sort(stripCands.begin(), stripCands.end());
+        stripCands.erase(unique(stripCands.begin(), stripCands.end()), stripCands.end());
+        // pairwise sums of the narrowest few
+        {
+            int n = min((int)stripCands.size(), 3);
+            vector<int> sums;
+            for(int i = 0; i < n; ++i)
+                for(int j = i; j < n; ++j) sums.push_back(stripCands[i] + stripCands[j]);
+            for(int s : sums) stripCands.push_back(s);
+            sort(stripCands.begin(), stripCands.end());
+            stripCands.erase(unique(stripCands.begin(), stripCands.end()), stripCands.end());
+        }
+        if((int)stripCands.size() > 6) stripCands.resize(6);
+        for(int d : stripCands){
+            if(elapsed() > TIME_LIMIT * 0.45) break;
+            consider(polish(mixedShelfPlan(allowRot, 0, d, false)));
+            if(elapsed() > TIME_LIMIT * 0.45) break;
+            consider(polish(mixedShelfPlan(allowRot, 0, d, true)));
+        }
+    }
+#ifdef DIAG
+    g_label="mixedrand";
+#endif
+    {
+        uint32_t s = 1;
+        while(elapsed() < TIME_LIMIT * 0.5 && s <= 12){
+            consider(polish(mixedShelfPlan(allowRot, s, 0, false)));
+            if(elapsed() > TIME_LIMIT * 0.5) break;
+            consider(polish(mixedShelfPlan(allowRot, s, 0, true)));
+            ++s;
+        }
+    }
 
     // Column-based (transposed) knapsack plan + its own gap fill; keep whichever is better.
     if(elapsed() < TIME_LIMIT * 0.55){
@@ -1082,123 +1440,15 @@ int main(){
         if(elapsed() > TIME_LIMIT * 0.6) break;
     }
 
-    // Shelf packer with multiple orderings.
-    ShelfFiller sf;
-    sf.W = g_bin.W; sf.H = g_bin.H; sf.allowRot = allowRot;
-    for(auto& ord : orders){
-        // greedy shelf heights based on this order
-        vector<int> heights = greedyShelfHeights(ord, allowRot);
-        if(!heights.empty()){
-            consider(sf.fillWithShelfHeights(ord, heights));
-        }
-        if(elapsed() > TIME_LIMIT * 0.55) break;
-    }
-    // Also try: shelf heights = sorted unique item heights (descending), fill each.
-    {
-        vector<int> allH;
-        for(auto& it : g_items){
-            allH.push_back(it.h);
-            if(allowRot) allH.push_back(it.w);
-        }
-        sort(allH.begin(), allH.end());
-        allH.erase(unique(allH.begin(), allH.end()), allH.end());
-        sort(allH.begin(), allH.end(), greater<int>());
-        // For each candidate first-shelf-height, build a plan: pick heights greedily from allH
-        // that fit remaining vertical space, fill each shelf with density order.
-        vector<int> densOrd = orderByDensity();
-        // Try a few plans: allH as-is (descending); also greedy from each starting height.
-        consider(sf.fillWithShelfHeights(densOrd, allH));
-        // Greedy plan from density order
-        vector<int> gh = greedyShelfHeights(densOrd, allowRot);
-        if(!gh.empty()) consider(sf.fillWithShelfHeights(densOrd, gh));
-        // Try ascending too (small shelves first can fill gaps)
-        sort(allH.begin(), allH.end());
-        consider(sf.fillWithShelfHeights(densOrd, allH));
-        // Try tiling with a single shelf height = each candidate (best for uniform items).
-        for(int h : allH){
-            if(h <= 0) continue;
-            int n = g_bin.H / h;
-            if(n <= 0) continue;
-            vector<int> plan;
-            for(int k=0;k<n;++k) plan.push_back(h);
-            // leftover strip
-            int remH = g_bin.H - n*h;
-            if(remH > 0) plan.push_back(remH);
-            consider(sf.fillWithShelfHeights(densOrd, plan));
-            if(elapsed() > TIME_LIMIT * 0.55) break;
-        }
-        // Try plans starting with each candidate height, then greedy.
-        for(int h0 : allH){
-            if(h0 <= 0 || h0 > g_bin.H) continue;
-            // build plan: first shelf h0, then greedy from density order with that rem
-            vector<int> rem(g_items.size());
-            for(size_t i=0;i<g_items.size();++i) rem[i] = g_items[i].limit;
-            vector<int> plan;
-            int curY = 0;
-            // first shelf h0
-            plan.push_back(h0);
-            // simulate fill of first shelf to update rem
-            {
-                int curX=0; bool prog=true;
-                while(prog){ prog=false;
-                    for(int t : densOrd){
-                        if(rem[t]<=0) continue;
-                        const ItemType& it=g_items[t];
-                        int rw0=it.w,rh0=it.h,rw1=it.h,rh1=it.w;
-                        int cr=-1,cw=0,ch=0;
-                        bool f0=(rh0<=h0 && rw0<=g_bin.W-curX);
-                        bool f1=allowRot&&(rh1<=h0 && rw1<=g_bin.W-curX);
-                        if(f0&&f1){if(rh0<=rh1){cr=0;cw=rw0;ch=rh0;}else{cr=1;cw=rw1;ch=rh1;}}
-                        else if(f0){cr=0;cw=rw0;ch=rh0;}
-                        else if(f1){cr=1;cw=rw1;ch=rh1;}
-                        if(cr>=0){rem[t]--;curX+=cw;prog=true;}
-                    }
-                }
-            }
-            curY += h0;
-            // greedy remainder
-            while(curY < g_bin.H){
-                int sh=-1;
-                for(int t : densOrd){
-                    if(rem[t]<=0) continue;
-                    const ItemType& it=g_items[t];
-                    int h0b=it.h, h1b=it.w;
-                    int cand=-1;
-                    if(it.w<=g_bin.W && h0b<=g_bin.H-curY) cand=h0b;
-                    if(allowRot && it.h<=g_bin.W && h1b<=g_bin.H-curY){ if(cand<0||h1b<cand) cand=h1b; }
-                    if(cand>0){ sh=cand; break; }
-                }
-                if(sh<0) break;
-                plan.push_back(sh);
-                int curX=0; bool prog=true;
-                while(prog){ prog=false;
-                    for(int t : densOrd){
-                        if(rem[t]<=0) continue;
-                        const ItemType& it=g_items[t];
-                        int rw0=it.w,rh0=it.h,rw1=it.h,rh1=it.w;
-                        int cr=-1,cw=0,ch=0;
-                        bool f0=(rh0<=sh && rw0<=g_bin.W-curX);
-                        bool f1=allowRot&&(rh1<=sh && rw1<=g_bin.W-curX);
-                        if(f0&&f1){if(rh0<=rh1){cr=0;cw=rw0;ch=rh0;}else{cr=1;cw=rw1;ch=rh1;}}
-                        else if(f0){cr=0;cw=rw0;ch=rh0;}
-                        else if(f1){cr=1;cw=rw1;ch=rh1;}
-                        if(cr>=0){rem[t]--;curX+=cw;prog=true;}
-                    }
-                }
-                curY += sh;
-            }
-            consider(sf.fillWithShelfHeights(densOrd, plan));
-            if(elapsed() > TIME_LIMIT * 0.55) break;
-        }
-    }
-
     #ifdef DIAG
     g_label="random";
 #endif
     // Randomized multi-start on skyline.
     mt19937 rng(987654321u);
     int seed = 0;
-    while(elapsed() < TIME_LIMIT){
+    double iterCost = 0.0; // adaptive margin: last iteration's duration
+    while(elapsed() + 2.0 * iterCost < TIME_LIMIT - 0.04){
+        double t0 = elapsed();
         vector<int> ord = orderByDensity();
         int mode = seed % 8;
         if(mode == 0){
@@ -1254,12 +1504,13 @@ int main(){
         bool tryBoth = allowRot ? ((seed & 1) == 0) : false;
         if(mode == 6) tryBoth = true; // force both
         consider(greedyFill(ord, allowRot, tryBoth));
+        iterCost = elapsed() - t0;
         ++seed;
         if(seed > 2000000) break;
     }
 
     // Final gap-fill on the champion (in case the multistart produced a new best).
-    gapFill();
+    if(elapsed() < TIME_LIMIT - 0.04) gapFill();
 
     if(best.totalValue < 0){
         best.totalValue = 0;
