@@ -567,6 +567,96 @@ static bool localSearch(vector<vector<int>>& seedGrid, int K,
     vector<vector<int>> cellsOf(N+2);
     auto rebuildCellsOf=[&](){ for(int c=1;c<=N;c++) cellsOf[c].clear(); for(int p=0;p<K*K;p++) cellsOf[g[p]].push_back(p); };
     rebuildCellsOf();
+    auto recolorCell=[&](int p, int x){
+        int r=p/K, c=p%K, o=g[p];
+        if(x==o) return;
+        for(int d=0;d<4;d++){
+            int nr=r+DR[d], nc=c+DC[d];
+            if(nr<0||nr>=K||nc<0||nc>=K) continue;
+            int y=g[nr*K+nc];
+            if(o!=y){
+                int a=min(o,y), b=max(o,y), oldc=cnt[a][b];
+                cnt[a][b]=oldc-1;
+                if(ADJ[a][b]){ if(oldc==1) missing++; }
+                else forbidden--;
+            }
+            if(x!=y){
+                int a=min(x,y), b=max(x,y), oldc=cnt[a][b];
+                cnt[a][b]=oldc+1;
+                if(ADJ[a][b]){ if(oldc==0) missing--; }
+                else forbidden++;
+            }
+        }
+        colorCount[o]--; if(colorCount[o]==0) missingColors++;
+        colorCount[x]++; if(colorCount[x]==1) missingColors--;
+        g[p]=x;
+        updateBad(p);
+        for(int d=0;d<4;d++){
+            int nr=r+DR[d], nc=c+DC[d];
+            if(nr<0||nr>=K||nc<0||nc>=K) continue;
+            updateBad(nr*K+nc);
+        }
+    };
+    auto trySafeMissingPlant=[&]()->bool{
+        int bestP=-1, bestX=-1, bestDm=0;
+        for(int tries=0; tries<28; tries++){
+            int eidx=-1;
+            for(int et=0; et<24; et++){
+                int e=rng()%EDGES.size();
+                if(cnt[EDGES[e].first][EDGES[e].second]==0){ eidx=e; break; }
+            }
+            if(eidx<0) break;
+            int ea=EDGES[eidx].first, eb=EDGES[eidx].second;
+            for(int orient=0; orient<2; orient++){
+                int anchor = orient ? eb : ea;
+                int x = orient ? ea : eb;
+                if(cellsOf[anchor].empty()) continue;
+                int base = cellsOf[anchor][rng()%cellsOf[anchor].size()];
+                if(g[base]!=anchor) continue;
+                int br=base/K, bc=base%K;
+                for(int d0=0; d0<4; d0++){
+                    int nr=br+DR[d0], nc=bc+DC[d0];
+                    if(nr<0||nr>=K||nc<0||nc>=K) continue;
+                    int p=nr*K+nc, o=g[p];
+                    if(o==x || colorCount[o]<=1) continue;
+                    int pr=p/K, pc=p%K;
+                    int touched[8], de[8], nt=0;
+                    auto addDelta=[&](int u,int v,int delta)->bool{
+                        if(u==v) return true;
+                        int a=min(u,v), b=max(u,v);
+                        if(!ADJ[a][b]) return false;
+                        int id=a*45+b, j=0;
+                        for(; j<nt; j++) if(touched[j]==id) break;
+                        if(j==nt){ touched[nt]=id; de[nt]=0; nt++; }
+                        de[j]+=delta;
+                        return true;
+                    };
+                    bool ok=true;
+                    for(int d=0; d<4 && ok; d++){
+                        int ar=pr+DR[d], ac=pc+DC[d];
+                        if(ar<0||ar>=K||ac<0||ac>=K) continue;
+                        int y=g[ar*K+ac];
+                        if(!addDelta(o,y,-1)) ok=false;
+                        if(ok && !addDelta(x,y,1)) ok=false;
+                    }
+                    if(!ok) continue;
+                    int dm=0;
+                    for(int j=0;j<nt;j++){
+                        int id=touched[j], a=id/45, b=id%45;
+                        int oldc=cnt[a][b], newc=oldc+de[j];
+                        if(newc<0){ ok=false; break; }
+                        if(oldc>0 && newc==0) dm++;
+                        else if(oldc==0 && newc>0) dm--;
+                    }
+                    if(!ok) continue;
+                    if(dm<bestDm){ bestDm=dm; bestP=p; bestX=x; }
+                }
+            }
+        }
+        if(bestP<0) return false;
+        recolorCell(bestP,bestX);
+        return true;
+    };
     long long iters=0;
     auto now=[&](){ return chrono::steady_clock::now(); };
     while(true){
@@ -576,6 +666,12 @@ static bool localSearch(vector<vector<int>>& seedGrid, int K,
             result.assign(K, vector<int>(K));
             for(int r=0;r<K;r++) for(int c=0;c<K;c++) result[r][c]=g[r*K+c];
             return true;
+        }
+        if(forbidden==0 && missing>0 && (iters&15)==0){
+            if(trySafeMissingPlant()){
+                if((iters & 127)==0) rebuildCellsOf();
+                continue;
+            }
         }
         int p=-1, forcedX=-1;
         if((int)(rng()%1000) < 20){
@@ -638,16 +734,7 @@ static bool localSearch(vector<vector<int>>& seedGrid, int K,
         }
         int x=bestX;
         if(!first && x!=o){
-            for(int i=0;i<nnbr;i++){
-                int nc=nbr[i];
-                if(o!=nc){ int a=min(o,nc),b=max(o,nc); int oldc=cnt[a][b]; cnt[a][b]=oldc-1; if(ADJ[a][b]){ if(oldc==1) missing++; } else forbidden--; }
-                if(x!=nc){ int a=min(x,nc),b=max(x,nc); int oldc=cnt[a][b]; cnt[a][b]=oldc+1; if(ADJ[a][b]){ if(oldc==0) missing--; } else forbidden++; }
-            }
-            colorCount[o]--; if(colorCount[o]==0) missingColors++;
-            colorCount[x]++; if(colorCount[x]==1) missingColors--;
-            g[p]=x;
-            updateBad(p);
-            for(int d=0;d<4;d++){ int nr=r+DR[d],nc=c+DC[d]; if(nr<0||nr>=K||nc<0||nc>=K)continue; updateBad(nr*K+nc); }
+            recolorCell(p,x);
             if((iters & 127)==0) rebuildCellsOf();
         }
     }
