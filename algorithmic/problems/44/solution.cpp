@@ -144,6 +144,108 @@ struct Solver {
         return after - before;
     }
 
+    double local_block_cost(const vector<int> &route, int lo, int hi) const {
+        lo = max(1, lo);
+        hi = min(N, hi);
+        double total = 0.0;
+        for (int t = lo; t <= hi; ++t) total += step_cost(route, t);
+        return total;
+    }
+
+    double relocate_delta(vector<int> &route, int from, int to) const {
+        if (from == to) return 0.0;
+        int lo = min(from, to) + 1;
+        int hi = max(from, to) + 2;
+        double before = local_block_cost(route, lo, hi);
+        int v = route[from];
+        route.erase(route.begin() + from);
+        if (to > from) --to;
+        route.insert(route.begin() + to, v);
+        double after = local_block_cost(route, lo, hi);
+        route.erase(route.begin() + to);
+        route.insert(route.begin() + from, v);
+        return after - before;
+    }
+
+    void improve_relocate(vector<int> &route, int window, int passes) const {
+        int M = (int)route.size();
+        if (M < 3) return;
+        for (int pass = 0; pass < passes; ++pass) {
+            bool changed = false;
+            for (int i = 0; i < M; ++i) {
+                double best = 0.0;
+                int best_to = -1;
+                int lo = max(0, i - window);
+                int hi = min(M - 1, i + window);
+                for (int j = lo; j <= hi; ++j) {
+                    if (j == i) continue;
+                    double d = relocate_delta(route, i, j);
+                    if (d < best) {
+                        best = d;
+                        best_to = j;
+                    }
+                }
+                if (best_to >= 0) {
+                    int v = route[i];
+                    route.erase(route.begin() + i);
+                    if (best_to > i) --best_to;
+                    route.insert(route.begin() + best_to, v);
+                    changed = true;
+                }
+            }
+            if (!changed) break;
+        }
+    }
+
+    double relocate_pair_delta(vector<int> &route, int from, int to) const {
+        int M = (int)route.size();
+        if (from < 0 || from + 1 >= M || to == from || to == from + 1) return 0.0;
+        int lo = min(from, to) + 1;
+        int hi = max(from + 1, to) + 2;
+        double before = local_block_cost(route, lo, hi);
+        int a = route[from], b = route[from + 1];
+        route.erase(route.begin() + from, route.begin() + from + 2);
+        if (to > from) to -= 2;
+        route.insert(route.begin() + to, b);
+        route.insert(route.begin() + to, a);
+        double after = local_block_cost(route, lo, hi);
+        route.erase(route.begin() + to, route.begin() + to + 2);
+        route.insert(route.begin() + from, b);
+        route.insert(route.begin() + from, a);
+        return after - before;
+    }
+
+    void improve_pair_relocate(vector<int> &route, int window, int passes) const {
+        int M = (int)route.size();
+        if (M < 4) return;
+        for (int pass = 0; pass < passes; ++pass) {
+            bool changed = false;
+            for (int i = 0; i + 1 < M; ++i) {
+                double best = 0.0;
+                int best_to = -1;
+                int lo = max(0, i - window);
+                int hi = min(M - 1, i + window);
+                for (int j = lo; j <= hi; ++j) {
+                    if (j == i || j == i + 1) continue;
+                    double d = relocate_pair_delta(route, i, j);
+                    if (d < best) {
+                        best = d;
+                        best_to = j;
+                    }
+                }
+                if (best_to >= 0) {
+                    int a = route[i], b = route[i + 1];
+                    route.erase(route.begin() + i, route.begin() + i + 2);
+                    if (best_to > i) best_to -= 2;
+                    route.insert(route.begin() + best_to, b);
+                    route.insert(route.begin() + best_to, a);
+                    changed = true;
+                }
+            }
+            if (!changed) break;
+        }
+    }
+
     void improve_two_opt(vector<int> &route) const {
         int M = (int)route.size();
         if (M < 3) return;
@@ -156,11 +258,24 @@ struct Solver {
             span = 140;
         } else if (M <= 6000) {
             passes = 2;
-            span = 60;
+            span = 90;
+        } else if (M <= 20000) {
+            passes = 1;
+            span = 120;
+        } else if (M <= 60000) {
+            passes = 1;
+            span = 55;
         } else {
             passes = 1;
             span = 8;
         }
+        improve_two_opt_window(route, passes, span);
+    }
+
+    void improve_two_opt_window(vector<int> &route, int passes, int span) const {
+        int M = (int)route.size();
+        if (M < 3) return;
+        span = min(span, M - 1);
         for (int pass = 0; pass < passes; ++pass) {
             bool changed = false;
             for (int l = 0; l < M - 1; ++l) {
@@ -322,6 +437,32 @@ struct Solver {
         return ids;
     }
 
+    vector<int> centroid_angle_order(bool far_first) const {
+        vector<int> ids;
+        ids.reserve(max(0, N - 1));
+        long double cx = 0.0L, cy = 0.0L;
+        for (int i = 0; i < N; ++i) {
+            cx += x[i];
+            cy += y[i];
+        }
+        cx /= max(1, N);
+        cy /= max(1, N);
+        vector<double> ang(N), rad(N);
+        for (int i = 1; i < N; ++i) {
+            ids.push_back(i);
+            double dx = (double)((long double)x[i] - cx);
+            double dy = (double)((long double)y[i] - cy);
+            ang[i] = atan2(dy, dx);
+            rad[i] = dx * dx + dy * dy;
+        }
+        stable_sort(ids.begin(), ids.end(), [&](int a, int b) {
+            if (ang[a] != ang[b]) return ang[a] < ang[b];
+            if (rad[a] != rad[b]) return far_first ? rad[a] > rad[b] : rad[a] < rad[b];
+            return a < b;
+        });
+        return ids;
+    }
+
     vector<int> angle_radius_snake(int block) const {
         vector<int> ids;
         ids.reserve(max(0, N - 1));
@@ -471,6 +612,75 @@ struct Solver {
         return route;
     }
 
+    vector<int> farthest_insertion_small() const {
+        if (N <= 2) {
+            vector<int> route;
+            for (int i = 1; i < N; ++i) route.push_back(i);
+            return route;
+        }
+        vector<char> used(N, 0);
+        used[0] = 1;
+        int far = 1;
+        double far_d = -1.0;
+        for (int i = 1; i < N; ++i) {
+            double d = dist_id(0, i);
+            if (d > far_d) {
+                far_d = d;
+                far = i;
+            }
+        }
+        vector<int> cycle = {0, far};
+        used[far] = 1;
+        vector<double> near(N, numeric_limits<double>::infinity());
+        for (int i = 1; i < N; ++i) {
+            if (!used[i]) near[i] = min(dist_id(i, 0), dist_id(i, far));
+        }
+
+        for (int inserted = 2; inserted < N; ++inserted) {
+            int v = -1;
+            double best_near = -1.0;
+            for (int i = 1; i < N; ++i) {
+                if (!used[i] && near[i] > best_near) {
+                    best_near = near[i];
+                    v = i;
+                }
+            }
+            if (v < 0) break;
+            int best_pos = 0;
+            double best_inc = numeric_limits<double>::infinity();
+            int C = (int)cycle.size();
+            for (int p = 0; p < C; ++p) {
+                int a = cycle[p];
+                int b = cycle[(p + 1) % C];
+                double inc = dist_id(a, v) + dist_id(v, b) - dist_id(a, b);
+                if (inc < best_inc) {
+                    best_inc = inc;
+                    best_pos = p + 1;
+                }
+            }
+            cycle.insert(cycle.begin() + best_pos, v);
+            used[v] = 1;
+            for (int i = 1; i < N; ++i) {
+                if (!used[i]) near[i] = min(near[i], dist_id(i, v));
+            }
+        }
+
+        int zero = 0;
+        for (int i = 0; i < (int)cycle.size(); ++i) {
+            if (cycle[i] == 0) {
+                zero = i;
+                break;
+            }
+        }
+        vector<int> route;
+        route.reserve(N - 1);
+        for (int k = 1; k < (int)cycle.size(); ++k) {
+            int v = cycle[(zero + k) % cycle.size()];
+            if (v != 0) route.push_back(v);
+        }
+        return route;
+    }
+
     vector<int> exact_small() const {
         int M = N - 1;
         if (M <= 0) return {};
@@ -597,13 +807,17 @@ struct Solver {
             consider_path_variants(bitonic_split_route(mode, true), large_case ? 1 : 2);
         }
         if (N <= 60000) {
-            vector<int> greedy_windows = (N <= 5000) ? vector<int>{12, 32, 96, 256}
-                                                     : vector<int>{16, 64};
+            vector<int> greedy_windows;
+            if (N <= 5000) greedy_windows = {12, 32, 96, 256};
+            else if (N <= 20000) greedy_windows = {16, 64, 192};
+            else greedy_windows = {16, 96};
             for (int w : greedy_windows) consider_path_variants(frontier_greedy(w), 1);
         }
         if (!large_case) {
             consider_path_variants(angle_order(false), 2);
             consider_path_variants(angle_order(true), 2);
+            consider_path_variants(centroid_angle_order(false), 2);
+            consider_path_variants(centroid_angle_order(true), 2);
             for (int b : blocks) {
                 if (b > 1) consider_path_variants(angle_radius_snake(b), 2);
             }
@@ -673,6 +887,7 @@ int main() {
     Solver s;
     if (!(cin >> s.N)) return 0;
     if (s.N > 60000) {
+        cout << s.N + 1 << '\n';
         return 0;
     }
     s.x.resize(s.N);
