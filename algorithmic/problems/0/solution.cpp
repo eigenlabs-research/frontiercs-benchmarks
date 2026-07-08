@@ -13,6 +13,7 @@ struct R{long long A;int W,H;vector<Pl> pl;};
 struct RNG{unsigned long long s;RNG(unsigned long long x){s=x?x:1;}inline unsigned long long nxt(){s^=s<<7;s^=s>>9;return s;}inline int rint(int n){return (int)(nxt()%n);}inline bool coin(){return nxt()&1;}};
 static inline pair<int,int> rotp(pair<int,int> p,int r){if(r==0)return p; if(r==1)return make_pair(-p.second,p.first); if(r==2)return make_pair(-p.first,-p.second); return make_pair(p.second,-p.first);}
 int main(){
+    auto progStart=chrono::steady_clock::now();
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
     int n; if(!(cin>>n)) return 0;
@@ -59,7 +60,7 @@ int main(){
         });
         return res;
     };
-    auto pack=[&](int W,const vector<int>& o0,RNG &rng,bool randtie){
+    auto pack=[&](int W,const vector<int>& o0,RNG &rng,bool randtie,long long deadlineMs=1650){
         vector<int> h(W,-1);
         long long g=-1;
         vector<Pl> pl; pl.reserve(o0.size());
@@ -69,9 +70,9 @@ int main(){
         int maxBound=max(1,n/4);
         int expLIM=min(maxBound,(int)(350000/max(1LL,S-3500)));
         int dynLIM=big?expLIM:maxBound;
-        auto tStart=chrono::steady_clock::now();
-        auto batchStart=tStart;
-        long long TLms=big?1900:LLONG_MAX/4;
+        auto tStart=progStart;
+        auto batchStart=chrono::steady_clock::now();
+        long long TLms=big?deadlineMs:LLONG_MAX/4;
         int stepCnt=0;
         while(t<nm){
             int limCnt=max(1,dynLIM);
@@ -232,9 +233,10 @@ int main(){
         sort(Ws.begin(),Ws.end(),[&](int a,int b){int da=abs(a-base),db=abs(b-base); if(da!=db) return da<db; return a<b;});
     }
     long long bestA=LLONG_MAX; int bestW=0,bestH=0; R bestR; bool hasBestmine=false;
-    auto t0=chrono::steady_clock::now();
-    const double TL=1980.0;
+    auto t0=progStart;
+    const double TL=1650.0;
     double avg=250.0; int cnt=0;
+    vector<pair<long long,int>> sweepRes; sweepRes.reserve(Ws.size());
     for(int wi=0;wi<(int)Ws.size();wi++){
         auto now=chrono::steady_clock::now();
         double used=chrono::duration<double,milli>(now-t0).count();
@@ -252,10 +254,41 @@ int main(){
             auto t2=chrono::steady_clock::now();
             double dt=chrono::duration<double,milli>(t2-t1).count();
             cnt++; avg=(avg*(cnt-1)+dt)/cnt;
+            sweepRes.push_back({r.A,W});
             if(!hasBestmine || r.A<bestA || (r.A==bestA && (r.H<bestH || (r.H==bestH && r.W<bestW)))){
                 bestA=r.A; bestW=r.W; bestH=r.H; bestR=r; hasBestmine=true;
             }
             oi++;
+        }
+    }
+    // Restart phase: small instances exhaust the width sweep long before the time limit
+    // (and they are exactly the cases with the lowest packing density), so re-pack the
+    // most promising widths with randomized tie-breaking until the budget is spent.
+    // Results are kept only on strict improvement, so this can never worsen the packing;
+    // big instances never enter the loop (the sweep already consumed the budget).
+    if(hasBestmine && !sweepRes.empty()){
+        sort(sweepRes.begin(),sweepRes.end());
+        vector<int> topWs;
+        for(auto &pr:sweepRes){
+            if(find(topWs.begin(),topWs.end(),pr.second)==topWs.end()) topWs.push_back(pr.second);
+            if((int)topWs.size()>=3) break;
+        }
+        auto ord=ord4();
+        int it=0;
+        while(true){
+            auto now=chrono::steady_clock::now();
+            double used=chrono::duration<double,milli>(now-t0).count();
+            if(used+avg*1.3>TL) break;
+            int W=topWs[it%(int)topWs.size()];
+            auto t1=chrono::steady_clock::now();
+            R r=pack(W,ord,rng,true);
+            auto t2=chrono::steady_clock::now();
+            double dt=chrono::duration<double,milli>(t2-t1).count();
+            cnt++; avg=(avg*(cnt-1)+dt)/cnt;
+            if(r.A<bestA || (r.A==bestA && (r.H<bestH || (r.H==bestH && r.W<bestW)))){
+                bestA=r.A; bestW=r.W; bestH=r.H; bestR=r;
+            }
+            it++;
         }
     }
     if(!hasBestmine){
