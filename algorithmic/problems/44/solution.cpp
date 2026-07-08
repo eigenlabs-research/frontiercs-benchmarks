@@ -11,8 +11,7 @@
 using namespace std;
 
 static const int HBITS = 21;
-static const uint32_t HN = 1u << HBITS;
-static const uint32_t HMASK = HN - 1u;
+static const uint32_t HMASK = (1u << HBITS) - 1u;
 
 struct Solver {
     int N = 0;
@@ -77,6 +76,17 @@ struct Solver {
         double m = (N % 10 == 0 && !prime[prev]) ? 1.1 : 1.0;
         total += m * dist_id(prev, 0);
         return total;
+    }
+
+    void init_primes() {
+        prime.assign(max(2, N), true);
+        prime[0] = false;
+        prime[1] = false;
+        for (int p = 2; 1LL * p * p < N; ++p) {
+            if (prime[p]) {
+                for (long long q = 1LL * p * p; q < N; q += p) prime[(int)q] = false;
+            }
+        }
     }
 
     double swap_delta(vector<int> &route, int i, int j) const {
@@ -1284,15 +1294,74 @@ struct Solver {
         return route;
     }
 
-    vector<int> solve() {
-        prime.assign(max(2, N), true);
-        prime[0] = false;
-        prime[1] = false;
-        for (int p = 2; 1LL * p * p < N; ++p) {
-            if (prime[p]) {
-                for (long long q = 1LL * p * p; q < N; q += p) prime[(int)q] = false;
-            }
+    vector<vector<int>> gap_cluster_routes(int max_routes) const {
+        vector<vector<int>> routes;
+        if (N < 20 || N > 140 || max_routes <= 0) return routes;
+
+        vector<pair<long long, int>> gaps;
+        gaps.reserve(max(0, N - 2));
+        for (int i = 1; i + 1 < N; ++i) {
+            gaps.push_back({x[i + 1] - x[i], i + 1});
         }
+        sort(gaps.begin(), gaps.end(), [](const auto &a, const auto &b) {
+            if (a.first != b.first) return a.first > b.first;
+            return a.second < b.second;
+        });
+        if (gaps.empty()) return routes;
+
+        int max_groups = min(5, N - 1);
+        for (int groups_count = 2; groups_count <= max_groups && (int)routes.size() < max_routes; ++groups_count) {
+            if ((int)gaps.size() < groups_count - 1) break;
+            vector<int> cuts;
+            for (int i = 0; i < groups_count - 1; ++i) cuts.push_back(gaps[i].second);
+            sort(cuts.begin(), cuts.end());
+
+            vector<vector<int>> groups;
+            int last = 1;
+            bool ok = true;
+            for (int cut : cuts) {
+                if (cut <= last) {
+                    ok = false;
+                    break;
+                }
+                vector<int> ids;
+                ids.reserve(cut - last);
+                for (int v = last; v < cut; ++v) ids.push_back(v);
+                if (ids.empty()) ok = false;
+                groups.push_back(std::move(ids));
+                last = cut;
+            }
+            vector<int> ids;
+            ids.reserve(N - last);
+            for (int v = last; v < N; ++v) ids.push_back(v);
+            if (ids.empty()) ok = false;
+            groups.push_back(std::move(ids));
+            if (!ok || (int)groups.size() != groups_count) continue;
+
+            vector<int> perm(groups_count);
+            for (int i = 0; i < groups_count; ++i) perm[i] = i;
+            do {
+                int masks = 1 << groups_count;
+                for (int mask = 0; mask < masks && (int)routes.size() < max_routes; ++mask) {
+                    vector<int> route;
+                    route.reserve(N - 1);
+                    for (int idx : perm) {
+                        const vector<int> &part = groups[idx];
+                        if (mask & (1 << idx)) {
+                            for (int i = (int)part.size() - 1; i >= 0; --i) route.push_back(part[i]);
+                        } else {
+                            route.insert(route.end(), part.begin(), part.end());
+                        }
+                    }
+                    routes.push_back(std::move(route));
+                }
+            } while ((int)routes.size() < max_routes && next_permutation(perm.begin(), perm.end()));
+        }
+        return routes;
+    }
+
+    vector<int> solve() {
+        init_primes();
 
         vector<int> best;
         double best_cost = numeric_limits<double>::infinity();
@@ -1359,6 +1428,17 @@ struct Solver {
         for (int mode = 0; mode < 4; ++mode) {
             consider_path_variants(bitonic_split_route(mode, false), large_case ? 1 : 4);
             consider_path_variants(bitonic_split_route(mode, true), large_case ? 1 : 4);
+        }
+        if (N <= 140) {
+            int cluster_limit = 700;
+            auto routes = gap_cluster_routes(cluster_limit);
+            int polish_limit = 36;
+            int idx = 0;
+            for (auto &r : routes) {
+                consider(r);
+                if (idx < polish_limit) direct_polish_pool.push_back(r);
+                ++idx;
+            }
         }
         if (N <= 60000) {
             vector<int> greedy_windows;
@@ -1582,7 +1662,11 @@ struct Solver {
 
         auto top_snapshot = top_routes;
         for (auto &route : direct_polish_pool) {
-            polish_basic_safe(route);
+            if (N <= 140) {
+                polish_final_safe(route);
+            } else {
+                polish_basic_safe(route);
+            }
             consider_direct(std::move(route));
         }
         int top_polish_idx = 0;
