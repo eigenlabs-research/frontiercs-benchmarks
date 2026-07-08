@@ -20,7 +20,7 @@ static chrono::steady_clock::time_point T_START;
 static inline double elapsed(){
     return chrono::duration<double>(chrono::steady_clock::now() - T_START).count();
 }
-static double TIME_LIMIT = 0.85;
+static double TIME_LIMIT = 0.72;
 
 // ---------------- JSON parser (minimal, schema-specific) ----------------
 struct JsonParser {
@@ -247,7 +247,80 @@ struct Skyline {
         if(compact.back().x != W){
             compact.push_back({W, 0});
         }
-        segs = move(compact);
+        segs = std::move(compact);
+    }
+};
+
+// ---------------- MaxRects packer (free-rectangle list, best-short-side-fit) ----------------
+struct MaxRects {
+    int W, H;
+    // free rectangles stored as x,y,w,h
+    vector<int> fx, fy, fw, fh;
+    void init(int W_, int H_){
+        W = W_; H = H_;
+        fx.clear(); fy.clear(); fw.clear(); fh.clear();
+        fx.push_back(0); fy.push_back(0); fw.push_back(W_); fh.push_back(H_);
+    }
+    // Best-short-side-fit: minimize the shorter leftover, tiebreak by longer leftover.
+    bool findBest(int rw, int rh, int& outX, int& outY, int& outIdx) const {
+        if(rw <= 0 || rh <= 0) return false;
+        int bestShort = INT32_MAX, bestLong = INT32_MAX; outIdx = -1;
+        int n = (int)fx.size();
+        for(int i = 0; i < n; ++i){
+            if(fw[i] >= rw && fh[i] >= rh){
+                int lw = fw[i] - rw, lh = fh[i] - rh;
+                int s = lw < lh ? lw : lh;
+                int l = lw < lh ? lh : lw;
+                if(s < bestShort || (s == bestShort && l < bestLong)){
+                    bestShort = s; bestLong = l; outX = fx[i]; outY = fy[i]; outIdx = i;
+                }
+            }
+        }
+        return outIdx >= 0;
+    }
+    static bool contains(int ax,int ay,int aw,int ah,int bx,int by,int bw,int bh){
+        return ax <= bx && ay <= by && ax + aw >= bx + bw && ay + ah >= by + bh;
+    }
+    void place(int x, int y, int rw, int rh){
+        int px1 = x, py1 = y, px2 = x + rw, py2 = y + rh;
+        int n = (int)fx.size();
+        // collect new fragments
+        static vector<int> ax, ay, aw, ah;
+        ax.clear(); ay.clear(); aw.clear(); ah.clear();
+        for(int i = 0; i < n; ){
+            int gx1 = fx[i], gy1 = fy[i], gx2 = fx[i] + fw[i], gy2 = fy[i] + fh[i];
+            if(px1 < gx2 && px2 > gx1 && py1 < gy2 && py2 > gy1){
+                if(px1 > gx1){ ax.push_back(gx1); ay.push_back(gy1); aw.push_back(px1 - gx1); ah.push_back(gy2 - gy1); }
+                if(px2 < gx2){ ax.push_back(px2); ay.push_back(gy1); aw.push_back(gx2 - px2); ah.push_back(gy2 - gy1); }
+                if(py1 > gy1){ ax.push_back(gx1); ay.push_back(gy1); aw.push_back(gx2 - gx1); ah.push_back(py1 - gy1); }
+                if(py2 < gy2){ ax.push_back(gx1); ay.push_back(py2); aw.push_back(gx2 - gx1); ah.push_back(gy2 - py2); }
+                // remove i by swap with last
+                fx[i] = fx[n-1]; fy[i] = fy[n-1]; fw[i] = fw[n-1]; fh[i] = fh[n-1];
+                fx.pop_back(); fy.pop_back(); fw.pop_back(); fh.pop_back();
+                --n;
+            } else ++i;
+        }
+        // append new fragments (skip degenerate)
+        for(size_t k = 0; k < ax.size(); ++k){
+            if(aw[k] <= 0 || ah[k] <= 0) continue;
+            fx.push_back(ax[k]); fy.push_back(ay[k]); fw.push_back(aw[k]); fh.push_back(ah[k]);
+        }
+        prune();
+    }
+    void prune(){
+        int n = (int)fx.size();
+        for(int i = 0; i < n; ++i){
+            for(int j = i + 1; j < n; ){
+                if(contains(fx[i],fy[i],fw[i],fh[i], fx[j],fy[j],fw[j],fh[j])){
+                    fx[j]=fx[n-1]; fy[j]=fy[n-1]; fw[j]=fw[n-1]; fh[j]=fh[n-1];
+                    fx.pop_back(); fy.pop_back(); fw.pop_back(); fh.pop_back(); --n;
+                } else if(contains(fx[j],fy[j],fw[j],fh[j], fx[i],fy[i],fw[i],fh[i])){
+                    fx[i]=fx[n-1]; fy[i]=fy[n-1]; fw[i]=fw[n-1]; fh[i]=fh[n-1];
+                    fx.pop_back(); fy.pop_back(); fw.pop_back(); fh.pop_back(); --n;
+                    --i; break;
+                } else ++j;
+            }
+        }
     }
 };
 
@@ -307,6 +380,73 @@ static PackResult greedyFill(const vector<int>& order, bool allowRotate, bool tr
             }
         }
     }
+    return res;
+}
+
+// Core MaxRects greedy loop: places items (order, up to rem[t]) into the given free-rect state,
+// appending placements to res and decrementing rem. Tries both orientations if allowed.
+static void mrGreedyLoop(MaxRects& mr, vector<int>& rem, const vector<int>& order,
+                         bool allowRotate, bool tryBothOrient, PackResult& res){
+    bool progress = true;
+    while(progress){
+        progress = false;
+        for(int t : order){
+            if(rem[t] <= 0) continue;
+            const ItemType& it = g_items[t];
+            int x0,y0,i0, x1,y1,i1;
+            bool f0 = false, f1 = false;
+            if(it.w <= mr.W && it.h <= mr.H) f0 = mr.findBest(it.w, it.h, x0, y0, i0);
+            if(tryBothOrient && allowRotate && it.h <= mr.W && it.w <= mr.H)
+                f1 = mr.findBest(it.h, it.w, x1, y1, i1);
+            int chosenRot = -1, ox=0, oy=0, rw=0, rh=0;
+            if(f0 && f1){
+                if(y0 < y1 || (y0 == y1 && x0 <= x1)){ chosenRot=0; ox=x0; oy=y0; rw=it.w; rh=it.h; }
+                else { chosenRot=1; ox=x1; oy=y1; rw=it.h; rh=it.w; }
+            } else if(f0){ chosenRot=0; ox=x0; oy=y0; rw=it.w; rh=it.h; }
+            else if(f1){ chosenRot=1; ox=x1; oy=y1; rw=it.h; rh=it.w; }
+            if(chosenRot >= 0){
+                Placed p; p.typeId=t; p.x=ox; p.y=oy; p.rot=chosenRot;
+                res.placements.push_back(p);
+                res.totalValue += it.v;
+                res.used[t]++; rem[t]--;
+                mr.place(ox, oy, rw, rh);
+                progress = true;
+            }
+        }
+    }
+}
+
+// Greedy fill using MaxRects (best-short-side-fit), from an empty bin.
+static PackResult greedyFillMaxRects(const vector<int>& order, bool allowRotate, bool tryBothOrient){
+    PackResult res;
+    res.totalValue = 0;
+    res.used.assign(g_items.size(), 0);
+    MaxRects mr;
+    mr.init(g_bin.W, g_bin.H);
+    vector<int> rem(g_items.size());
+    for(size_t i = 0; i < g_items.size(); ++i) rem[i] = g_items[i].limit;
+    mrGreedyLoop(mr, rem, order, allowRotate, tryBothOrient, res);
+    return res;
+}
+
+// Take an existing packing and greedily fill its leftover free space with additional items
+// (respecting remaining per-type limits). Carves the occupied rectangles out of the full bin,
+// then runs the MaxRects greedy loop on the resulting free space.
+static PackResult fillGaps(const PackResult& base, const vector<int>& order,
+                           bool allowRotate, bool tryBothOrient){
+    PackResult res = base; // copy placements, totalValue, used
+    MaxRects mr;
+    mr.init(g_bin.W, g_bin.H);
+    // Carve out every occupied rectangle so fr becomes the free space.
+    for(const Placed& p : base.placements){
+        const ItemType& it = g_items[p.typeId];
+        int rw = p.rot ? it.h : it.w;
+        int rh = p.rot ? it.w : it.h;
+        mr.place(p.x, p.y, rw, rh);
+    }
+    vector<int> rem(g_items.size());
+    for(size_t i = 0; i < g_items.size(); ++i) rem[i] = g_items[i].limit - res.used[i];
+    mrGreedyLoop(mr, rem, order, allowRotate, tryBothOrient, res);
     return res;
 }
 
@@ -711,6 +851,19 @@ static PackResult knapsackShelfPlan(bool allowRot){
     return res;
 }
 
+// Column-based variant: transpose the bin and items, run the shelf knapsack (which stacks
+// shelves along height), then map placements back. This packs vertical columns instead of
+// horizontal shelves — a different layout that can waste less for some aspect ratios.
+static PackResult knapsackColumnPlan(bool allowRot){
+    swap(g_bin.W, g_bin.H);
+    for(auto& it : g_items) swap(it.w, it.h);
+    PackResult r = knapsackShelfPlan(allowRot);
+    for(auto& it : g_items) swap(it.w, it.h);
+    swap(g_bin.W, g_bin.H);
+    for(auto& p : r.placements) swap(p.x, p.y); // rot and type unchanged (see derivation)
+    return r;
+}
+
 // ---------------- Orderings ----------------
 static vector<int> orderByDensity(){
     vector<int> idx(g_items.size());
@@ -860,13 +1013,68 @@ int main(){
         orderByMinDimAsc()
     };
 
+#ifdef DIAG
+    const char* g_label = "";
     auto consider = [&](PackResult&& r){
-        if(r.totalValue > best.totalValue) best = move(r);
+        if(r.totalValue > best.totalValue){ best = std::move(r); fprintf(stderr,"[%s] newbest=%lld @%.3fs\n", g_label, best.totalValue, elapsed()); }
     };
+#else
+    auto consider = [&](PackResult&& r){
+        if(r.totalValue > best.totalValue) best = std::move(r);
+    };
+#endif
 
     // Knapsack-based single-item-per-shelf plan (strongest in most cases). Run FIRST with ample budget.
+    #ifdef DIAG
+    g_label="knap";
+#endif
     consider(knapsackShelfPlan(allowRot));
 
+    // Orderings that favor small / slender pieces for filling narrow leftover strips.
+    vector<int> ordMinDim = orderByMinDimAsc();
+    vector<int> ordDens   = orderByDensity();
+    vector<int> ordVal    = orderByValueDesc();
+    vector<int> ordAreaAsc = ordMinDim; // area-ascending
+    sort(ordAreaAsc.begin(), ordAreaAsc.end(), [](int a,int b){ return g_items[a].area < g_items[b].area; });
+    vector<vector<int>*> gapOrders = {&ordMinDim, &ordAreaAsc, &ordDens, &ordVal};
+    auto gapFill = [&](){
+#ifdef DIAG
+        g_label="gapfill";
+#endif
+        ll prev = -1;
+        for(int round = 0; round < 5 && best.totalValue != prev; ++round){
+            prev = best.totalValue;
+            for(auto* op : gapOrders){
+                consider(fillGaps(best, *op, allowRot, allowRot));
+                if(elapsed() > TIME_LIMIT) return;
+            }
+        }
+    };
+    // Fill gaps left by the knapsack shelf layout (wasted horizontal strips + top strip).
+    gapFill();
+
+    // Column-based (transposed) knapsack plan + its own gap fill; keep whichever is better.
+    if(elapsed() < TIME_LIMIT * 0.55){
+#ifdef DIAG
+        g_label="column";
+#endif
+        consider(knapsackColumnPlan(allowRot));
+        gapFill();
+    }
+
+    #ifdef DIAG
+    g_label="maxrects";
+#endif
+    // MaxRects packer with multiple orderings + orientation variants (fills irregular gaps best).
+    for(auto& ord : orders){
+        consider(greedyFillMaxRects(ord, allowRot, false));
+        if(allowRot) consider(greedyFillMaxRects(ord, allowRot, true));
+        if(elapsed() > TIME_LIMIT * 0.5) break;
+    }
+
+    #ifdef DIAG
+    g_label="skyline";
+#endif
     // Skyline packer with multiple orderings + orientation variants (fills irregular gaps).
     for(auto& ord : orders){
         consider(greedyFill(ord, allowRot, false));
@@ -984,6 +1192,9 @@ int main(){
         }
     }
 
+    #ifdef DIAG
+    g_label="random";
+#endif
     // Randomized multi-start on skyline.
     mt19937 rng(987654321u);
     int seed = 0;
@@ -1046,6 +1257,9 @@ int main(){
         ++seed;
         if(seed > 2000000) break;
     }
+
+    // Final gap-fill on the champion (in case the multistart produced a new best).
+    gapFill();
 
     if(best.totalValue < 0){
         best.totalValue = 0;
