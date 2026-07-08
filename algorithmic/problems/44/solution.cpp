@@ -264,7 +264,7 @@ struct Solver {
             span = 90;
         } else if (M <= 20000) {
             passes = 1;
-            span = 180;
+            span = 195;
         } else if (M <= 60000) {
             passes = 1;
             span = 55;
