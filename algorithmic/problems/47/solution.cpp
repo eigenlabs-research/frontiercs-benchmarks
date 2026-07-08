@@ -20,7 +20,7 @@ static chrono::steady_clock::time_point T_START;
 static inline double elapsed(){
     return chrono::duration<double>(chrono::steady_clock::now() - T_START).count();
 }
-static double TIME_LIMIT = 0.68;
+static double TIME_LIMIT = 0.84;
 
 // ---------------- JSON parser (minimal, schema-specific) ----------------
 struct JsonParser {
@@ -426,41 +426,6 @@ static PackResult greedyFillMaxRects(const vector<int>& order, bool allowRotate,
     vector<int> rem(g_items.size());
     for(size_t i = 0; i < g_items.size(); ++i) rem[i] = g_items[i].limit;
     mrGreedyLoop(mr, rem, order, allowRotate, tryBothOrient, res);
-    return res;
-}
-
-static PackResult selectFillMaxRects(bool allowRotate, int mode){
-    PackResult res; res.totalValue = 0; res.used.assign(g_items.size(), 0);
-    MaxRects mr; mr.init(g_bin.W, g_bin.H);
-    vector<int> rem(g_items.size());
-    for(size_t i = 0; i < g_items.size(); ++i) rem[i] = g_items[i].limit;
-    while(elapsed() < TIME_LIMIT * 0.92){
-        int bt=-1, brot=0, bx=0, by=0, brw=0, brh=0, bshort=INT_MAX, blong=INT_MAX;
-        double bscore = -1e100;
-        for(int t = 0; t < (int)g_items.size(); ++t){
-            if(rem[t] <= 0) continue;
-            const ItemType& it = g_items[t];
-            for(int rot = 0; rot <= (allowRotate ? 1 : 0); ++rot){
-                int rw = rot ? it.h : it.w, rh = rot ? it.w : it.h;
-                int x=0,y=0,idx=-1;
-                if(!mr.findBest(rw, rh, x, y, idx)) continue;
-                int a = mr.fw[idx] - rw, b = mr.fh[idx] - rh;
-                int sh = min(a,b), lo = max(a,b);
-                double sc = it.density;
-                if(mode == 1) sc = (double)it.v / (double)min(rw, rh);
-                else if(mode == 2) sc = (double)it.v / (double)(rw + rh);
-                else if(mode == 3) sc = (double)it.v;
-                if(sc > bscore + 1e-12 || (fabs(sc-bscore) <= 1e-12 &&
-                   (sh < bshort || (sh == bshort && (lo < blong || (lo == blong && y < by)))))){
-                    bscore=sc; bt=t; brot=rot; bx=x; by=y; brw=rw; brh=rh; bshort=sh; blong=lo;
-                }
-            }
-        }
-        if(bt < 0) break;
-        res.placements.push_back({bt,bx,by,brot});
-        res.totalValue += g_items[bt].v; res.used[bt]++; rem[bt]--;
-        mr.place(bx, by, brw, brh);
-    }
     return res;
 }
 
@@ -1397,6 +1362,17 @@ int main(){
 #endif
     consider(polish(mixedShelfPlan(allowRot, 0, 0, false)));
     consider(polish(mixedShelfPlan(allowRot, 0, 0, true)));
+    {
+        double alphas[1] = {0.94};
+        for(double a : alphas){
+            if(elapsed() > TIME_LIMIT * 0.22) break;
+            g_msAlpha = a;
+            consider(polish(mixedShelfPlan(allowRot, 0, 0, false)));
+            if(elapsed() > TIME_LIMIT * 0.22) break;
+            consider(polish(mixedShelfPlan(allowRot, 0, 0, true)));
+        }
+        g_msAlpha = 1.0;
+    }
     // Beam search over shelf-height partitions (branch early shelves, greedy tail).
 #ifdef DIAG
     g_label="beam";
@@ -1453,7 +1429,7 @@ int main(){
     g_label="split";
 #endif
     {
-        vector<int> splits = {g_bin.W/3, g_bin.W/2, (2*g_bin.W)/3};
+        int splits[3] = {g_bin.W/3, g_bin.W/2, (2*g_bin.W)/3};
         for(int sw : splits){
             for(int mask = 0; mask < 8 && elapsed() < TIME_LIMIT * 0.56; ++mask)
                 consider(polish(splitMixedPlan(allowRot, sw, mask, 0)));
@@ -1491,8 +1467,6 @@ int main(){
         if(allowRot) consider(greedyFillMaxRects(ord, allowRot, true));
         if(elapsed() > TIME_LIMIT * 0.5) break;
     }
-    for(int m = 0; m < 4 && elapsed() < TIME_LIMIT * 0.72; ++m)
-        consider(polish(selectFillMaxRects(allowRot, m)));
 
     #ifdef DIAG
     g_label="skyline";
