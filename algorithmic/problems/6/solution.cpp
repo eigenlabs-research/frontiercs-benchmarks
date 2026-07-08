@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cstring>
 #include <array>
+#include <cmath>
 using namespace std;
 typedef long long ll;
 typedef pair<int,int> pii;
@@ -699,6 +700,61 @@ static vector<vector<int>> rescaleTo(const vector<vector<int>>& G, int K2){
     return out;
 }
 
+static bool buildDenseRandomGrid(int K, int attempts,
+                                 chrono::steady_clock::time_point dl,
+                                 vector<vector<int>>& out){
+    if(K*K < N || 2*K*(K-1) < M) return false;
+    int deg[45]; memset(deg,0,sizeof(deg));
+    for(auto& e: EDGES){ deg[e.first]++; deg[e.second]++; }
+    mt19937 localRng(1);
+    for(int attempt=0; attempt<attempts; attempt++){
+        if((attempt&15)==0 && chrono::steady_clock::now() >= dl) break;
+        vector<int> g(K*K,0), colorCount(N+1,0);
+        bool seen[45][45]; memset(seen,0,sizeof(seen));
+        int missingColors=N, edgeCount=0;
+        bool ok=true;
+        for(int p=0; p<K*K && ok; p++){
+            int r=p/K, c=p%K;
+            int up = r ? g[(r-1)*K+c] : 0;
+            int left = c ? g[p-1] : 0;
+            int remaining = K*K-p;
+            int cand[45], weight[45], cc=0, total=0;
+            for(int x=1; x<=N; x++){
+                if(up && up!=x && !ADJ[up][x]) continue;
+                if(left && left!=x && !ADJ[left][x]) continue;
+                if(missingColors >= remaining && colorCount[x]>0) continue;
+                int add=0;
+                if(up && up!=x && !seen[min(up,x)][max(up,x)]) add++;
+                if(left && left!=x && !seen[min(left,x)][max(left,x)]) add++;
+                int w = 1 + 80*add + deg[x];
+                if(colorCount[x]==0) w += 200;
+                cand[cc]=x; weight[cc]=w; total+=w; cc++;
+            }
+            if(cc==0){ ok=false; break; }
+            int pick = (int)(localRng()%total), x=cand[0];
+            for(int i=0;i<cc;i++){
+                if(pick < weight[i]){ x=cand[i]; break; }
+                pick -= weight[i];
+            }
+            g[p]=x;
+            if(colorCount[x]++==0) missingColors--;
+            if(up && up!=x){
+                int a=min(up,x), b=max(up,x);
+                if(!seen[a][b]){ seen[a][b]=true; edgeCount++; }
+            }
+            if(left && left!=x){
+                int a=min(left,x), b=max(left,x);
+                if(!seen[a][b]){ seen[a][b]=true; edgeCount++; }
+            }
+        }
+        if(!ok || missingColors!=0 || edgeCount!=M) continue;
+        out.assign(K, vector<int>(K));
+        for(int r=0;r<K;r++) for(int c=0;c<K;c++) out[r][c]=g[r*K+c];
+        return true;
+    }
+    return false;
+}
+
 // verify a grid satisfies all checker conditions (defensive)
 static bool verifyGrid(const vector<vector<int>>& grid){
     int K=(int)grid.size();
@@ -742,6 +798,23 @@ int main(){
         auto tStart = chrono::steady_clock::now();
         HARD_DL = tStart + chrono::milliseconds(900);
         if(N==1){ printf("1\n1\n1\n"); continue; }
+        int lb = 2; while(lb*lb < N) lb++;
+        { int lb2=2; while(2*lb2*(lb2-1) < M) lb2++; lb=max(lb,lb2); }
+        vector<vector<int>> earlyDenseGrid;
+        if(40LL*M >= 7LL*N*(N-1)){
+            auto denseDl = tStart + chrono::milliseconds(N>=35 ? 760 : 650);
+            if(denseDl > HARD_DL) denseDl = HARD_DL;
+            int focus = max(lb, (int)(sqrt((double)M)*1.12));
+            int hi = min(N, max(lb+18, focus+7));
+            for(int k=lb; k<=hi && chrono::steady_clock::now()<denseDl; k++){
+                int attempts = (k < focus) ? 35 : (N>=35 ? 700 : 900);
+                vector<vector<int>> g;
+                if(buildDenseRandomGrid(k, attempts, denseDl, g) && verifyGrid(g)){
+                    earlyDenseGrid=g;
+                    break;
+                }
+            }
+        }
         // ---- gather walks ----
         vector<vector<int>> walks;
         bool largeGraph = (N >= 30);
@@ -773,6 +846,7 @@ int main(){
             int K=(int)g.size();
             if(K<bestK && verifyGrid(g)){ bestK=K; bestGrid=g; }
         };
+        consider(earlyDenseGrid);
         auto considerWalk=[&](const vector<int>& w){
             if(w.empty()) return;
             { vector<vector<int>> g; if(constructDiagV2(w,g)<=240) consider(g); }
@@ -788,8 +862,6 @@ int main(){
             vector<vector<int>> g; constructFrom(dfsw, g); bestGrid=g; bestK=(int)g.size();
         }
         // ---- local search: progressively shrink K until deadline ----
-        int lb = 2; while(lb*lb < N) lb++;
-        { int lb2=2; while(2*lb2*(lb2-1) < M) lb2++; lb=max(lb,lb2); }
         int targetK = bestK-1, variant = 0;
         while(targetK >= max(2,lb)){
             auto now = chrono::steady_clock::now();
