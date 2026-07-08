@@ -1256,7 +1256,7 @@ struct Solver {
                 sort(kd_starts.begin(), kd_starts.end());
                 kd_starts.erase(unique(kd_starts.begin(), kd_starts.end()), kd_starts.end());
                 vector<pair<double, vector<int>>> kd_polish;
-                int kd_keep = (N <= 20000) ? 4 : 1;
+                int kd_keep = (N <= 20000) ? 5 : 1;
                 auto remember_kd_polish = [&](vector<int> route) {
                     if ((int)route.size() != N - 1) return;
                     double c = route_cost(route);
