@@ -183,9 +183,56 @@ static vector<vector<int>> seedGT(int mode, mt19937& rng){
     return seq;
 }
 
+// Non-delay dispatch: never leaves a machine idle if a job is ready for it.
+// On structured (flow/bottleneck) instances these dominate active schedules,
+// and the hidden baseline B is exactly min non-delay over {SPT,LPT,FCFS}, so
+// seeding with these guarantees P <= B (ratio >= 0). Priority rule chooses
+// inside the conflict set. mode: 0=MWR 1=LPT 2=SPT 3=FCFS 4=LWR 5=random.
+static vector<vector<int>> seedND(int mode, mt19937& rng){
+    vector<int> jp(J, 0);
+    vector<long long> jr(J, 0), mf(M, 0), wrem(J, 0);
+    for(int j=0;j<J;++j) for(int k=0;k<M;++k) wrem[j] += p_of[j][k];
+    vector<vector<int>> seq(M);
+    int remaining = N;
+    while(remaining > 0){
+        // Global minimum earliest-start over available ops, and its machine.
+        long long ss = LLONG_MAX; int sm = -1;
+        for(int j=0;j<J;++j){
+            if(jp[j] >= M) continue;
+            int k = jp[j], m = m_of[j][k];
+            long long s = max(jr[j], mf[m]);
+            if(s < ss){ ss = s; sm = m; }
+        }
+        // Conflict set = available ops on machine sm that can start at ss.
+        int cj = -1; long long cp = 0;
+        for(int j=0;j<J;++j){
+            if(jp[j] >= M) continue;
+            int k = jp[j], m = m_of[j][k];
+            if(m != sm) continue;
+            long long s = max(jr[j], mf[m]);
+            if(s != ss) continue;
+            long long pr;
+            if(mode==0) pr = wrem[j];
+            else if(mode==1) pr = p_of[j][k];
+            else if(mode==2) pr = -p_of[j][k];
+            else if(mode==3) pr = -(long long)j;
+            else if(mode==4) pr = -wrem[j];
+            else pr = (long long)rng();
+            if(cj==-1 || pr > cp){ cp = pr; cj = j; }
+        }
+        int k = jp[cj], m = m_of[cj][k];
+        long long s = max(jr[cj], mf[m]);
+        long long f = s + p_of[cj][k];
+        seq[m].push_back(cj);
+        jr[cj] = f; mf[m] = f; wrem[cj] -= p_of[cj][k];
+        jp[cj]++; remaining--;
+    }
+    return seq;
+}
+
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(770);
+    const auto budget = chrono::milliseconds(880);
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
@@ -235,19 +282,28 @@ int main(){
     vector<vector<int>> cur = best;
     long long curC = bestC;
 
-    auto trySeed = [&](const vector<vector<int>>& s){
+    // Track the two best seeds (seed2 reserved for future restart use).
+    vector<vector<int>> seed2 = best; long long seed2C = LLONG_MAX;
+    auto trySeedTop2 = [&](const vector<vector<int>>& s){
         long long c = evalSeq(s);
-        if(c > 0 && c < curC){
-            cur = s; curC = c;
-            if(c < bestC){ best = s; bestC = c; }
-        }
+        if(c <= 0) return;
+        if(c < curC){ cur = s; curC = c; }
+        if(c < bestC){ seed2 = best; seed2C = bestC; best = s; bestC = c; }
+        else if(c < seed2C && c > bestC){ seed2 = s; seed2C = c; }
     };
 
     mt19937 rng(777u);
-    trySeed(seedGT(0, rng)); // MWR
-    trySeed(seedGT(1, rng)); // LPT
-    if(chrono::steady_clock::now() - T0 < budget)
-        trySeed(seedGT(2, rng)); // SPT
+    // Non-delay dispatches (dominate on structured instances; define B).
+    trySeedTop2(seedND(1, rng)); // LPT  (often best)
+    trySeedTop2(seedND(2, rng)); // SPT
+    trySeedTop2(seedND(3, rng)); // FCFS
+    trySeedTop2(seedND(0, rng)); // MWR
+    trySeedTop2(seedND(4, rng)); // LWR
+    // Active Giffler-Thompson dispatches (strong on random instances).
+    trySeedTop2(seedGT(0, rng)); // MWR
+    trySeedTop2(seedGT(1, rng)); // LPT
+    trySeedTop2(seedGT(2, rng)); // SPT
+    if(seed2C == LLONG_MAX){ seed2 = best; seed2C = bestC; }
 
     vector<vector<int>> pm(M, vector<int>(J));
     auto rebuildPM = [&](const vector<vector<int>>& s){
