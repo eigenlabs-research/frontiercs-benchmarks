@@ -744,10 +744,15 @@ int main(){
         if(N==1){ printf("1\n1\n1\n"); continue; }
         // ---- gather walks ----
         vector<vector<int>> walks;
-        if(findHP(0.10)) walks.push_back(bestHP);
-        auto hpEnd = tStart + chrono::milliseconds(160);
-        for(int attempt=0; attempt<3 && chrono::steady_clock::now()<hpEnd; attempt++){
-            if(findHP(0.02)) walks.push_back(bestHP);
+        bool largeGraph = (N >= 30);
+        double firstHpTime = largeGraph ? 0.04 : 0.10;
+        double extraHpTime = largeGraph ? 0.015 : 0.02;
+        int hpWindowMs = largeGraph ? 80 : 160;
+        int hpAttempts = largeGraph ? 2 : 3;
+        if(findHP(firstHpTime)) walks.push_back(bestHP);
+        auto hpEnd = tStart + chrono::milliseconds(hpWindowMs);
+        for(int attempt=0; attempt<hpAttempts && chrono::steady_clock::now()<hpEnd; attempt++){
+            if(findHP(extraHpTime)) walks.push_back(bestHP);
         }
         vector<int> dfsw = buildWalk();
         {   // short covering walks from a few starts, keep the 3 shortest
