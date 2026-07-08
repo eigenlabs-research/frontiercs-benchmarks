@@ -18,6 +18,7 @@ static bool ADJ[45][45];
 static vector<pii> EDGES;
 static mt19937 rng(246813579u);
 static chrono::steady_clock::time_point HARD_DL; // global hard deadline
+static int DENSE_LAST_EDGES, DENSE_LAST_MISSING_COLORS;
 
 // ---------------- Hamiltonian path (Warnsdorff + restarts) ----------------
 static vector<int> bestHP, cur;
@@ -703,10 +704,15 @@ static vector<vector<int>> rescaleTo(const vector<vector<int>>& G, int K2){
 static bool buildDenseRandomGrid(int K, int attempts,
                                  chrono::steady_clock::time_point dl,
                                  vector<vector<int>>& out){
+    DENSE_LAST_EDGES = -1;
+    DENSE_LAST_MISSING_COLORS = 1000000;
+    out.clear();
     if(K*K < N || 2*K*(K-1) < M) return false;
     int deg[45]; memset(deg,0,sizeof(deg));
     for(auto& e: EDGES){ deg[e.first]++; deg[e.second]++; }
     mt19937 localRng(1);
+    vector<int> bestG;
+    int bestEdges=-1, bestMissing=1000000;
     for(int attempt=0; attempt<attempts; attempt++){
         if((attempt&15)==0 && chrono::steady_clock::now() >= dl) break;
         vector<int> g(K*K,0), colorCount(N+1,0);
@@ -747,10 +753,25 @@ static bool buildDenseRandomGrid(int K, int attempts,
                 if(!seen[a][b]){ seen[a][b]=true; edgeCount++; }
             }
         }
-        if(!ok || missingColors!=0 || edgeCount!=M) continue;
+        if(ok && (missingColors < bestMissing ||
+                  (missingColors == bestMissing && edgeCount > bestEdges))){
+            bestMissing = missingColors;
+            bestEdges = edgeCount;
+            bestG = g;
+        }
+        if(ok && missingColors==0 && edgeCount==M){
+            out.assign(K, vector<int>(K));
+            for(int r=0;r<K;r++) for(int c=0;c<K;c++) out[r][c]=g[r*K+c];
+            DENSE_LAST_EDGES = M;
+            DENSE_LAST_MISSING_COLORS = 0;
+            return true;
+        }
+    }
+    if(!bestG.empty()){
         out.assign(K, vector<int>(K));
-        for(int r=0;r<K;r++) for(int c=0;c<K;c++) out[r][c]=g[r*K+c];
-        return true;
+        for(int r=0;r<K;r++) for(int c=0;c<K;c++) out[r][c]=bestG[r*K+c];
+        DENSE_LAST_EDGES = bestEdges;
+        DENSE_LAST_MISSING_COLORS = bestMissing;
     }
     return false;
 }
@@ -784,6 +805,111 @@ static bool verifyGrid(const vector<vector<int>>& grid){
     return true;
 }
 
+struct GridStats {
+    int forbidden = 0;
+    int missingEdges = 0;
+    int missingColors = 0;
+    vector<int> missingIdx;
+};
+
+static GridStats analyzeGrid(const vector<vector<int>>& grid){
+    GridStats s;
+    int K=(int)grid.size();
+    static int cnt[45][45];
+    for(int a=0;a<45;a++) for(int b=0;b<45;b++) cnt[a][b]=0;
+    vector<int> colorCount(N+1,0);
+    for(int r=0;r<K;r++) for(int c=0;c<K;c++){
+        int v=grid[r][c];
+        if(v>=1 && v<=N) colorCount[v]++;
+        if(c+1<K){
+            int u=grid[r][c+1];
+            if(v!=u){
+                int a=min(v,u), b=max(v,u);
+                if(a>=1 && b<=N && ADJ[a][b]) cnt[a][b]++;
+                else s.forbidden++;
+            }
+        }
+        if(r+1<K){
+            int u=grid[r+1][c];
+            if(v!=u){
+                int a=min(v,u), b=max(v,u);
+                if(a>=1 && b<=N && ADJ[a][b]) cnt[a][b]++;
+                else s.forbidden++;
+            }
+        }
+    }
+    for(int c=1;c<=N;c++) if(colorCount[c]==0) s.missingColors++;
+    for(int i=0;i<M;i++){
+        auto e=EDGES[i];
+        if(cnt[e.first][e.second]==0){
+            s.missingEdges++;
+            s.missingIdx.push_back(i);
+        }
+    }
+    return s;
+}
+
+static long long denseRepairScore(const GridStats& s){
+    return 1000000000LL*s.forbidden + 1000000LL*s.missingColors + s.missingEdges;
+}
+
+static bool patchRepairDense(vector<vector<int>> grid, int K,
+                             chrono::steady_clock::time_point dl,
+                             vector<vector<int>>& result){
+    if((int)grid.size()!=K || K<=0 || (int)grid[0].size()!=K) return false;
+    GridStats cur=analyzeGrid(grid);
+    if(cur.forbidden==0 && cur.missingColors==0 && cur.missingEdges==0){
+        result=grid;
+        return true;
+    }
+    if(cur.missingColors>0) return false;
+    const int DR[2]={0,1}, DC[2]={1,0};
+    int rounds=0;
+    while(cur.missingEdges>0 && chrono::steady_clock::now()<dl && rounds++<20){
+        long long baseScore=denseRepairScore(cur);
+        long long bestScore=baseScore;
+        int br1=-1, bc1=-1, br2=-1, bc2=-1, bx=0, by=0;
+        GridStats bestStats=cur;
+        vector<int> order=cur.missingIdx;
+        bool stopSearch=false;
+        for(int eidx: order){
+            if(stopSearch) break;
+            int a=EDGES[eidx].first, b=EDGES[eidx].second;
+            for(int orient=0; orient<2 && !stopSearch; orient++){
+                int x=orient?a:b, y=orient?b:a;
+                for(int r=0;r<K && !stopSearch;r++) for(int c=0;c<K && !stopSearch;c++){
+                    for(int d=0;d<2;d++){
+                        int nr=r+DR[d], nc=c+DC[d];
+                        if(nr>=K || nc>=K) continue;
+                        int ox=grid[r][c], oy=grid[nr][nc];
+                        if(ox==x && oy==y) continue;
+                        grid[r][c]=x; grid[nr][nc]=y;
+                        GridStats s=analyzeGrid(grid);
+                        long long sc=denseRepairScore(s);
+                        if(sc<bestScore){
+                            bestScore=sc;
+                            bestStats=s;
+                            br1=r; bc1=c; br2=nr; bc2=nc; bx=x; by=y;
+                        }
+                        if(sc<baseScore) stopSearch=true;
+                        grid[r][c]=ox; grid[nr][nc]=oy;
+                        if(stopSearch) break;
+                    }
+                }
+            }
+        }
+        if(bestScore>=baseScore || br1<0) break;
+        grid[br1][bc1]=bx;
+        grid[br2][bc2]=by;
+        cur=bestStats;
+    }
+    if(cur.forbidden==0 && cur.missingColors==0 && cur.missingEdges==0 && verifyGrid(grid)){
+        result=grid;
+        return true;
+    }
+    return false;
+}
+
 int main(){
     int T; if(scanf("%d",&T)!=1) return 0;
     while(T--){
@@ -802,16 +928,34 @@ int main(){
         { int lb2=2; while(2*lb2*(lb2-1) < M) lb2++; lb=max(lb,lb2); }
         vector<vector<int>> earlyDenseGrid;
         if(8LL*M >= 1LL*N*(N-1)){
-            auto denseDl = tStart + chrono::milliseconds(N>=35 ? 760 : 650);
+            auto denseDl = tStart + chrono::milliseconds(N>=35 ? 850 : 650);
             if(denseDl > HARD_DL) denseDl = HARD_DL;
             int focus = max(lb, (int)(sqrt((double)M)*1.12));
             int hi = min(N, max(lb+18, focus+7));
             for(int k=lb; k<=hi && chrono::steady_clock::now()<denseDl; k++){
                 int attempts = (k < focus) ? 35 : (N>=35 ? 900 : 2600);
                 vector<vector<int>> g;
-                if(buildDenseRandomGrid(k, attempts, denseDl, g) && verifyGrid(g)){
+                bool exactDense = buildDenseRandomGrid(k, attempts, denseDl, g);
+                if(exactDense && verifyGrid(g)){
                     earlyDenseGrid=g;
                     break;
+                }
+                int missingEdges = (DENSE_LAST_EDGES>=0) ? M-DENSE_LAST_EDGES : M;
+                if(!g.empty() && DENSE_LAST_MISSING_COLORS==0 &&
+                   missingEdges>0 && missingEdges<=max(30, M/10) &&
+                   chrono::steady_clock::now()<denseDl){
+                    auto repairDl = chrono::steady_clock::now() + chrono::milliseconds(k<focus ? 180 : 180);
+                    if(repairDl > denseDl) repairDl = denseDl;
+                    vector<vector<int>> repaired;
+                    if(patchRepairDense(g, k, repairDl, repaired) && verifyGrid(repaired)){
+                        earlyDenseGrid=repaired;
+                        break;
+                    }
+                    if(chrono::steady_clock::now()<denseDl &&
+                       localSearch(g, k, repairDl, repaired) && verifyGrid(repaired)){
+                        earlyDenseGrid=repaired;
+                        break;
+                    }
                 }
             }
         }
