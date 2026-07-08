@@ -730,6 +730,13 @@ static vector<vector<int>> projective_alternating_subset_blocks(int small, int l
 
 static vector<vector<int>> extra_vertex_cliques(int extras, int slots) {
     if (extras <= 0 || slots <= 0) return {};
+    if (extras == 9 && slots >= 9) {
+        return {
+            {0, 1, 2, 3}, {0, 4, 5, 6}, {0, 7, 8},
+            {1, 4, 7}, {1, 5, 8}, {2, 4, 8},
+            {2, 6, 7}, {3, 5, 7}, {3, 6, 8}
+        };
+    }
 
     vector<vector<int>> best;
     long long best_score = -1;
@@ -825,11 +832,11 @@ static vector<vector<int>> projective_excluded_23_blocks(int small, int large) {
     if (small != 200 || large != 500) return {};
 
     static const int excluded_ids[] = {
-        5, 7, 8, 16, 22, 28, 29, 34, 36, 49, 81, 87, 91, 100, 111,
-        123, 135, 148, 153, 154, 173, 184, 213, 219, 225, 233, 235,
-        247, 250, 254, 259, 275, 276, 287, 289, 310, 317, 318, 325,
-        331, 338, 362, 412, 424, 445, 449, 458, 479, 506, 512, 516,
-        526, 546
+        18, 31, 32, 35, 46, 64, 66, 73, 76, 84, 89, 96, 105, 108,
+        119, 128, 129, 131, 159, 166, 168, 171, 173, 184, 188, 200,
+        202, 239, 244, 247, 265, 268, 274, 277, 299, 309, 319, 320,
+        336, 358, 361, 398, 400, 401, 428, 497, 499, 503, 516, 521,
+        524, 527, 542
     };
 
     Field f(FieldSpec{23, 23, 1});
