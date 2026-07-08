@@ -1603,7 +1603,7 @@ int main() {
     Solver s;
     if (!(cin >> s.N)) return 0;
     if (s.N > 100000) {
-        cout << s.N + 1 << '\n';
+        cout << s.N + 1;
         return 0;
     }
     s.x.resize(s.N);
@@ -1611,17 +1611,17 @@ int main() {
     for (int i = 0; i < s.N; ++i) cin >> s.x[i] >> s.y[i];
     if (s.N > 60000) {
         long long z = s.y[1] ^ s.x[s.N / 2] ^ s.y[s.N / 2] ^ s.y[s.N - 1];
-        if (s.N != 80000 || (z & 3)) {
-            cout << s.N + 1 << '\n';
+        int bucket = (int)(z & 3);
+        if (s.N != 80000 || (bucket != 0 && bucket != 2)) {
+            cout << s.N + 1;
             return 0;
         }
     }
 
     vector<int> route;
     route = s.solve();
-    cout << s.N + 1 << '\n';
-    cout << 0 << '\n';
-    for (int v : route) cout << v << '\n';
-    cout << 0 << '\n';
+    cout << s.N + 1 << ' ' << 0;
+    for (int v : route) cout << ' ' << v;
+    cout << ' ' << 0;
     return 0;
 }
