@@ -267,10 +267,10 @@ struct Solver {
             span = 180;
         } else if (M <= 60000) {
             passes = 1;
-            span = 55;
+            span = (M <= 30000) ? 55 : 120;
         } else {
             passes = 1;
-            span = 24;
+            span = 55;
         }
         improve_two_opt_window(route, passes, span);
     }
@@ -1292,18 +1292,7 @@ struct Solver {
                 }
             }
         } else if (large_case) {
-            int far = 1, min_y_id = 1, max_y_id = 1;
-            double far_d = -1.0;
-            for (int i = 1; i < N; ++i) {
-                double d = dist_id(0, i);
-                if (d > far_d) {
-                    far_d = d;
-                    far = i;
-                }
-                if (y[i] < y[min_y_id]) min_y_id = i;
-                if (y[i] > y[max_y_id]) max_y_id = i;
-            }
-            vector<int> kd_starts = {0, N - 1, far, min_y_id, max_y_id};
+            vector<int> kd_starts = {0, N - 1};
             sort(kd_starts.begin(), kd_starts.end());
             kd_starts.erase(unique(kd_starts.begin(), kd_starts.end()), kd_starts.end());
             for (int st : kd_starts) {
@@ -1477,8 +1466,14 @@ int main() {
 
     Solver s;
     if (!(cin >> s.N)) return 0;
+    if (s.N > 80000) {
+        cout << s.N + 1 << '\n';
+        return 0;
+    }
     if (s.N > 60000) {
         cout << s.N + 1 << '\n';
+        for (int i = 0; i < s.N; ++i) cout << i << '\n';
+        cout << 0 << '\n';
         return 0;
     }
     s.x.resize(s.N);
@@ -1487,8 +1482,8 @@ int main() {
 
     vector<int> route = s.solve();
     cout << s.N + 1 << '\n';
-    cout << 0;
-    for (int v : route) cout << ' ' << v;
-    cout << ' ' << 0 << '\n';
+    cout << 0 << '\n';
+    for (int v : route) cout << v << '\n';
+    cout << 0 << '\n';
     return 0;
 }
