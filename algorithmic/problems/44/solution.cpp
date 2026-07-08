@@ -1545,7 +1545,7 @@ struct Solver {
             if (1200 < N && N <= 20000) {
                 double before = route_cost(route);
                 vector<int> original = route;
-                improve_candidate_two_opt(route, 2, N <= 6000 ? 20 : 24);
+                improve_candidate_two_opt(route, 2, N <= 6000 ? 20 : 40);
                 improve_prime_slots(route);
                 if (route_cost(route) > before + 1e-7) route = std::move(original);
             }
