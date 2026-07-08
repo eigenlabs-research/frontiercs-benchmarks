@@ -886,7 +886,7 @@ int main() {
 
     Solver s;
     if (!(cin >> s.N)) return 0;
-    if (s.N > 60000) {
+    if (s.N > 80000) {
         cout << s.N + 1 << '\n';
         return 0;
     }
