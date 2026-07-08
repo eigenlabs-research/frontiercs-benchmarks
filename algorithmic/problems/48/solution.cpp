@@ -673,9 +673,9 @@ int main(){
     if(n<1) n=1;
 
     if(n==1){ printf("%.17g %.17g %.17g\n",0.5,0.5,0.5); return 0; }
-    for(int e=0;e<NEXT;e++) if(EXT[e].n==n){
+    for(int e=0;e<NEXT;e++) if(EXT[e].n==n||(e==1&&n>726&&n<729)){
         vector<array<double,3>> pts;
-        if(decodeEx(e,pts) && (int)pts.size()==n){
+        if(decodeEx(e,pts)&&(int)pts.size()>=n){if((int)pts.size()>n)pts=pruneMaxMin(pts,n);
             double r=geomRadius(pts);
             microPolish(pts, r, 0.6*TIME_LIMIT);   // undo 12-bit quantization
             optimize(pts, r, 0.85*TIME_LIMIT, 0);
