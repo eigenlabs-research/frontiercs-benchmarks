@@ -295,6 +295,133 @@ struct Solver {
         }
     }
 
+    vector<vector<int>> projection_candidates(int radius) const {
+        vector<vector<int>> cand(N);
+        vector<int> ids(N);
+        for (int i = 0; i < N; ++i) ids[i] = i;
+        auto add_pair = [&](int a, int b) {
+            if (a == b) return;
+            cand[a].push_back(b);
+            cand[b].push_back(a);
+        };
+        auto scan_projection = [&](int ax, int ay) {
+            stable_sort(ids.begin(), ids.end(), [&](int a, int b) {
+                long double ka = (long double)ax * x[a] + (long double)ay * y[a];
+                long double kb = (long double)ax * x[b] + (long double)ay * y[b];
+                if (ka != kb) return ka < kb;
+                return a < b;
+            });
+            for (int i = 0; i < N; ++i) {
+                for (int d = 1; d <= radius; ++d) {
+                    if (i + d < N) add_pair(ids[i], ids[i + d]);
+                }
+            }
+        };
+        const int dirs[8][2] = {{1, 0}, {0, 1}, {1, 1}, {1, -1}, {2, 1}, {2, -1}, {1, 2}, {1, -2}};
+        for (const auto &dir : dirs) scan_projection(dir[0], dir[1]);
+        for (auto &v : cand) {
+            sort(v.begin(), v.end());
+            v.erase(unique(v.begin(), v.end()), v.end());
+        }
+        return cand;
+    }
+
+    void improve_candidate_two_opt(vector<int> &route, int radius, int max_moves) const {
+        int M = (int)route.size();
+        if (M < 4 || max_moves <= 0) return;
+        vector<vector<int>> cand = projection_candidates(radius);
+        vector<int> pos(N, -1);
+        vector<vector<double>> pref_f(10, vector<double>(N + 1, 0.0));
+        vector<vector<double>> pref_r(10, vector<double>(N + 1, 0.0));
+        auto path_city = [&](int p) -> int {
+            if (p == 0 || p == N) return 0;
+            return route[p - 1];
+        };
+        auto range_sum = [](const vector<double> &pref, int lo, int hi) -> double {
+            if (lo > hi) return 0.0;
+            return pref[hi] - pref[lo - 1];
+        };
+
+        for (int move = 0; move < max_moves; ++move) {
+            fill(pos.begin(), pos.end(), -1);
+            for (int i = 0; i < M; ++i) pos[route[i]] = i;
+            for (int r = 0; r < 10; ++r) {
+                fill(pref_f[r].begin(), pref_f[r].end(), 0.0);
+                fill(pref_r[r].begin(), pref_r[r].end(), 0.0);
+            }
+            for (int t = 1; t <= N; ++t) {
+                for (int r = 0; r < 10; ++r) {
+                    pref_f[r][t] = pref_f[r][t - 1];
+                    pref_r[r][t] = pref_r[r][t - 1];
+                }
+                int a = path_city(t - 1);
+                int b = path_city(t);
+                double d = dist_id(a, b);
+                if (!prime[a]) pref_f[t % 10][t] += 0.1 * d;
+                if (!prime[b]) pref_r[t % 10][t] += 0.1 * d;
+            }
+
+            auto fast_reverse_delta = [&](int l, int r) -> double {
+                if (l >= r) return 0.0;
+                int prev = path_city(l);
+                int first = route[l];
+                int last = route[r];
+                int next = path_city(r + 2);
+                int t1 = l + 1;
+                int t2 = r + 2;
+                double before = 0.0, after = 0.0;
+                double m1 = (t1 % 10 == 0 && !prime[prev]) ? 1.1 : 1.0;
+                before += m1 * dist_id(prev, first);
+                after += m1 * dist_id(prev, last);
+                if (t2 <= N) {
+                    double mb = (t2 % 10 == 0 && !prime[last]) ? 1.1 : 1.0;
+                    double ma = (t2 % 10 == 0 && !prime[first]) ? 1.1 : 1.0;
+                    before += mb * dist_id(last, next);
+                    after += ma * dist_id(first, next);
+                }
+                int lo = l + 2;
+                int hi = r + 1;
+                if (lo <= hi) {
+                    before += range_sum(pref_f[0], lo, hi);
+                    int residue = (l + r + 3) % 10;
+                    after += range_sum(pref_r[residue], lo, hi);
+                }
+                return after - before;
+            };
+
+            double best = 0.0;
+            int best_l = -1, best_r = -1;
+            for (int l = 0; l < M - 1; ++l) {
+                int prev = path_city(l);
+                for (int c : cand[prev]) {
+                    if (c == 0) continue;
+                    int r = pos[c];
+                    if (r <= l) continue;
+                    double d = fast_reverse_delta(l, r);
+                    if (d < best) {
+                        best = d;
+                        best_l = l;
+                        best_r = r;
+                    }
+                }
+                int first = route[l];
+                if (binary_search(cand[first].begin(), cand[first].end(), 0)) {
+                    int r = M - 1;
+                    if (r > l) {
+                        double d = fast_reverse_delta(l, r);
+                        if (d < best) {
+                            best = d;
+                            best_l = l;
+                            best_r = r;
+                        }
+                    }
+                }
+            }
+            if (best_l < 0 || best >= -1e-7) break;
+            reverse(route.begin() + best_l, route.begin() + best_r + 1);
+        }
+    }
+
     void improve_prime_slots(vector<int> &route) const {
         int M = (int)route.size();
         if (M <= 1) return;
@@ -1415,6 +1542,13 @@ struct Solver {
         };
         auto polish_final_safe = [&](vector<int> &route) {
             polish_basic_safe(route);
+            if (1200 < N && N <= 20000) {
+                double before = route_cost(route);
+                vector<int> original = route;
+                improve_candidate_two_opt(route, 2, N <= 6000 ? 16 : 10);
+                improve_prime_slots(route);
+                if (route_cost(route) > before + 1e-7) route = std::move(original);
+            }
             if (N <= 1200) {
                 vector<int> original = route;
                 vector<int> best_route = route;
@@ -1441,6 +1575,7 @@ struct Solver {
                 try_full_two_opt(original);
                 try_relocate(original, 12, 1, 8);
                 try_relocate(original, 16, 2, 10);
+                try_relocate(original, 24, 2, 14);
                 route = std::move(best_route);
             }
         };
@@ -1450,9 +1585,15 @@ struct Solver {
             polish_basic_safe(route);
             consider_direct(std::move(route));
         }
+        int top_polish_idx = 0;
         for (auto &item : top_snapshot) {
             vector<int> route = item.second;
-            polish_basic_safe(route);
+            if (350 < N && N <= 1000 && top_polish_idx < 5) {
+                polish_final_safe(route);
+            } else {
+                polish_basic_safe(route);
+            }
+            ++top_polish_idx;
             consider(std::move(route));
         }
         polish_final_safe(best);
@@ -1466,7 +1607,7 @@ int main() {
 
     Solver s;
     if (!(cin >> s.N)) return 0;
-    if (s.N > 60000) {
+    if (s.N > 80000) {
         cout << s.N + 1 << '\n';
         return 0;
     }
@@ -1476,6 +1617,12 @@ int main() {
 
     vector<int> route = s.solve();
     cout << s.N + 1 << '\n';
+    if (s.N > 60000) {
+        cout << 0;
+        for (int v : route) cout << ' ' << v;
+        cout << ' ' << 0 << '\n';
+        return 0;
+    }
     cout << 0 << '\n';
     for (int v : route) cout << v << '\n';
     cout << 0 << '\n';
