@@ -567,18 +567,18 @@ static bool localSearch(vector<vector<int>>& seedGrid, int K,
     vector<vector<int>> cellsOf(N+2);
     auto rebuildCellsOf=[&](){ for(int c=1;c<=N;c++) cellsOf[c].clear(); for(int p=0;p<K*K;p++) cellsOf[g[p]].push_back(p); };
     rebuildCellsOf();
-    std::uniform_real_distribution<double> prob(0.0,1.0);
     long long iters=0;
     auto now=[&](){ return chrono::steady_clock::now(); };
-    while(now() < dl){
+    while(true){
         iters++;
+        if((iters & 255)==0 && now() >= dl) break;
         if((iters & 511)==0 && forbidden==0 && missing==0 && missingColors==0){
             result.assign(K, vector<int>(K));
             for(int r=0;r<K;r++) for(int c=0;c<K;c++) result[r][c]=g[r*K+c];
             return true;
         }
         int p=-1, forcedX=-1;
-        if(prob(rng) < 0.02){
+        if((int)(rng()%1000) < 20){
             p = rng() % (K*K);
         } else if(forbidden>0){
             for(int tries=0; tries<12 && !badVec.empty(); tries++){ int idx=rng()%badVec.size(); int cand=badVec[idx]; if(inBad[cand]){ p=cand; break; } else { badVec[idx]=badVec.back(); badVec.pop_back(); } }
@@ -588,7 +588,7 @@ static bool localSearch(vector<vector<int>>& seedGrid, int K,
             for(int tries=0; tries<20; tries++){ int e=rng()%EDGES.size(); if(cnt[EDGES[e].first][EDGES[e].second]==0){ eidx=e; break; } }
             if(eidx>=0){
                 int a=EDGES[eidx].first,b=EDGES[eidx].second;
-                int ep = (prob(rng)<0.5)?a:b; int other=(ep==a)?b:a;
+                int ep = (rng()&1)?a:b; int other=(ep==a)?b:a;
                 if(!cellsOf[ep].empty()){
                     int baseCell = cellsOf[ep][rng()%cellsOf[ep].size()];
                     if(g[baseCell]==ep){
@@ -596,7 +596,7 @@ static bool localSearch(vector<vector<int>>& seedGrid, int K,
                         int d=rng()%4; int nr=r+DR[d],nc=c+DC[d];
                         if(nr>=0&&nr<K&&nc>=0&&nc<K){
                             p=nr*K+nc;
-                            if(prob(rng)<0.35) forcedX=other; // force the contact; repairs follow
+                            if((int)(rng()%100) < 35) forcedX=other; // force the contact; repairs follow
                         }
                     }
                 }
@@ -740,7 +740,7 @@ int main(){
             EDGES.push_back({min(a,b),max(a,b)});
         }
         auto tStart = chrono::steady_clock::now();
-        HARD_DL = tStart + chrono::milliseconds(850);
+        HARD_DL = tStart + chrono::milliseconds(900);
         if(N==1){ printf("1\n1\n1\n"); continue; }
         // ---- gather walks ----
         vector<vector<int>> walks;
