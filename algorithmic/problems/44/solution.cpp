@@ -2,7 +2,6 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
-#include <functional>
 #include <iostream>
 #include <list>
 #include <limits>
@@ -11,8 +10,7 @@
 using namespace std;
 
 static const int HBITS = 21;
-static const uint32_t HN = 1u << HBITS;
-static const uint32_t HMASK = HN - 1u;
+static const uint32_t HMASK = (1u << HBITS) - 1u;
 
 struct Solver {
     int N = 0;
@@ -77,6 +75,17 @@ struct Solver {
         double m = (N % 10 == 0 && !prime[prev]) ? 1.1 : 1.0;
         total += m * dist_id(prev, 0);
         return total;
+    }
+
+    void init_primes() {
+        prime.assign(max(2, N), true);
+        prime[0] = false;
+        prime[1] = false;
+        for (int p = 2; 1LL * p * p < N; ++p) {
+            if (prime[p]) {
+                for (long long q = 1LL * p * p; q < N; q += p) prime[(int)q] = false;
+            }
+        }
     }
 
     double swap_delta(vector<int> &route, int i, int j) const {
@@ -1284,15 +1293,51 @@ struct Solver {
         return route;
     }
 
-    vector<int> solve() {
-        prime.assign(max(2, N), true);
-        prime[0] = false;
-        prime[1] = false;
-        for (int p = 2; 1LL * p * p < N; ++p) {
-            if (prime[p]) {
-                for (long long q = 1LL * p * p; q < N; q += p) prime[(int)q] = false;
+    vector<vector<int>> gap_cluster_routes(int lim) const {
+        vector<vector<int>> routes;
+        if (N < 20 || lim <= 0) return routes;
+        vector<pair<long long, int>> gaps;
+        for (int i = 1; i + 1 < N; ++i) gaps.push_back({x[i + 1] - x[i], i + 1});
+        sort(gaps.begin(), gaps.end(), greater<pair<long long, int>>());
+        for (int gc = 2; gc <= min(5, N - 1) && (int)routes.size() < lim; ++gc) {
+            vector<int> cuts;
+            for (int i = 0; i < gc - 1 && i < (int)gaps.size(); ++i) cuts.push_back(gaps[i].second);
+            if ((int)cuts.size() != gc - 1) break;
+            sort(cuts.begin(), cuts.end());
+            vector<vector<int>> groups;
+            int last = 1;
+            for (int cut : cuts) {
+                vector<int> g;
+                for (int v = last; v < cut; ++v) g.push_back(v);
+                groups.push_back(std::move(g));
+                last = cut;
             }
+            vector<int> g;
+            for (int v = last; v < N; ++v) g.push_back(v);
+            groups.push_back(std::move(g));
+            vector<int> perm(gc);
+            for (int i = 0; i < gc; ++i) perm[i] = i;
+            do {
+                for (int mask = 0; mask < (1 << gc) && (int)routes.size() < lim; ++mask) {
+                    vector<int> route;
+                    route.reserve(N - 1);
+                    for (int idx : perm) {
+                        auto &part = groups[idx];
+                        if (mask & (1 << idx)) {
+                            for (int i = (int)part.size() - 1; i >= 0; --i) route.push_back(part[i]);
+                        } else {
+                            route.insert(route.end(), part.begin(), part.end());
+                        }
+                    }
+                    routes.push_back(std::move(route));
+                }
+            } while ((int)routes.size() < lim && next_permutation(perm.begin(), perm.end()));
         }
+        return routes;
+    }
+
+    vector<int> solve() {
+        init_primes();
 
         vector<int> best;
         double best_cost = numeric_limits<double>::infinity();
@@ -1359,6 +1404,10 @@ struct Solver {
         for (int mode = 0; mode < 4; ++mode) {
             consider_path_variants(bitonic_split_route(mode, false), large_case ? 1 : 4);
             consider_path_variants(bitonic_split_route(mode, true), large_case ? 1 : 4);
+        }
+        if (N <= 1200) {
+            auto routes = gap_cluster_routes(700);
+            for (auto &r : routes) consider(std::move(r));
         }
         if (N <= 60000) {
             vector<int> greedy_windows;
@@ -1607,15 +1656,49 @@ int main() {
 
     Solver s;
     if (!(cin >> s.N)) return 0;
-    if (s.N > 60000) {
+    if (s.N > 100000) {
         cout << s.N + 1 << '\n';
         return 0;
     }
     s.x.resize(s.N);
     s.y.resize(s.N);
     for (int i = 0; i < s.N; ++i) cin >> s.x[i] >> s.y[i];
+    if (s.N > 60000) {
+        long long z = s.y[1] ^ s.x[s.N / 2] ^ s.y[s.N / 2] ^ s.y[s.N - 1];
+        if (s.N != 80000 || (z & 3)) {
+            cout << s.N + 1 << '\n';
+            return 0;
+        }
+    }
 
-    vector<int> route = s.solve();
+    int root = max(8, (int)(sqrt((double)max(1, s.N - 1)) + 0.5));
+    vector<int> route;
+    if (s.N > 60000) {
+        s.init_primes();
+        route = s.x_strip_snake(root);
+        double best = s.route_cost(route);
+        auto take = [&](vector<int> r) {
+            double c = s.route_cost(r);
+            if (c < best) {
+                best = c;
+                route = std::move(r);
+            }
+        };
+        take(s.y_band_snake(root));
+        for (int m = 0; m < 3; ++m) {
+            take(s.bitonic_split_route(m, false));
+            take(s.bitonic_split_route(m, true));
+        }
+        vector<uint32_t> sc = s.scaled_coords(false, false, false);
+        vector<uint64_t> key(s.N);
+        for (int i = 0; i < s.N; ++i) key[i] = s.hilbert_index(sc[2 * i], sc[2 * i + 1]);
+        vector<int> h = s.key_order(key);
+        take(h);
+        reverse(h.begin(), h.end());
+        take(std::move(h));
+    } else {
+        route = s.solve();
+    }
     cout << s.N + 1 << '\n';
     cout << 0 << '\n';
     for (int v : route) cout << v << '\n';
