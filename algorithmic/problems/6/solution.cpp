@@ -87,6 +87,168 @@ static vector<int> buildWalk(){
     return w;
 }
 
+
+static bool verifyGrid(const vector<vector<int>>& grid);
+// ---------------- Posa rotation HP ----------------
+static bool posaHP(vector<int>& path, int ms){
+    auto dl = chrono::steady_clock::now()+chrono::milliseconds(ms);
+    vector<int> adjl[45];
+    for(int v=1;v<=N;v++){ adjl[v].clear(); for(int u=1;u<=N;u++) if(ADJ[v][u]) adjl[v].push_back(u); }
+    while(chrono::steady_clock::now()<=dl){
+        vector<int> p; vector<char> inp(N+1,0);
+        int s=(int)(rng()%N)+1; p.push_back(s); inp[s]=1;
+        vector<int> pos(N+1,-1); pos[s]=0; long long steps=0;
+        while((int)p.size()<N){
+            if(++steps>50000) break;
+            int end=p.back(); int ext[45],ne=0;
+            for(int u: adjl[end]) if(!inp[u]) ext[ne++]=u;
+            if(ne){ int u=ext[rng()%ne]; pos[u]=(int)p.size(); p.push_back(u); inp[u]=1; continue; }
+            int cand[45],nc=0;
+            for(int u: adjl[end]) if((int)p.size()<2||u!=p[p.size()-2]) cand[nc++]=u;
+            if(!nc) break;
+            int u=cand[rng()%nc]; int i=pos[u];
+            reverse(p.begin()+i+1,p.end());
+            for(int j=i+1;j<(int)p.size();j++) pos[p[j]]=j;
+        }
+        if((int)p.size()==N){ path=p; return true; }
+    }
+    return false;
+}
+static inline bool cmpOK(int x,int y){ return x==y || ADJ[x][y]; }
+// ---------------- Diagonal staircase construction ----------------
+// seq: colors per anti-diagonal; consecutive must be equal-or-adjacent.
+static int buildDiagonal(vector<vector<int>>& grid, int posaMs){
+    vector<int> walk;
+    if(!posaHP(walk, posaMs)) walk = buildWalk();
+    // chords = edges not consecutive in walk
+    set<pii> we;
+    for(int i=0;i+1<(int)walk.size();i++){ int a=walk[i],b=walk[i+1]; if(a!=b) we.insert({min(a,b),max(a,b)}); }
+    vector<pii> chords;
+    for(auto&e: EDGES) if(!we.count(e)) chords.push_back(e);
+    // greedy slot expansions on the sequence (first occurrence of each vertex)
+    vector<int> seq = walk;
+    {
+        vector<int> occ(N+1,-1);
+        for(int i=0;i<(int)seq.size();i++) if(occ[seq[i]]<0) occ[seq[i]]=i;
+        auto prevOf=[&](int v){ int i=occ[v]; return i>0? seq[i-1]:0; };
+        auto nextOf=[&](int v){ int i=occ[v]; return i+1<(int)seq.size()? seq[i+1]:0; };
+        auto req=[&](int u,int v)->int{
+            int a=prevOf(v), b=nextOf(v);
+            bool ca=(a==0)||cmpOK(u,a), cb=(b==0)||cmpOK(u,b);
+            if(ca&&cb) return 0;
+            if(ca||cb) return 1;
+            return 2;
+        };
+        int nch=(int)chords.size();
+        vector<char> done(nch,0); int rem=0;
+        vector<int> ru(nch), rv(nch);
+        for(int i=0;i<nch;i++){ ru[i]=req(chords[i].second,chords[i].first); rv[i]=req(chords[i].first,chords[i].second);
+            if(min(ru[i],rv[i])==0) done[i]=1; else rem++; }
+        vector<int> expn(N+1,0);
+        while(rem>0){
+            double best=-1; int bv=0,bl=0;
+            for(int v=1;v<=N;v++){ if(occ[v]<0) continue; for(int l=expn[v]+1;l<=2;l++){
+                int cov=0;
+                for(int i=0;i<nch;i++) if(!done[i]){
+                    int r;
+                    if(chords[i].first==v) r=rv[i]; else if(chords[i].second==v) r=ru[i]; else continue;
+                    if(r<=l) cov++;
+                }
+                double eff=(double)cov/(l-expn[v]);
+                if(eff>best){ best=eff; bv=v; bl=l; }
+            }}
+            if(best<=0) break;
+            for(int i=0;i<nch;i++) if(!done[i]){
+                int r;
+                if(chords[i].first==bv) r=rv[i]; else if(chords[i].second==bv) r=ru[i]; else continue;
+                if(r<=bl){ done[i]=1; rem--; }
+            }
+            expn[bv]=bl;
+        }
+        // materialize expansions: insert copies right after first occurrence
+        vector<int> s2;
+        vector<char> did(N+1,0);
+        for(int i=0;i<(int)seq.size();i++){
+            int v=seq[i]; s2.push_back(v);
+            if(!did[v]){ did[v]=1; for(int t=0;t<expn[v];t++) s2.push_back(v); }
+        }
+        seq=s2;
+    }
+    // retry loop: build grid from seq, place chords exactly; on failure insert a repeat and retry
+    for(int retry=0; retry<8; retry++){
+        int L=(int)seq.size();
+        int K=(L+2)/2; // 2K-1 >= L
+        if(K<1) K=1;
+        if(K>240) return -1;
+        grid.assign(K, vector<int>(K,0));
+        for(int r=0;r<K;r++) for(int c=0;c<K;c++){ int d=r+c; grid[r][c]= seq[min(d,L-1)]; }
+        // contact counts
+        static int cnt2[45][45];
+        for(int a=0;a<45;a++) for(int b=0;b<45;b++) cnt2[a][b]=0;
+        vector<int> colc(N+1,0);
+        for(int r=0;r<K;r++) for(int c=0;c<K;c++){
+            colc[grid[r][c]]++;
+            if(c+1<K){ int x=grid[r][c],y=grid[r][c+1]; if(x!=y) cnt2[min(x,y)][max(x,y)]++; }
+            if(r+1<K){ int x=grid[r][c],y=grid[r+1][c]; if(x!=y) cnt2[min(x,y)][max(x,y)]++; }
+        }
+        auto tryPlace=[&](int u,int v)->bool{ // place a u-cell touching v
+            for(int r=0;r<K;r++) for(int c=0;c<K;c++){
+                if(grid[r][c]!=v) continue;
+                if(colc[v]<=1) return false;
+                // simulate overwrite grid[r][c]=u
+                bool ok=true, touchesV=false;
+                int dec[4][2]; int nd=0;
+                static const int DR2[4]={1,-1,0,0}, DC2[4]={0,0,1,-1};
+                for(int dd=0;dd<4;dd++){
+                    int nr=r+DR2[dd], nc=c+DC2[dd];
+                    if(nr<0||nr>=K||nc<0||nc>=K) continue;
+                    int x=grid[nr][nc];
+                    if(x!=u && !ADJ[min(x,u)][max(x,u)]){ ok=false; break; }
+                    if(x==v) touchesV=true;
+                    if(x!=v && x!=grid[r][c]){ /* removing old contact (v,x) */ }
+                    if(x!=v){ dec[nd][0]=min(v,x); dec[nd][1]=max(v,x); nd++; }
+                }
+                if(!ok || !touchesV) continue;
+                // check we don't zero out any needed realized edge (v,x)
+                bool kills=false;
+                for(int i2=0;i2<nd;i2++){ int a=dec[i2][0],b=dec[i2][1];
+                    if(ADJ[a][b] && cnt2[a][b]<=1){ kills=true; break; } }
+                if(kills) continue;
+                // commit
+                for(int dd=0;dd<4;dd++){
+                    int nr=r+DR2[dd], nc=c+DC2[dd];
+                    if(nr<0||nr>=K||nc<0||nc>=K) continue;
+                    int x=grid[nr][nc];
+                    if(x!=v){ cnt2[min(v,x)][max(v,x)]--; }
+                    if(x!=u){ cnt2[min(u,x)][max(u,x)]++; }
+                }
+                colc[v]--; colc[u]++;
+                grid[r][c]=u;
+                return true;
+            }
+            return false;
+        };
+        bool allok=true; int failV=-1;
+        for(auto&ch: chords){
+            int u=ch.first, v=ch.second;
+            if(cnt2[min(u,v)][max(u,v)]>0) continue;
+            if(tryPlace(u,v)) continue;
+            if(tryPlace(v,u)) continue;
+            allok=false; failV=v; break;
+        }
+        if(allok){
+            if(verifyGrid(grid)) return (int)grid.size();
+            return -1;
+        }
+        // insert one more copy of failV after its first occurrence
+        vector<int> s2; bool ins=false;
+        for(int i=0;i<(int)seq.size();i++){ s2.push_back(seq[i]); if(!ins && seq[i]==failV){ s2.push_back(failV); ins=true; } }
+        if(!ins) return -1;
+        seq=s2;
+    }
+    return -1;
+}
+
 // ---------------- Construct from a given path ----------------
 // returns K and fills grid (K x K). Also returns K for selection.
 static int constructFrom(const vector<int>& path, vector<vector<int>>& grid){
@@ -215,6 +377,19 @@ static bool localSearch(vector<vector<int>>& seedGrid, int K,
     vector<vector<int>> cellsOf(N+2);
     auto rebuildCellsOf=[&](){ for(int c=1;c<=N;c++) cellsOf[c].clear(); for(int p=0;p<K*K;p++) cellsOf[g[p]].push_back(p); };
     rebuildCellsOf();
+    const auto costNow=[&]()->long long{ return 1000LL*forbidden + 50LL*missing + 50LL*missingColors; };
+    auto doSet=[&](int p,int x){
+        int r=p/K,c=p%K,o=g[p]; if(x==o) return;
+        for(int d=0;d<4;d++){ int nr=r+DR[d],nc0=c+DC[d]; if(nr<0||nr>=K||nc0<0||nc0>=K)continue; int nc=g[nr*K+nc0];
+            if(o!=nc){ int a=min(o,nc),b=max(o,nc); int oldc=cnt[a][b]; cnt[a][b]=oldc-1; if(ADJ[a][b]){ if(oldc==1) missing++; } else forbidden--; }
+            if(x!=nc){ int a=min(x,nc),b=max(x,nc); int oldc=cnt[a][b]; cnt[a][b]=oldc+1; if(ADJ[a][b]){ if(oldc==0) missing--; } else forbidden++; }
+        }
+        colorCount[o]--; if(colorCount[o]==0) missingColors++;
+        colorCount[x]++; if(colorCount[x]==1) missingColors--;
+        g[p]=x;
+        updateBad(p);
+        for(int d=0;d<4;d++){ int nr=r+DR[d],nc0=c+DC[d]; if(nr<0||nr>=K||nc0<0||nc0>=K)continue; updateBad(nr*K+nc0); }
+    };
     std::uniform_real_distribution<double> prob(0.0,1.0);
     long long iters=0;
     auto now=[&](){ return chrono::steady_clock::now(); };
@@ -224,6 +399,28 @@ static bool localSearch(vector<vector<int>>& seedGrid, int K,
             result.assign(K, vector<int>(K));
             for(int r=0;r<K;r++) for(int c=0;c<K;c++) result[r][c]=g[r*K+c];
             return true;
+        }
+        // compound edge-planting move
+        if(missing>0 && forbidden==0 && prob(rng)<0.5){
+            int eidx=-1;
+            for(int tries=0; tries<20; tries++){ int e=rng()%EDGES.size(); if(cnt[EDGES[e].first][EDGES[e].second]==0){ eidx=e; break; } }
+            if(eidx>=0){
+                int a=EDGES[eidx].first,b=EDGES[eidx].second;
+                if(prob(rng)<0.5) swap(a,b);
+                // try planting near an existing cell of a if possible, else random
+                int p1=-1;
+                if(!cellsOf[a].empty()){ int cand=cellsOf[a][rng()%cellsOf[a].size()]; if(g[cand]==a) p1=cand; }
+                if(p1<0) p1 = rng()%(K*K);
+                int r1=p1/K,c1=p1%K; int d=rng()%4; int r2=r1+DR[d],c2=c1+DC[d];
+                if(r2>=0&&r2<K&&c2>=0&&c2<K){
+                    int p2=r2*K+c2;
+                    int o1=g[p1],o2=g[p2];
+                    long long before=costNow();
+                    doSet(p1,a); doSet(p2,b);
+                    if(costNow()>before){ doSet(p2,o2); doSet(p1,o1); }
+                }
+            }
+            continue;
         }
         int p=-1;
         if(prob(rng) < 0.02){
@@ -368,6 +565,13 @@ static bool verifyGrid(const vector<vector<int>>& grid){
 int main(){
     int T; if(scanf("%d",&T)!=1) return 0;
     while(T--){
+        // ---- one global deadline per case, threaded through every phase ----
+        auto caseStart = chrono::steady_clock::now();
+        auto T_end = caseStart + chrono::milliseconds(900); // hard budget; TL is 1s
+        auto conEnd = caseStart + chrono::milliseconds(230); // construction sub-budget
+        auto msTo = [](chrono::steady_clock::time_point tp)->int{
+            return (int)chrono::duration_cast<chrono::milliseconds>(tp - chrono::steady_clock::now()).count();
+        };
         scanf("%d %d",&N,&M);
         memset(ADJ,0,sizeof(ADJ));
         EDGES.clear();
@@ -378,14 +582,24 @@ int main(){
         }
         // gather candidate paths (variety helps local search escape minima)
         vector<vector<int>> cands;
-        auto hpEnd = chrono::steady_clock::now() + chrono::milliseconds(420);
-        if(findHP(0.20)) cands.push_back(bestHP);
-        for(int attempt=0; attempt<4 && chrono::steady_clock::now()<hpEnd; attempt++){
-            if(findHP(0.05)){ cands.push_back(bestHP); }
+        int bestK = 1000000; vector<vector<int>> bestGrid, constructiveGrid;
+        // diagonal staircase candidates (time-bounded)
+        for(int t=0;t<3 && chrono::steady_clock::now()<conEnd;t++){
+            int pm = min(80, max(1, msTo(conEnd)));
+            vector<vector<int>> dg;
+            int dk = buildDiagonal(dg, pm);
+            if(dk>0 && dk<bestK){ bestK=dk; bestGrid=dg; constructiveGrid=dg; }
+        }
+        // Hamiltonian-path candidates for the row builder (time-bounded)
+        if(chrono::steady_clock::now()<conEnd){
+            double tl = min(0.08, max(0.001, msTo(conEnd)/1000.0));
+            if(findHP(tl)) cands.push_back(bestHP);
+        }
+        for(int attempt=0; attempt<2 && chrono::steady_clock::now()<conEnd; attempt++){
+            double tl = min(0.04, max(0.001, msTo(conEnd)/1000.0));
+            if(findHP(tl)){ cands.push_back(bestHP); }
         }
         cands.push_back(buildWalk()); // fallback always available
-
-        int bestK = 1000000; vector<vector<int>> bestGrid, constructiveGrid;
         for(auto& p : cands){
             if((int)p.size() < N) continue; // walk covers all; safety
             vector<vector<int>> g;
@@ -396,9 +610,8 @@ int main(){
             // constructive should always be valid; if not, re-derive from walk
             vector<vector<int>> g; constructFrom(buildWalk(), g); bestGrid=g; constructiveGrid=g; bestK=(int)g.size();
         }
-        // ---- local search: progressively shrink K ----
-        auto tStart = chrono::steady_clock::now();
-        auto tEnd = tStart + chrono::milliseconds(870);
+        // ---- local search: progressively shrink K (until the global deadline) ----
+        auto tEnd = T_end;
         int failStreak=0;
         for(int K=bestK-1; K>=2 && chrono::steady_clock::now()<tEnd; K--){
             auto rem = chrono::duration_cast<chrono::milliseconds>(tEnd - chrono::steady_clock::now()).count();
