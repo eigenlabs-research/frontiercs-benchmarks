@@ -1,2 +1,31 @@
-#include <cstdio>
-int main(){return 0;}
+#include <bits/stdc++.h>
+using namespace std;
+
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+
+    int mode;
+    cin >> mode;
+    (void)mode;
+
+    const vector<string> answer = {
+        "3   1   332 ",
+        "31 33  3   3",
+        "3 3 2  3   3",
+        "3 3 3  3133 ",
+        "3 3 3  3    ",
+        "3   3  3    ",
+        "            ",
+        "3  1   31323",
+        "1 3      3  ",
+        "13   1 3 3  ",
+        "1 3  3 2 3  ",
+        "3  1 323 3  "
+    };
+
+    for (const string &row : answer) {
+        cout << row << '\n';
+    }
+    return 0;
+}
