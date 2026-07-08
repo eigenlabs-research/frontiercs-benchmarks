@@ -1403,9 +1403,9 @@ int main(){
 #endif
     {
         uint32_t s = 1;
-        while(elapsed() < TIME_LIMIT * 0.5 && s <= 12){
+        while(elapsed() < TIME_LIMIT * 0.62 && s <= 30){
             consider(polish(mixedShelfPlan(allowRot, s, 0, false)));
-            if(elapsed() > TIME_LIMIT * 0.5) break;
+            if(elapsed() > TIME_LIMIT * 0.62) break;
             consider(polish(mixedShelfPlan(allowRot, s, 0, true)));
             ++s;
         }
@@ -1443,7 +1443,7 @@ int main(){
     #ifdef DIAG
     g_label="random";
 #endif
-    // Randomized multi-start on skyline.
+    // Randomized multi-start on skyline after extra mixed-shelf probes.
     mt19937 rng(987654321u);
     int seed = 0;
     double iterCost = 0.0; // adaptive margin: last iteration's duration
