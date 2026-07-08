@@ -10,7 +10,7 @@ int main() {
     (void)mode;
 
     const vector<string> answer = {
-        "1   1   332 ",
+        "1   1   211 ",
         "21 33  3   3",
         "3 3 2  3   3",
         "3 3 3  3133 ",
