@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <bitset>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
@@ -9,6 +10,13 @@
 using namespace std;
 
 static const int MAXS = 320;
+
+using RfgClock = std::chrono::steady_clock;
+static RfgClock::time_point RFG_START;
+static inline double rfg_elapsed_ms() {
+    return std::chrono::duration<double, std::milli>(RfgClock::now() - RFG_START).count();
+}
+static const double RFG_TIME_LIMIT_MS = 900.0;
 
 struct Candidate {
     vector<vector<int>> blocks;
@@ -892,7 +900,119 @@ static bool valid_blocks(const vector<vector<int>>& blocks, int small) {
     return true;
 }
 
+// Recompute the pairwise-usage bitsets from a block set.
+static void rebuild_used(const vector<vector<int>>& blocks, int small,
+                         vector<bitset<MAXS>>& used) {
+    for (int i = 0; i < small; ++i) used[i].reset();
+    for (const auto& blk : blocks) {
+        for (int i = 0; i < (int)blk.size(); ++i) {
+            int a = blk[i];
+            for (int j = i + 1; j < (int)blk.size(); ++j) {
+                int b = blk[j];
+                used[a].set(b);
+                used[b].set(a);
+            }
+        }
+    }
+}
+
+// Monotonic greedy fill: repeatedly add compatible points to blocks (smallest
+// blocks first) so that no pair of points is reused. Only ever increases k.
+static void greedy_fill(vector<vector<int>>& blocks, int small,
+                        vector<bitset<MAXS>>& used, vector<bitset<MAXS>>& bmask,
+                        Rng& rng, double deadline) {
+    int large = (int)blocks.size();
+    if (small <= 1 || large <= 0) return;
+    for (int b = 0; b < large; ++b) {
+        bmask[b].reset();
+        for (int v : blocks[b]) bmask[b].set(v);
+    }
+    vector<int> porder(small);
+    iota(porder.begin(), porder.end(), 0);
+    vector<int> border(large);
+    iota(border.begin(), border.end(), 0);
+
+    bool progress = true;
+    int pass = 0;
+    while (progress) {
+        if ((pass & 3) == 0 && rfg_elapsed_ms() > deadline) break;
+        progress = false;
+        // Process blocks in ascending current size (grow small blocks first to
+        // keep sizes balanced -> uses scarce pairs most efficiently).
+        stable_sort(border.begin(), border.end(), [&](int a, int b) {
+            return blocks[a].size() < blocks[b].size();
+        });
+        rng.shuffle_vec(porder);
+        for (int b : border) {
+            if ((int)blocks[b].size() >= small) continue;
+            const bitset<MAXS>& mask = bmask[b];
+            for (int p : porder) {
+                if (mask.test(p)) continue;
+                if ((used[p] & mask).none()) {
+                    for (int q : blocks[b]) {
+                        used[q].set(p);
+                        used[p].set(q);
+                    }
+                    blocks[b].push_back(p);
+                    bmask[b].set(p);
+                    progress = true;
+                    break;
+                }
+            }
+        }
+        if (++pass > small + 4) break;
+    }
+}
+
+// Ruin-and-recreate local search. Starts from the (already strong) heuristic
+// solution and only ever keeps strictly better snapshots, so it can never lower
+// k below what the constructive heuristics achieved. Each iteration removes a
+// few random point/block incidences (freeing the pairs they used) and re-fills
+// greedily; occasionally this repacks the freed pairs into a net gain.
+static void polish(vector<vector<int>>& best, int small, int large, double deadline) {
+    if (small <= 1 || large <= 0) return;
+    vector<bitset<MAXS>> used(small), bmask(large);
+    Rng rng(0x1234abcdULL ^ ((uint64_t)small << 20) ^ (uint64_t)large);
+
+    rebuild_used(best, small, used);
+    greedy_fill(best, small, used, bmask, rng, deadline);
+    long long best_score = block_score(best);
+
+    // Pair-starved regime (many blocks, few pairs): the provable optimum is
+    // every pair used once as a size-2 block plus singletons for the rest, i.e.
+    // k = large + C(small,2). If the fill already reached it, no search can help.
+    long long pair_budget = choose2(small);
+    if (pair_budget <= (long long)large && best_score >= (long long)large + pair_budget) {
+        return;
+    }
+
+    vector<vector<int>> work;
+    long long iters = 0;
+    while (rfg_elapsed_ms() < deadline) {
+        work = best;
+        // Ruin: remove a handful of random incidences.
+        int nrem = 1 + (int)rng.next_int(10);
+        for (int t = 0; t < nrem; ++t) {
+            int b = (int)rng.next_int(large);
+            if (work[b].empty()) continue;
+            int j = (int)rng.next_int((int)work[b].size());
+            work[b][j] = work[b].back();
+            work[b].pop_back();
+        }
+        // Recreate.
+        rebuild_used(work, small, used);
+        greedy_fill(work, small, used, bmask, rng, deadline);
+        long long sc = block_score(work);
+        if (sc > best_score) {
+            best_score = sc;
+            best = work;
+        }
+        if (++iters > 5000000) break;
+    }
+}
+
 int main() {
+    RFG_START = RfgClock::now();
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
 
@@ -917,6 +1037,17 @@ int main() {
         best.blocks.clear();
         for (int i = 0; i < large; ++i) best.blocks.push_back({0});
     }
+
+    // Ensure exactly `large` blocks then run the time-budgeted polish pass.
+    if ((int)best.blocks.size() > large) best.blocks.resize(large);
+    while ((int)best.blocks.size() < large) best.blocks.push_back({});
+    polish(best.blocks, small, large, RFG_TIME_LIMIT_MS);
+    // Any block left empty (e.g. a deadline cut a fill short) gets a singleton;
+    // a singleton uses no pair so this is always valid and never hurts.
+    for (auto& blk : best.blocks) {
+        if (blk.empty()) blk.push_back(0);
+    }
+    best.score = block_score(best.blocks);
 
     cout << best.score << '\n';
     for (int b = 0; b < (int)best.blocks.size(); ++b) {
