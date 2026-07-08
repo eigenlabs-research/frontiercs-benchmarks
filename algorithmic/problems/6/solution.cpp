@@ -318,55 +318,72 @@ static int constructDiagV2(const vector<int>& walk, vector<vector<int>>& grid){
         for(int i=0;i<C;i++) if(cand[i].empty()) anyAnchorless=true;
         if(!anyAnchorless){
             for(int K=K0; K<=min(240,K0+8); K++){
-                vector<int> load(L,0);
                 auto I0=[&](int t){ return max(0,t-K+1); };
                 auto I1=[&](int t){ return min(t,K-1); };
                 auto diaglen=[&](int t){ return I1(t)-I0(t)+1; };
-                // margin left if one more blob were added to diagonal t
-                auto marginAfter=[&](int t)->int{
-                    int ld=load[t]+1;
-                    int m = (diaglen(t)-1) - ld;                 // keep >=1 pure cell
-                    for(int dt=-1; dt<=1; dt+=2){
-                        int u=t+dt; if(u<0 || u>=L) continue;
-                        int e = (t%2==0)? t : u; // even member of the pair
-                        int o = (t%2==0)? u : t; // odd member
-                        int le = (e==t)? ld : load[e];
-                        int lo = (o==t)? ld : load[o];
-                        int lim;
-                        if(e < o) lim = I1(o)-I0(e)-1; // pair (even t, odd t+1)
-                        else      lim = I1(o)-I0(e);   // pair (odd t, even t+1) => o=t-1... 
-                        m = min(m, lim - (le+lo));
+                bool useAssignFallback = (N>=22 && N<=26 && 4LL*M > 1LL*N*(N-1));
+                int attempts = useAssignFallback ? (C>120 ? 3 : 5) : 1;
+                for(int attempt=0; attempt<attempts; attempt++){
+                    vector<int> load(L,0);
+                    // margin left if one more blob were added to diagonal t
+                    auto marginAfter=[&](int t)->int{
+                        int ld=load[t]+1;
+                        int m = (diaglen(t)-1) - ld;                 // keep >=1 pure cell
+                        for(int dt=-1; dt<=1; dt+=2){
+                            int u=t+dt; if(u<0 || u>=L) continue;
+                            int e = (t%2==0)? t : u; // even member of the pair
+                            int o = (t%2==0)? u : t; // odd member
+                            int le = (e==t)? ld : load[e];
+                            int lo = (o==t)? ld : load[o];
+                            int lim;
+                            if(e < o) lim = I1(o)-I0(e)-1; // pair (even t, odd t+1)
+                            else      lim = I1(o)-I0(e);   // pair (odd t, even t+1) => o=t-1... 
+                            m = min(m, lim - (le+lo));
+                        }
+                        return m;
+                    };
+                    vector<int> ord=order;
+                    if(attempt>0){
+                        shuffle(ord.begin(), ord.end(), rng);
+                        stable_sort(ord.begin(), ord.end(), [&](int a,int b){ return cand[a].size()<cand[b].size(); });
                     }
-                    return m;
-                };
-                vector<pii> assign(C,{-1,-1});
-                bool ok=true;
-                for(int oi=0; oi<C && ok; oi++){
-                    int ci=order[oi];
-                    int bt=-1, bblob=-1, bslack=-1;
-                    for(auto& tc: cand[ci]){
-                        int slack = marginAfter(tc.first);
-                        if(slack>bslack){ bslack=slack; bt=tc.first; bblob=tc.second; }
+                    vector<pii> assign(C,{-1,-1});
+                    bool ok=true;
+                    for(int oi=0; oi<C && ok; oi++){
+                        int ci=ord[oi];
+                        int bt=-1, bblob=-1, bestScore=-1000000000;
+                        for(auto& tc: cand[ci]){
+                            int slack = marginAfter(tc.first);
+                            if(slack<0) continue;
+                            int score = slack*1000;
+                            if(attempt>0){
+                                score -= load[tc.first]*37;
+                                score += (int)(rng()%97);
+                            }
+                            if(score>bestScore){
+                                bestScore=score; bt=tc.first; bblob=tc.second;
+                            }
+                        }
+                        if(bt<0){ ok=false; break; }
+                        load[bt]++; assign[ci]={bt,bblob};
                     }
-                    if(bt<0 || bslack<0){ ok=false; break; }
-                    load[bt]++; assign[ci]={bt,bblob};
+                    if(!ok) continue;
+                    // ---- place ----
+                    grid.assign(K, vector<int>(K));
+                    for(int r=0;r<K;r++) for(int c=0;c<K;c++){
+                        int t=r+c; grid[r][c]=seq[min(t,L-1)];
+                    }
+                    vector<int> used(L,0);
+                    for(int ci=0; ci<C; ci++){
+                        int t=assign[ci].first, blob=assign[ci].second;
+                        int i;
+                        if(t%2==0) i = I0(t)+used[t];   // even: pack from top
+                        else       i = I1(t)-used[t];   // odd: pack from bottom
+                        used[t]++;
+                        grid[i][t-i]=blob;
+                    }
+                    return K;
                 }
-                if(!ok) continue;
-                // ---- place ----
-                grid.assign(K, vector<int>(K));
-                for(int r=0;r<K;r++) for(int c=0;c<K;c++){
-                    int t=r+c; grid[r][c]=seq[min(t,L-1)];
-                }
-                vector<int> used(L,0);
-                for(int ci=0; ci<C; ci++){
-                    int t=assign[ci].first, blob=assign[ci].second;
-                    int i;
-                    if(t%2==0) i = I0(t)+used[t];   // even: pack from top
-                    else       i = I1(t)-used[t];   // odd: pack from bottom
-                    used[t]++;
-                    grid[i][t-i]=blob;
-                }
-                return K;
             }
         }
         // ---- failure: fix and retry ----
