@@ -1671,34 +1671,8 @@ int main() {
         }
     }
 
-    int root = max(8, (int)(sqrt((double)max(1, s.N - 1)) + 0.5));
     vector<int> route;
-    if (s.N > 60000) {
-        s.init_primes();
-        route = s.x_strip_snake(root);
-        double best = s.route_cost(route);
-        auto take = [&](vector<int> r) {
-            double c = s.route_cost(r);
-            if (c < best) {
-                best = c;
-                route = std::move(r);
-            }
-        };
-        take(s.y_band_snake(root));
-        for (int m = 0; m < 3; ++m) {
-            take(s.bitonic_split_route(m, false));
-            take(s.bitonic_split_route(m, true));
-        }
-        vector<uint32_t> sc = s.scaled_coords(false, false, false);
-        vector<uint64_t> key(s.N);
-        for (int i = 0; i < s.N; ++i) key[i] = s.hilbert_index(sc[2 * i], sc[2 * i + 1]);
-        vector<int> h = s.key_order(key);
-        take(h);
-        reverse(h.begin(), h.end());
-        take(std::move(h));
-    } else {
-        route = s.solve();
-    }
+    route = s.solve();
     cout << s.N + 1 << '\n';
     cout << 0 << '\n';
     for (int v : route) cout << v << '\n';
