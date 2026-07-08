@@ -699,6 +699,56 @@ static vector<vector<int>> rescaleTo(const vector<vector<int>>& G, int K2){
     return out;
 }
 
+// Dense-ish graphs often have a high-degree vertex whose neighborhood covers
+// many other edges. Use it as a safe background and pack edge-dominoes inside.
+static bool buildHubDominoGrid(int K, vector<vector<int>>& out){
+    int deg[45]; memset(deg,0,sizeof(deg));
+    for(auto &e: EDGES){ deg[e.first]++; deg[e.second]++; }
+    vector<pair<int,int>> hubRank;
+    for(int h=1; h<=N; h++){
+        int cover=deg[h];
+        for(auto &e: EDGES){
+            int a=e.first, b=e.second;
+            if(a==h || b==h) continue;
+            if(ADJ[h][a] && ADJ[h][b]) cover++;
+        }
+        hubRank.push_back({cover,h});
+    }
+    sort(hubRank.rbegin(), hubRank.rend());
+    if(hubRank.empty() || hubRank[0].first<=0) return false;
+    int top = min(3, (int)hubRank.size());
+    int hub = hubRank[(int)(rng()%top)].second;
+    out.assign(K, vector<int>(K, hub));
+    vector<pii> spots;
+    for(int r=1; r<K; r+=2) for(int c=1; c+1<K; c+=3) spots.push_back({r,c});
+    if(spots.empty()) return false;
+    shuffle(spots.begin(), spots.end(), rng);
+    vector<pii> dom;
+    for(auto &e: EDGES){
+        int a=e.first, b=e.second;
+        if(a==hub || b==hub) continue;
+        if(ADJ[hub][a] && ADJ[hub][b]) dom.push_back(e);
+    }
+    sort(dom.begin(), dom.end(), [&](const pii& x, const pii& y){
+        return min(deg[x.first],deg[x.second]) < min(deg[y.first],deg[y.second]);
+    });
+    vector<char> present(N+1,0); present[hub]=1;
+    int si=0, placed=0;
+    for(auto &e: dom){
+        if(si >= (int)spots.size()) break;
+        int r=spots[si].first, c=spots[si].second; si++;
+        if(rng()&1){ out[r][c]=e.first; out[r][c+1]=e.second; }
+        else { out[r][c]=e.second; out[r][c+1]=e.first; }
+        present[e.first]=present[e.second]=1;
+        placed++;
+    }
+    for(int v=1; v<=N && si<(int)spots.size(); v++) if(!present[v] && ADJ[hub][v]){
+        int r=spots[si].first, c=spots[si].second; si++;
+        out[r][c]=v; present[v]=1; placed++;
+    }
+    return placed>0;
+}
+
 // verify a grid satisfies all checker conditions (defensive)
 static bool verifyGrid(const vector<vector<int>>& grid){
     int K=(int)grid.size();
@@ -798,7 +848,10 @@ int main(){
             if(rem < 20) break;
             long long slice = min(min(220LL, 70LL + 50LL*variant), max(30LL, rem/2));
             vector<vector<int>> seed;
-            int which = variant % 3;
+            bool mediumDenseGraph = (N>=22 && N<=26 && 4LL*M > 1LL*N*(N-1));
+            int seedModes = mediumDenseGraph ? 4 : 3;
+            int which = variant % seedModes;
+            bool structuredSeed = false;
             if(which==0){
                 int off = bestK - targetK;
                 int dr = (int)(rng()%(off+1)), dc = (int)(rng()%(off+1));
@@ -807,10 +860,13 @@ int main(){
             } else if(which==1){
                 seed = shrinkByOne(bestGrid);
                 if((int)seed.size()!=targetK) seed = rescaleTo(bestGrid, targetK);
-            } else {
+            } else if(which==2) {
                 seed = rescaleTo(bestGrid, targetK);
+            } else {
+                structuredSeed = buildHubDominoGrid(targetK, seed);
+                if(!structuredSeed) seed = rescaleTo(bestGrid, targetK);
             }
-            if(variant>=3){
+            if(variant>=3 && !structuredSeed){
                 // perturb to escape repeated failure
                 int KK=targetK;
                 for(int i=0;i<KK*KK/24+1;i++) seed[rng()%KK][rng()%KK]=1+rng()%N;
