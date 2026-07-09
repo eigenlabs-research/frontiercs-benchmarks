@@ -60,7 +60,7 @@ int main(){
     vector<int> bucket(N); { vector<int> tmp=cnt; for(int i=0;i<N;i++) bucket[tmp[cellOf[i]]++]=i; }
 
     // ---- k nearest neighbors per city ----
-    int K=min(N-1, N>50000?6:(N>5000?11:10));
+    int K=min(N-1, N>50000?6:(N>5000?13:10));
     vector<int> nbr((size_t)N*K,-1);
     {
         vector<pair<double,int>> cand; cand.reserve(128);
