@@ -345,7 +345,7 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(995); // increased budget for more iterations with longer tenure
+    const auto budget = chrono::milliseconds(993); // tuned for optimal judge performance
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
@@ -621,6 +621,30 @@ int main(){
         extern long long g_pops, g_calls;
         fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d)\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N);
 #endif
+    }
+
+    // Post-tabu local search: try adjacent swaps (runs only if time remains)
+    {
+        auto now = chrono::steady_clock::now();
+        if(now < T_end - chrono::milliseconds(20)){
+            bool improved = true;
+            while(improved && chrono::steady_clock::now() < T_end - chrono::milliseconds(5)){
+                improved = false;
+                for(int m=0; m<M; ++m){
+                    for(int i=0; i<J-1; ++i){
+                        swap(best[m][i], best[m][i+1]);
+                        long long nc = evalSeq(best, false);
+                        if(nc >= 0 && nc < bestC){
+                            bestC = nc;
+                            improved = true;
+                            evalSeq(best, true);
+                        } else {
+                            swap(best[m][i], best[m][i+1]); // undo
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Fast buffered output (single fwrite) then _exit to skip static-vector
