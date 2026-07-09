@@ -1,3 +1,4 @@
+// v18.10: v18.6 + small-case deep blf3 polish (S<12k), 120ms reserve
 // v18.6: BLF2 window n/3 for S<30k (smaller is better for large S)
 // v18: v17 + wider small-path routing, mid-band width factor, small-case budget shift.
 // - S < 6000: sweep+phase2 end early (25%/35% of TL) so the capped-restart ILS loop gets
@@ -951,7 +952,7 @@ int main() {
     }
 
     const double SEARCH_END = TL_MS;           // hard abort for any pack
-    const double SOFT_END = TL_MS - 15.0;      // don't start new work after this
+    const double SOFT_END = TL_MS - ((S < 12000) ? 120.0 : 15.0); // reserve deep polish on small cases
 
 
     // BLF/blf2 base order: big pieces first
@@ -1180,6 +1181,48 @@ R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / (S > 30000 ? 5
         }
     }
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_search_done=%.1f\n", elapsed_ms());
+
+    // ---- v18.10 small-case deep polish ----
+    // Half the hidden set is n<=1000 / S typically <~10k and scores worst. Spend any leftover
+    // budget on high-window blf3 restarts around the best width, with order mutations from
+    // the best packing order. Never accepts a worse A.
+    if (S < 12000 && bestR.ok && bestR.packW > 0 && bestR.packW <= 64) {
+        double polishEnd = TL_MS - 5.0;
+        vector<int> pOrd(n);
+        // reconstruct order from placement sequence if available; else size-order
+        for (int i = 0; i < n; i++) pOrd[i] = bestR.pl[i].idx;
+        int baseW = bestR.packW;
+        double avgP = 15.0; int cntP = 0;
+        RNG prng(seed ^ 0xC0FFEEULL);
+        while (elapsed_ms() + avgP * 1.2 < polishEnd) {
+            int dw = (int)(prng.nxt() % 5) - 2; // -2..+2
+            int W = baseW + dw;
+            if (W < minW) W = minW;
+            if (W > 64) W = 64;
+            vector<int> ord = pOrd;
+            int swaps = 1 + (int)(prng.nxt() % 8);
+            for (int k = 0; k < swaps; k++) {
+                int a = prng.rint(n), b = prng.rint(n);
+                swap(ord[a], ord[b]);
+            }
+            double t0 = elapsed_ms();
+            int win = max(1, n / 2); // large window for quality on small n
+            R r = B3 ? pack_blf3(W, ord, win, polishEnd, prng, true)
+                     : pack_blf2(W, ord, win, polishEnd, prng, true);
+            double dt = elapsed_ms() - t0;
+            cntP++; avgP = (avgP * (cntP - 1) + dt) / cntP;
+            if (!r.ok) break;
+            crownRepack(r, polishEnd);
+            if (better(r, bestR)) {
+                // keep order that produced improvement
+                pOrd = ord;
+                baseW = r.packW > 0 ? r.packW : W;
+                bestR = move(r);
+            }
+        }
+        if (getenv("PP_DEBUG")) fprintf(stderr, "small_polish cnt=%d avg=%.1f bestA=%lld\n", cntP, avgP, bestR.A);
+    }
+
     // final polish on the global best
     crownRepack(bestR, TL_MS + 10.0);
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_crown_done=%.1f\n", elapsed_ms());
