@@ -399,9 +399,9 @@ int main(){
 
     mt19937 rng(777u);
     trySeed(seedGT(0, rng)); // MWR
-    trySeed(seedGT(1, rng)); // LPT
+    trySeed(seedGT(4, rng)); // PMWR (wrem/(nextP+1))
     if(chrono::steady_clock::now() - T0 < budget)
-        trySeed(seedGT(2, rng)); // SPT
+        trySeed(seedGT(1, rng)); // LPT
 
     // Trivial lower bound: max(machine load, job length). If reached, we are
     // provably optimal and can stop immediately.
@@ -615,6 +615,30 @@ int main(){
                 }
                 fill(tabuTB.begin(), tabuTB.end(), 0);
                 sinceImp = 0;
+            }
+            else {
+                // Wall-clock based diversification: if wall-time stagnation > 400ms,
+                // do a small perturbation to escape hard local optima.
+                long long stagMs = chrono::duration_cast<chrono::milliseconds>(nowT - lastImpT).count();
+                if(stagMs >= 400 && sinceImp > 5000){
+                    cur = best;
+                    evalSeq(cur, true); curC = bestC;
+                    // 2-3 random block moves
+                    int nk = 2 + (int)(rng() % 3);
+                    for(int r=0; r<nk; ++r){
+                        genMoves(cur);
+                        if(gmoves.empty()) break;
+                        const Mv& mv = gmoves[rng() % gmoves.size()];
+                        applyMove(cur, mv);
+                        long long nc = evalSeq(cur, true);
+                        if(nc < 0){ undoMove(cur, mv); evalSeq(cur, true); }
+                        else curC = nc;
+                    }
+                    // Half tabu clear (reset just a fraction to keep some memory)
+                    fill(tabuTB.begin(), tabuTB.end(), 0);
+                    sinceImp = 0;
+                    lastImpT = chrono::steady_clock::now();
+                }
             }
         }
 #ifdef DIAG
