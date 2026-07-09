@@ -1,8 +1,21 @@
-#include <bits/stdc++.h>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <climits>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <numeric>
+#include <set>
+#include <string>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 1850.0;
+static double TL_MS = 1890.0; // Hard global deadline (env POLYPACK_TL override)
 static inline double elapsed_ms() {
     return chrono::duration<double, milli>(chrono::steady_clock::now() - T0).count();
 }
@@ -190,6 +203,7 @@ static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0,
         adapt();
         if (!panic && deadlineMs > 0 && elapsed_ms() > deadlineMs) return R{};
     }
+    if ((int)pl.size() != nm) return R{};  // validate all pieces placed
     int H = (int)g + 1;
     int maxX = -1;
     for (auto& pp : pl) {
@@ -771,7 +785,7 @@ static inline void bf_put(const T& o, int x, int y) {
 }
 static inline uint64_t bf_key(int w, const int* v) { uint64_t k = (uint64_t)w << 52; for (int j = 0; j < w; j++) { int s = v[j] + 16; if (s < 0) s = 0; if (s > 31) s = 31; k |= (uint64_t)s << (5 * j); } return k; }
 static int bf_pass(int W, const vector<int>& repr, const unordered_map<uint64_t, vector<pair<int,int>>>& idx,
-                   vector<int>& avail, int total, vector<int>& outKind, vector<int>& outOri, vector<int>& outX, vector<int>& outY, int tie, RNG* rng = nullptr) {
+                   vector<int>& avail, int total, vector<int>& outKind, vector<int>& outOri, vector<int>& outX, vector<int>& outY, int tie) {
     bf_W = W; bf_occ.assign(8, 0ULL); bf_colH.assign(W, 0);
     outKind.clear(); outOri.clear(); outX.clear(); outY.clear();
     int rem = total; int p[12];
@@ -787,9 +801,7 @@ static int bf_pass(int W, const vector<int>& repr, const unordered_map<uint64_t,
     };
     while (rem > 0) {
         int mh = INT_MAX; curH0 = 0; for (int c = 0; c < W; c++) { if (bf_colH[c] < mh) mh = bf_colH[c]; if (bf_colH[c] > curH0) curH0 = bf_colH[c]; }
-        int nc;
-        if (rng) { int lows[64], nl = 0; for (int c = 0; c < W; c++) if (bf_colH[c] == mh) lows[nl++] = c; nc = lows[rng->rint(nl)]; }
-        else { nc = 0; while (nc < W && bf_colH[nc] != mh) nc++; }
+        int nc = 0; while (nc < W && bf_colH[nc] != mh) nc++;
         bH = LLONG_MAX; bW = LLONG_MAX; bC = -1; bk = -1; bo = -1; bx = -1; by = -1;
         for (int w = 1; w <= 10; w++) {
             int xlo = nc - w + 1; if (xlo < 0) xlo = 0; int xhi = nc; if (xhi > W - w) xhi = W - w;
@@ -849,18 +861,6 @@ static R bfSolve(int minW, int base, double deadline) {
             }
         }
     }
-    // phase 2: random-niche GRASP restarts around bestW while time remains (never regresses phase 1)
-    if (bestW > 0 && envInt("PP_G", 1)) {
-        RNG rng(0x9e3779b97f4a7c15ULL ^ ((unsigned long long)S << 1));
-        while (elapsed_ms() + lastPass * 1.3 < deadline) {
-            int W = bestW + (rng.rint(5) - 2); if (W < minW || W > 63) continue;
-            int tie = rng.rint(2);
-            vector<int> avail = kcnt; double t0 = elapsed_ms();
-            int H = bf_pass(W, repr, idx, avail, n, tK, tO, tX, tY, tie, &rng);
-            lastPass = elapsed_ms() - t0;
-            if (H > 0) { long long A = (long long)W * H; if (A < bestA) { bestA = A; bestW = W; bestH = H; swap(bK, tK); swap(bO, tO); swap(bX, tX); swap(bY, tY); } }
-        }
-    }
     DONE:;
     if (getenv("PP_DEBUG")) fprintf(stderr, "bf: bestW=%d base=%d H=%d fill=%.4f K=%d idx=%zu lastPass=%.0f t=%.0f\n", bestW, base, bestH, (double)S/((double)bestW*bestH), K, idx.size(), lastPass, elapsed_ms());
     R r; if (bestW == 0) { r.ok = false; return r; }
@@ -886,7 +886,7 @@ int main() {
     double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;  // 0 => auto by size
     double P2ENDF = envInt("PP_P2END", 0) / 100.0;   // 0 => auto by size
     long long P2MAXS = envInt("PP_P2MAXS", 22000);   // phase2 only when S below this
-    long long B2RESTS = envInt("PP_B2RESTS", 1300);  // blf2 restarts when S below this
+    long long B2RESTS = envInt("PP_B2RESTS", 50000);  // blf2 restarts when S below this (was 1300)
 
     {
         size_t cap = 1 << 20; inbuf.resize(cap); size_t len = 0;
@@ -1003,7 +1003,7 @@ int main() {
     };
     R bestR;
     int bfEnv = envInt("PP_BF", -1);
-    long long BF_N = envInt("PP_BFN", 440);
+    long long BF_N = envInt("PP_BFN", 500);
     bool useBF = (bfEnv < 0) ? (n >= BF_N && base <= 63 && minW <= 63) : (bfEnv > 0);
     if (useBF) { bestR = bfSolve(minW, min(base, 63), TL_MS - 120.0); }
     if (!bestR.ok) {
@@ -1169,8 +1169,9 @@ int main() {
             } else if (used + avgSky * 1.3 > SOFT_END) {
                 if (used + avgBLF * 1.3 <= SOFT_END) doBLF = true; else break;
             }
-            static int CAPSHARE = envInt("PP_CAPSHARE", 95);
-            bool capEligible = !big || (n <= envInt("PP_CAPBIGN", 2500));
+            static int CAPSHARE = envInt("PP_CAPSHARE", 100);
+            static int CAPBIGN = envInt("PP_CAPBIGN", 6000);
+            bool capEligible = !big || (n <= CAPBIGN);
             if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
                 int W;
                 {
@@ -1186,7 +1187,7 @@ int main() {
                 int Hcap = (int)(capA / W);
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
-                obuf = fromBest ? ilsOrd : ordB2;
+                obuf = fromBest ? ilsOrd : ((cntBLF & 1) ? ordBLF : ordB2);
                 int swaps = 1 + rng.rint(12);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
@@ -1253,6 +1254,20 @@ int main() {
         }
     }
     } // end champion search block (skipped when best-fit produced the result)
+    // late restart: try shuffled orderings at best width for fresh diversification
+    if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30) {
+        int lateW = bestR.packW;
+        int lateHcap = max(1, (int)(bestR.A / lateW) - 1);
+        if (lateHcap >= minW) {
+            for (int attempt = 0; attempt < 4 && elapsed_ms() < SOFT_END - 10; attempt++) {
+                vector<int> randOrd = idx;
+                int ns = max(1, n / 3);
+                for (int s = 0; s < ns; s++) { int a = rng.rint(n), b = rng.rint(n); swap(randOrd[a], randOrd[b]); }
+                R r = pack_capped(lateW, lateHcap, randOrd, max(1, n / 4), SEARCH_END, rng);
+                if (r.ok) { crownRepack(r, SEARCH_END); if (better(r, bestR)) bestR = move(r); }
+            }
+        }
+    }
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_search_done=%.1f\n", elapsed_ms());
     if (!useBF) crownRepack(bestR, TL_MS + 10.0);
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_crown_done=%.1f\n", elapsed_ms());
