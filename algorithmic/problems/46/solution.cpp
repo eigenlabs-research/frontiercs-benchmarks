@@ -345,7 +345,7 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(995); // increased budget for more iterations with longer tenure
+    const auto budget = chrono::milliseconds(994); // 994ms adaptive tabu resample
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
