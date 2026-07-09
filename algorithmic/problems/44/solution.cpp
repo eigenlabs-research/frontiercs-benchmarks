@@ -28,9 +28,10 @@ struct Solver {
     // Reserve time for final polish; stop heavy construction early.
     bool construction_done() const {
         double lim = time_limit;
-        if (N > 100000) lim *= 0.82;
-        else if (N > 60000) lim *= 0.85;
-        else if (N > 20000) lim *= 0.80;
+        if (N > 100000) lim *= 0.80;
+        else if (N > 60000) lim *= 0.82;
+        else if (N > 20000) lim *= 0.75;
+        else if (N > 6000) lim *= 0.70;
         else lim *= 0.78;
         return chrono::duration<double>(chrono::steady_clock::now() - t0).count() > lim;
     }
@@ -297,10 +298,10 @@ struct Solver {
             span = (M <= 30000) ? 55 : 160;
         } else if (M <= 100000) {
             passes = 1;
-            span = 40;
+            span = 48;
         } else {
             passes = 1;
-            span = 20;
+            span = 28;
         }
         improve_two_opt_window(route, passes, span);
     }
@@ -1301,10 +1302,12 @@ struct Solver {
 
     vector<int> solve() {
         t0 = chrono::steady_clock::now();
-        if (N > 150000) time_limit = 2.15;
-        else if (N > 100000) time_limit = 2.20;
-        else if (N > 60000) time_limit = 2.25;
-        else time_limit = 2.35;
+        if (N > 150000) time_limit = 2.10;
+        else if (N > 100000) time_limit = 2.15;
+        else if (N > 60000) time_limit = 2.20;
+        else if (N > 20000) time_limit = 2.20;
+        else if (N > 6000) time_limit = 2.15;
+        else time_limit = 2.30;
         init_primes();
 
         vector<int> best;
@@ -1578,14 +1581,15 @@ struct Solver {
             if (1200 < N && N <= 20000 && !timed_out()) {
                 double before = route_cost(route);
                 vector<int> original = route;
-                improve_candidate_two_opt(route, 2, N <= 6000 ? 30 : 120);
+                // Keep under TL on ~15k cases; 80 moves was the prior stable setting.
+                improve_candidate_two_opt(route, 2, N <= 6000 ? 25 : 60);
                 improve_prime_slots(route);
                 if (route_cost(route) > before + 1e-7) route = std::move(original);
             }
             if (20000 < N && N <= 60000 && !timed_out()) {
                 double before = route_cost(route);
                 vector<int> original = route;
-                improve_candidate_two_opt(route, 2, 24);
+                improve_candidate_two_opt(route, 1, 12);
                 improve_prime_slots(route);
                 if (route_cost(route) > before + 1e-7) route = std::move(original);
             }
