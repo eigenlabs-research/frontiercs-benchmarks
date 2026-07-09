@@ -1,4 +1,3 @@
-// v19.9: v19.5 + PP_CAPDW default 3 (was 2); local small-band A/B winner
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -1279,6 +1278,7 @@ int main() {
             }
         }
     }
+    if(bestR.ok&&bestR.packW>0&&bestR.packW<=64&&elapsed_ms()<SOFT_END-12){int W=bestR.packW;vector<int> o=idx;for(int s=0,ns=max(1,n/3);s<ns;s++){int a=rng.rint(n),b=rng.rint(n);swap(o[a],o[b]);}R r=pack_blf3(W,o,max(1,n/4),SEARCH_END,rng,true);if(r.ok){crownRepack(r,SEARCH_END);if(better(r,bestR))bestR=move(r);}}
     } // end champion search block (skipped when best-fit produced the result)
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_search_done=%.1f\n", elapsed_ms());
     if (!useBF) crownRepack(bestR, TL_MS + 10.0);
