@@ -1194,7 +1194,7 @@ int main(){
     };
 #else
     auto consider = [&](PackResult&& r){
-        if(r.totalValue > best.totalValue) best = std::move(r);
+        if(r.totalValue > best.totalValue || (!allowRot && g_bin.W * 5 > g_bin.H * 7 && r.totalValue == best.totalValue)) best = std::move(r);
     };
 #endif
 
