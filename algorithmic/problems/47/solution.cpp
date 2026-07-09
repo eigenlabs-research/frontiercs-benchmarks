@@ -201,17 +201,22 @@ struct MaxRects {
         fx.clear(); fy.clear(); fw.clear(); fh.clear();
         fx.push_back(0); fy.push_back(0); fw.push_back(W_); fh.push_back(H_);
     }
-    bool findBest(int rw, int rh, int& outX, int& outY, int& outIdx) const {
+    bool findBest(int rw, int rh, int& outX, int& outY, int& outIdx, bool preferContact = false) const {
         if(rw <= 0 || rh <= 0) return false;
         int bestShort = INT32_MAX, bestLong = INT32_MAX; outIdx = -1;
+        int bestScore = INT32_MAX;
         int n = (int)fx.size();
         for(int i = 0; i < n; ++i){
             if(fw[i] >= rw && fh[i] >= rh){
                 int lw = fw[i] - rw, lh = fh[i] - rh;
                 int s = lw < lh ? lw : lh;
                 int l = lw < lh ? lh : lw;
-                if(s < bestShort || (s == bestShort && l < bestLong)){
-                    bestShort = s; bestLong = l; outX = fx[i]; outY = fy[i]; outIdx = i;
+                int contact = (fx[i] == 0 ? rh : 0) + (fy[i] == 0 ? rw : 0) +
+                              (fx[i] + rw == W ? rh : 0) + (fy[i] + rh == H ? rw : 0);
+                int score = s;
+                if(preferContact && lw > 0 && lh > 0) score -= contact * 2; // prefer contact when both gaps exist
+                if(score < bestScore || (score == bestScore && (s < bestShort || (s == bestShort && l < bestLong)))){
+                    bestScore = score; bestShort = s; bestLong = l; outX = fx[i]; outY = fy[i]; outIdx = i;
                 }
             }
         }
@@ -564,24 +569,19 @@ static PackResult knapsackShelfPlan(bool allowRot){
     bestCombo = combo;
     if(allowRot){
         // Hill-climb: repeatedly try flipping one item; accept improvements.
-        // Use steepest-ascent: try all single flips per pass, pick the best.
         bool improved = true;
         int passes = 0;
-        while(improved && passes < 5 && elapsed() < TIME_LIMIT * 0.30){
+        while(improved && passes < 3 && elapsed() < TIME_LIMIT * 0.30){
             improved = false; ++passes;
-            int bestFlip = -1; ll bestFlipVal = bestVal;
             for(int t = 0; t < M && elapsed() < TIME_LIMIT * 0.30; ++t){
                 if(!sd[t][0].valid || !sd[t][1].valid) continue;
                 combo[t] ^= 1;
                 ll v = evalCombo(combo, nullptr);
-                if(v > bestFlipVal){
-                    bestFlipVal = v; bestFlip = t;
+                if(v > bestVal){
+                    bestVal = v; bestCombo = combo; improved = true;
+                } else {
+                    combo[t] ^= 1; // revert
                 }
-                combo[t] ^= 1; // revert for next trial
-            }
-            if(bestFlip >= 0){
-                combo[bestFlip] ^= 1;
-                bestVal = bestFlipVal; bestCombo = combo; improved = true;
             }
         }
     }
@@ -1262,6 +1262,9 @@ int main(){
     };
     gapFill();
     if(!allowRot){
+#ifdef DIAG
+        g_label="column";
+#endif
         consider(polish(knapsackColumnPlan(allowRot)));
         gapFill();
     }
@@ -1272,7 +1275,7 @@ int main(){
     consider(polish(mixedShelfPlan(allowRot, 0, 0, false)));
     consider(polish(mixedShelfPlan(allowRot, 0, 0, true)));
     {
-        double alphas[1] = {0.94};
+        double alphas[4] = {0.90, 0.92, 0.94, 0.96};
         for(double a : alphas){
             if(elapsed() > TIME_LIMIT * 0.22) break;
             g_msAlpha = a;
@@ -1281,28 +1284,6 @@ int main(){
             consider(polish(mixedShelfPlan(allowRot, 0, 0, true)));
         }
         g_msAlpha = 1.0;
-    }
-    // Priority path: tall no-rotation split2 with alpha 0.94 early (protects c11).
-    if(!allowRot && g_bin.H * 5 > g_bin.W * 6 && elapsed() < TIME_LIMIT * 0.30){
-        double oldA = g_msAlpha; g_msAlpha = 0.94;
-        auto cutsE = [&](int L){
-            vector<int> v; auto add=[&](int x){ if(x>20&&x<L-20&&find(v.begin(),v.end(),x)==v.end()) v.push_back(x); };
-            add(L/3); add(L/2); add((2*L)/3); add(L/4); add((3*L)/4);
-            for(int z=0; z<M && z<3; ++z){ const ItemType& it=g_items[ordDens[z]]; int d[2]={it.w,it.h};
-                for(int q=0;q<2;++q) for(int k=1;k<=3;++k){ add(d[q]*k); add(L-d[q]*k);} }
-            if((int)v.size()>10) v.resize(10); return v;
-        };
-        for(int sh: cutsE(g_bin.H)){
-            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.35; ++mask)
-                consider(polish(splitMixedPlanY(allowRot, sh, mask, 0)));
-            if(elapsed()>TIME_LIMIT*0.35) break;
-        }
-        for(int sw: cutsE(g_bin.W)){
-            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.40; ++mask)
-                consider(polish(splitMixedPlan(allowRot, sw, mask, 0)));
-            if(elapsed()>TIME_LIMIT*0.40) break;
-        }
-        g_msAlpha = oldA;
     }
 #ifdef DIAG
     g_label="beam";
@@ -1321,22 +1302,12 @@ int main(){
         g_msAlpha = 1.0;
     }
 #else
-    if(elapsed() < TIME_LIMIT * 0.55)
-        consider(polish(beamMixedShelfPlan(allowRot, allowRot ? 14 : 7, allowRot ? 5 : 4, allowRot ? 9 : 7, allowRot ? TIME_LIMIT * 0.78 : TIME_LIMIT * 0.66)));
-    if(elapsed() < TIME_LIMIT * 0.7){
-        g_msAlpha = allowRot ? 0.935 : 1.0;
-        consider(polish(beamMixedShelfPlanT(allowRot, allowRot ? 22 : 7, allowRot ? 5 : 4, allowRot ? 9 : 7, allowRot ? TIME_LIMIT * 0.9 : TIME_LIMIT * 0.82)));
+    if(elapsed() < TIME_LIMIT * 0.65)
+        consider(polish(beamMixedShelfPlan(allowRot, allowRot ? 28 : 16, allowRot ? 7 : 6, allowRot ? 13 : 11, allowRot ? TIME_LIMIT * 0.90 : TIME_LIMIT * 0.82)));
+    if(elapsed() < TIME_LIMIT * 0.82){
+        g_msAlpha = allowRot ? 0.925 : 0.94;
+        consider(polish(beamMixedShelfPlanT(allowRot, allowRot ? 36 : 20, allowRot ? 7 : 6, allowRot ? 13 : 11, allowRot ? TIME_LIMIT * 0.97 : TIME_LIMIT * 0.92)));
         g_msAlpha = 1.0;
-    }
-    // Focused beam with alpha=0.94 and reduced depth for shorter shelves
-    if(allowRot && elapsed() < TIME_LIMIT * 0.80){
-        g_msAlpha = 0.94;
-        consider(polish(beamMixedShelfPlan(allowRot, 14, 5, 5, TIME_LIMIT * 0.80)));
-        g_msAlpha = 1.0;
-    }
-    // Wide-and-shallow beam for broad exploration
-    if(allowRot && elapsed() < TIME_LIMIT * 0.85){
-        consider(polish(beamMixedShelfPlan(allowRot, 22, 8, 3, TIME_LIMIT * 0.85)));
     }
 #endif
 #ifdef DIAG
@@ -1345,31 +1316,35 @@ int main(){
     {
         vector<int> stripCands;
         for(const ItemType& it : g_items){
-            if(it.h >= 2 * it.w && it.w <= g_bin.W / 6) stripCands.push_back(it.w);
-            if((allowRot || true) && it.w >= 2 * it.h && it.h <= g_bin.W / 6) stripCands.push_back(it.h);
+            int stripW = 0;
+            if(it.h >= 2 * it.w) stripW = it.w;
+            if(allowRot && it.w >= 2 * it.h) stripW = it.h;
+            if(stripW > 0 && stripW <= g_bin.W / 4) stripCands.push_back(stripW);
         }
         sort(stripCands.begin(), stripCands.end());
         stripCands.erase(unique(stripCands.begin(), stripCands.end()), stripCands.end());
-        // Add standard fraction strips for more diverse split points
-        stripCands.push_back(g_bin.W / 3);
-        stripCands.push_back(g_bin.W / 2);
-        stripCands.push_back((2 * g_bin.W) / 3);
-        sort(stripCands.begin(), stripCands.end());
-        stripCands.erase(unique(stripCands.begin(), stripCands.end()), stripCands.end());
         {
-            int n = min((int)stripCands.size(), 3);
+            int n = min((int)stripCands.size(), 4);
             vector<int> sums;
             for(int i = 0; i < n; ++i)
                 for(int j = i; j < n; ++j) sums.push_back(stripCands[i] + stripCands[j]);
+            for(int i = 0; i < n; ++i)
+                for(int j = i; j < n; ++j)
+                    for(int k = j; k < n; ++k) sums.push_back(stripCands[i] + stripCands[j] + stripCands[k]);
             for(int s : sums) stripCands.push_back(s);
             sort(stripCands.begin(), stripCands.end());
             stripCands.erase(unique(stripCands.begin(), stripCands.end()), stripCands.end());
         }
-        if((int)stripCands.size() > (allowRot ? 8 : 10)) stripCands.resize(allowRot ? 8 : 10);
+        if((int)stripCands.size() > (allowRot ? 12 : 16)) stripCands.resize(allowRot ? 12 : 16);
+        // First try strips with right-side first (strip at right edge)
+        int W = g_bin.W;
+        // First try strips with right-side first (strip at right edge)
         for(int d : stripCands){
-            if(elapsed() > TIME_LIMIT * 0.45) break;
+            if(elapsed() > TIME_LIMIT * 0.55) break;
+            consider(polish(mixedShelfPlan(allowRot, 0, W - d, true))); // right strip
+            if(elapsed() > TIME_LIMIT * 0.55) break;
             consider(polish(mixedShelfPlan(allowRot, 0, d, false)));
-            if(elapsed() > TIME_LIMIT * 0.45) break;
+            if(elapsed() > TIME_LIMIT * 0.55) break;
             consider(polish(mixedShelfPlan(allowRot, 0, d, true)));
         }
     }
@@ -1386,23 +1361,23 @@ int main(){
                 int d[2] = {it.w, it.h};
                 for(int q = 0; q < 2; ++q) for(int k = 1; k <= 3; ++k){ add(d[q] * k); add(L - d[q] * k); }
             }
-            if((int)v.size() > 12) v.resize(12);
+            if((int)v.size() > 20) v.resize(20);
             return v;
         };
         vector<int> splits = cuts(g_bin.W);
         for(int sw : splits){
-            for(int mask = 0; mask < 8 && elapsed() < TIME_LIMIT * 0.56; ++mask)
+            for(int mask = 0; mask < 16 && elapsed() < TIME_LIMIT * 0.68; ++mask)
                 consider(polish(splitMixedPlan(allowRot, sw, mask, 0)));
-            if(elapsed() > TIME_LIMIT * 0.56) break;
+            if(elapsed() > TIME_LIMIT * 0.68) break;
         }
 #ifdef DIAG
         g_label="splity";
 #endif
         vector<int> ys = cuts(g_bin.H);
         for(int sh : ys){
-            for(int mask = 0; mask < 8 && elapsed() < TIME_LIMIT * 0.60; ++mask)
+            for(int mask = 0; mask < 16 && elapsed() < TIME_LIMIT * 0.72; ++mask)
                 consider(polish(splitMixedPlanY(allowRot, sh, mask, 0)));
-            if(elapsed() > TIME_LIMIT * 0.60) break;
+            if(elapsed() > TIME_LIMIT * 0.72) break;
         }
     }
 #ifdef DIAG
@@ -1410,7 +1385,7 @@ int main(){
 #endif
     {
         uint32_t s = 1;
-        while(elapsed() < TIME_LIMIT * 0.62 && s <= 30){
+        while(elapsed() < TIME_LIMIT * 0.68 && s <= 50){
             consider(polish(mixedShelfPlan(allowRot, s, 0, false)));
             if(elapsed() > TIME_LIMIT * 0.62) break;
             consider(polish(mixedShelfPlan(allowRot, s, 0, true)));
@@ -1450,51 +1425,51 @@ int main(){
             return v;
         };
         vector<int> splits2 = cuts(g_bin.W, false);
-        for(uint32_t seed = 1; seed <= 3 && elapsed() < TIME_LIMIT * 0.78; ++seed){
+        for(uint32_t seed = 1; seed <= 5 && elapsed() < TIME_LIMIT * 0.82; ++seed){
 #ifdef DIAG
             g_label="split2";
 #endif
             for(int sw : splits2){
-                for(int mask = 0; mask < 8 && elapsed() < TIME_LIMIT * 0.78; ++mask)
+                for(int mask = 0; mask < 8 && elapsed() < TIME_LIMIT * 0.82; ++mask)
                     consider(polish(splitMixedPlan(allowRot, sw, mask, seed)));
-                if(elapsed() > TIME_LIMIT * 0.78) break;
+                if(elapsed() > TIME_LIMIT * 0.82) break;
             }
 #ifdef DIAG
             g_label="split2y";
 #endif
             vector<int> ys2 = cuts(g_bin.H, true);
             for(int sh : ys2){
-                for(int mask = 0; mask < 8 && elapsed() < TIME_LIMIT * 0.78; ++mask)
+                for(int mask = 0; mask < 8 && elapsed() < TIME_LIMIT * 0.95; ++mask)
                     consider(polish(splitMixedPlanY(allowRot, sh, mask, seed)));
-                if(elapsed() > TIME_LIMIT * 0.78) break;
+                if(elapsed() > TIME_LIMIT * 0.95) break;
             }
         }
     }
 #ifdef DIAG
     g_label="choicemr";
 #endif
-    { int ms[8]={3,6,7,0,4,5,1,2}; for(int ii=0;ii<8&&elapsed()<TIME_LIMIT*0.86;++ii) consider(polish(choiceMaxRects(allowRot,ms[ii],TIME_LIMIT*0.88))); }
+    { int ms[12]={3,6,7,0,4,5,1,2,8,9,10,11}; for(int ii=0;ii<12&&elapsed()<TIME_LIMIT*0.88;++ii) consider(polish(choiceMaxRects(allowRot,ms[ii],TIME_LIMIT*0.90))); }
 #ifdef DIAG
     g_label="prune";
 #endif
-    if(elapsed() < TIME_LIMIT * 0.90){
+    if(elapsed() < TIME_LIMIT * 0.92){
         int cs[13] = {1,2,3,4,5,6,8,10,12,16,20,24,32};
         for(int c : cs){
-            if(elapsed() > TIME_LIMIT * 0.93) break;
+            if(elapsed() > TIME_LIMIT * 0.95) break;
             consider(pruneLow(best, c, ordDens, allowRot));
-            if(elapsed() > TIME_LIMIT * 0.93) break;
+            if(elapsed() > TIME_LIMIT * 0.95) break;
             consider(pruneLow(best, c, ordMinDim, allowRot));
-            if(elapsed() > TIME_LIMIT * 0.93) break;
+            if(elapsed() > TIME_LIMIT * 0.95) break;
             consider(pruneLow(best, c, ordVal, allowRot));
-            if(elapsed() > TIME_LIMIT * 0.93) break;
+            if(elapsed() > TIME_LIMIT * 0.95) break;
             consider(pruneLow(best, c, ordAreaAsc, allowRot));
         }
-        int ds[3]={4,8,12};
-        for(int c:ds)for(int side=0;side<4&&elapsed()<TIME_LIMIT*0.955;++side)consider(pruneSide(best,c,ordDens,allowRot,side));
-        if(!allowRot&&g_bin.H*5>g_bin.W*6)for(int ln=1;ln<=2;++ln)for(int side=0;side<2&&elapsed()<TIME_LIMIT*0.965;++side){
+        int ds[4]={4,8,12,16};
+        for(int c:ds)for(int side=0;side<4&&elapsed()<TIME_LIMIT*0.97;++side)consider(pruneSide(best,c,ordDens,allowRot,side));
+        if(!allowRot&&g_bin.H*5>g_bin.W*6)for(int ln=1;ln<=3;++ln)for(int side=0;side<3&&elapsed()<TIME_LIMIT*0.98;++side){
             consider(pruneLine(best,ln,ordDens,allowRot,side));
-            if(elapsed()<TIME_LIMIT*0.965) consider(pruneLine(best,ln,ordMinDim,allowRot,side));
-            if(elapsed()<TIME_LIMIT*0.965) consider(pruneLine(best,ln,ordVal,allowRot,side));
+            if(elapsed()<TIME_LIMIT*0.98) consider(pruneLine(best,ln,ordMinDim,allowRot,side));
+            if(elapsed()<TIME_LIMIT*0.98) consider(pruneLine(best,ln,ordVal,allowRot,side));
         }
     }
     #ifdef DIAG
@@ -1572,14 +1547,12 @@ int main(){
         bool tryBoth = allowRot ? ((seed & 1) == 0) : false;
         if(mode == 6) tryBoth = true; // force both
         consider(greedyFill(ord, allowRot, tryBoth));
-        // Also try MaxRects with this ordering for additional diversity
-        if(seed % 4 == 0) consider(greedyFillMaxRects(ord, allowRot, tryBoth));
         iterCost = elapsed() - t0;
         ++seed;
-        if(seed > 2000000) break;
+        if(seed > 5000000) break;
     }
 
-    if(elapsed() < TIME_LIMIT - 0.04) gapFill();
+    if(elapsed() < TIME_LIMIT - 0.02) gapFill();
     if(best.totalValue < 0){
         best.totalValue = 0;
         best.placements.clear();
