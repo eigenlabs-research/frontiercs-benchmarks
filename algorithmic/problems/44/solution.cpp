@@ -11,7 +11,7 @@
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 2400.0;
+static double TL_MS = 2380.0;
 static inline double el_ms(){ return chrono::duration<double,milli>(chrono::steady_clock::now()-T0).count(); }
 
 static int N;
@@ -115,6 +115,33 @@ int main(){
             used[best]=1; order[step]=best; cur=best;
         }
         for(int i=0;i<N;i++) pos[order[i]]=i;
+    }
+
+    // Alternative: Hilbert curve construction (try 4 orientations, keep best)
+    {   static const int HB=21; static const uint32_t HM=(1u<<HB)-1u;
+        double minx=X[0],maxx=X[0],miny=Y[0],maxy=Y[0];
+        for(int i=1;i<N;i++){ minx=min(minx,X[i]);maxx=max(maxx,X[i]);miny=min(miny,Y[i]);maxy=max(maxy,Y[i]); }
+        auto sc=[&](double v,double lo,double hi)->uint32_t{ return hi==lo?HM/2:(uint32_t)((__int128)(v-lo)*HM/(hi-lo)); };
+        function<uint64_t(uint32_t,uint32_t,int,int)> hrec=[&](uint32_t x,uint32_t y,int p,int r)->uint64_t{
+            if(p==0) return 0; uint32_t h=1u<<(p-1);
+            int s=(x<h)?((y<h)?0:3):((y<h)?1:2); s=(s+r)&3;
+            static const int rd[4]={3,0,0,1}; int nr=(r+rd[s])&3;
+            uint64_t sub=1ULL<<(2*p-2); uint64_t a=hrec(x&h-1,y&h-1,p-1,nr);
+            return (uint64_t)s*sub+((s==1||s==2)?a:(sub-a-1));
+        };
+        vector<uint32_t> sx(N),sy(N);
+        for(int i=0;i<N;i++){ sx[i]=sc(X[i],minx,maxx); sy[i]=sc(Y[i],miny,maxy); }
+        vector<pair<uint64_t,int>> hval(N);
+        double bestCost=1e300; vector<int> bestOrder(order);
+        const bool cfg[4][2]={{0,0},{1,0},{0,1},{1,1}};
+        for(int ci=0;ci<4;ci++){
+            for(int i=0;i<N;i++){ uint32_t x=sx[i],y=sy[i]; if(cfg[ci][0])x=HM-x; if(cfg[ci][1])y=HM-y; hval[i]={hrec(x,y,HB,0),i}; }
+            sort(hval.begin(),hval.end());
+            double hc=0; for(int i=0;i<N;i++){ int c=hval[i].second,d=hval[(i+1)%N].second; hc+=dist(c,d); }
+            if(hc<bestCost){ bestCost=hc; for(int i=0;i<N;i++) bestOrder[i]=hval[i].second; }
+        }
+        double nnCost=0; for(int i=0;i<N;i++){ int a=order[i],b=order[(i+1)%N]; nnCost+=dist(a,b); }
+        if(bestCost<nnCost){ for(int i=0;i<N;i++) order[i]=bestOrder[i], pos[bestOrder[i]]=i; }
     }
 
     auto nextIdx=[&](int i){ return i+1<N?i+1:0; };
