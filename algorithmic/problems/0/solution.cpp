@@ -295,7 +295,7 @@ static bool crownRepack(R& r, double deadlineMs) {
         while (H > 0 && grid[H - 1] == 0) H--;
         if (H <= 1) break;
         bool anyDepthOk = false;
-        for (int crownDepth = 1; crownDepth <= 3; crownDepth++) {
+        for (int crownDepth = 1; crownDepth <= 4; crownDepth++) {
             if (H - crownDepth < 1) break;
             vector<int> crown;
             for (int i = 0; i < (int)r.pl.size(); i++) {
@@ -835,17 +835,35 @@ static R bfSolve(int minW, int base, double deadline) {
     }
     long long bestA = LLONG_MAX; int bestW = 0, bestH = 0; vector<int> bK, bO, bX, bY, tK, tO, tX, tY;
     double lastPass = 0;
-    for (int d = 0; d <= 24; d++) {
-        for (int sgn = (d ? -1 : 1); sgn <= 1; sgn += 2) {
-            int W = base + sgn * d; if (W < minW || W > 63) continue;
-            for (int tie = 1; tie >= 0; tie--) {   // try both tie-break directions, keep best area
-                if (elapsed_ms() + lastPass * 1.3 > deadline) goto DONE;
-                vector<int> avail = kcnt; double t0 = elapsed_ms();
-                int H = bf_pass(W, repr, idx, avail, n, tK, tO, tX, tY, tie);
-                lastPass = elapsed_ms() - t0;
-                if (H > 0) { long long A = (long long)W * H; if (A < bestA) { bestA = A; bestW = W; bestH = H; swap(bK, tK); swap(bO, tO); swap(bX, tX); swap(bY, tY); } }
-            }
+    auto tryBF = [&](int W, int tie) {
+        if (W < minW || W > 63) return false;
+        if (elapsed_ms() + lastPass * 1.22 > deadline) return false;
+        vector<int> avail = kcnt; double t0 = elapsed_ms();
+        int H = bf_pass(W, repr, idx, avail, n, tK, tO, tX, tY, tie);
+        lastPass = elapsed_ms() - t0;
+        if (H > 0) {
+            long long A = (long long)W * H;
+            if (A < bestA) { bestA = A; bestW = W; bestH = H; swap(bK, tK); swap(bO, tO); swap(bX, tX); swap(bY, tY); }
+            return true;
         }
+        return true; // attempted
+    };
+    for (int d = 0; d <= 26; d++) {
+        for (int sgn = (d ? -1 : 1); sgn <= 1; sgn += 2) {
+            int W = base + sgn * d;
+            for (int tie = 1; tie >= 0; tie--) if (!tryBF(W, tie) && elapsed_ms() + lastPass * 1.22 > deadline) goto DONE;
+        }
+    }
+    // residual budget: re-probe around champion and a few sqrt candidates
+    if (bestW > 0) {
+        for (int d = 0; d <= 6; d++)
+            for (int sgn = (d ? -1 : 1); sgn <= 1; sgn += 2)
+                for (int tie = 1; tie >= 0; tie--)
+                    if (!tryBF(bestW + sgn * d, tie) && elapsed_ms() + lastPass * 1.2 > deadline) goto DONE;
+        int mid = max(minW, min(63, (int)llround(sqrt(max(1.0, (double)S * 0.9)))));
+        for (int d = -2; d <= 2; d++)
+            for (int tie = 0; tie <= 1; tie++)
+                if (!tryBF(mid + d, tie) && elapsed_ms() + lastPass * 1.2 > deadline) goto DONE;
     }
     DONE:;
     if (getenv("PP_DEBUG")) fprintf(stderr, "bf: bestW=%d base=%d H=%d fill=%.4f K=%d idx=%zu lastPass=%.0f t=%.0f\n", bestW, base, bestH, (double)S/((double)bestW*bestH), K, idx.size(), lastPass, elapsed_ms());
@@ -863,9 +881,9 @@ int main() {
     int ffEnv = envInt("PP_FASTFIT", -1);    // -1 => auto-gate by S below; 0/1 => explicit override
     int BIGBLF = envInt("PP_BIGBLF", 0);     // 1: big cases skip champion pack, BLF-only
     int SMALLBLF = envInt("PP_SMALLBLF", 0); // 1: small cases skip champion sweep
-    int JUMP = envInt("PP_JUMP", 15);        // % chance of W jump in restarts
+    int JUMP = envInt("PP_JUMP", 26);        // % chance of W jump in restarts
     int BLF2 = envInt("PP_BLF2", 1);         // 1: restarts use blf2 (hole-aware window best-fit)
-    int BLF2SWEEP = envInt("PP_BLF2SWEEP", 0); // 1: small-case sweep uses blf2 instead of skyline
+    int BLF2SWEEP = envInt("PP_BLF2SWEEP", -1); // -1 auto by S; 1: sweep uses blf2
     int BLF2ORD = envInt("PP_BLF2ORD", 1);   // 0: big-first order, 1: champion order
     int B3 = envInt("PP_B3", 1);             // 1: use cached blf3 instead of blf2
     int PHASE2 = envInt("PP_PHASE2", 1);     // 1: blf2 pass over best sweep Ws
@@ -894,8 +912,9 @@ int main() {
         S += k;
     }
     gFASTFIT = (ffEnv < 0) ? (S >= 12000 ? 1 : 0) : ffEnv;
-    if (P2FRAC <= 0.0) P2FRAC = (S < 6000) ? 0.25 : 0.55;
-    if (P2ENDF <= 0.0) P2ENDF = (S < 6000) ? 0.35 : 0.70;
+    if (BLF2SWEEP < 0) BLF2SWEEP = (S > 0 && S < 3500) ? 1 : 0;
+    if (P2FRAC <= 0.0) P2FRAC = (S < 6000) ? 0.30 : 0.55;
+    if (P2ENDF <= 0.0) P2ENDF = (S < 6000) ? 0.55 : 0.70;
     for (int i = 0; i < n; i++) {
         auto& p = ps[i];
         unordered_set<string> seen; seen.reserve(32);
@@ -956,8 +975,8 @@ int main() {
 
     int minW = 0; for (auto& p : ps) minW = max(minW, p.minW);
     double factor;
-    if (S < 1000) factor = 0.4;
-    else if (S < 3000) factor = 0.5;
+    if (S < 1000) factor = 0.36;
+    else if (S < 3000) factor = 0.34;
     else if (S < 10000) factor = 0.27;
     else if (S < 30000) factor = 0.08;
     else if (S < 50000) factor = 0.028;  // measured optimum W~33 at S~38k (was 0.01 -> W~19)
@@ -989,9 +1008,9 @@ int main() {
     };
     R bestR;
     int bfEnv = envInt("PP_BF", -1);
-    long long BF_N = envInt("PP_BFN", 550);
+    long long BF_N = envInt("PP_BFN", 700);
     bool useBF = (bfEnv < 0) ? (n >= BF_N && base <= 63 && minW <= 63) : (bfEnv > 0);
-    if (useBF) { bestR = bfSolve(minW, min(base, 63), TL_MS - 120.0); }
+    if (useBF) { bestR = bfSolve(minW, min(base, 63), TL_MS - 80.0); }
     if (!bestR.ok) {
     double tFB0 = elapsed_ms();
     bestR = pack(base, baseOrder, rng, false, 1, false, 0.0, -1.0);
@@ -1125,7 +1144,7 @@ int main() {
             if (used + avg2 * 1.2 > p2Stop) break;
             int W = p2W[i];
             double t1 = elapsed_ms();
-            static int B3WINDIV = envInt("PP_B3WINDIV", 4);
+            static int B3WINDIV = envInt("PP_B3WINDIV", 2);
             int b3win = max(1, B3WINDIV > 0 ? n / B3WINDIV : n);
             R r = B3 ? pack_blf3(W, ordB2, b3win, SEARCH_END, rng, false)
                      : pack_blf2(W, ordB2, b3win, SEARCH_END, rng, false);
@@ -1160,9 +1179,9 @@ int main() {
             if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
                 int W;
                 {
-                    static int dwBase = envInt("PP_CAPDW", 2);
-                    static int dwWide = envInt("PP_CAPDWW", 6);
-                    static int wideP = envInt("PP_CAPWIDEP", 25);
+                    static int dwBase = envInt("PP_CAPDW", 3);
+                    static int dwWide = envInt("PP_CAPDWW", 8);
+                    static int wideP = envInt("PP_CAPWIDEP", 32);
                     int dw = ((int)(rng.nxt() % 100) < wideP) ? dwWide : dwBase;
                     W = bestR.packW + (dw > 0 ? (rng.rint(2 * dw + 1) - dw) : 0);
                     if (W < minW) W = minW;
@@ -1240,7 +1259,7 @@ int main() {
     }
     } // end champion search block (skipped when best-fit produced the result)
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_search_done=%.1f\n", elapsed_ms());
-    if (!useBF) crownRepack(bestR, TL_MS + 10.0);
+    crownRepack(bestR, TL_MS + 10.0);
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_crown_done=%.1f\n", elapsed_ms());
 
     int maxX = -1, maxY = -1;
