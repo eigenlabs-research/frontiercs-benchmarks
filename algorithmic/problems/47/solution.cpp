@@ -1434,7 +1434,7 @@ int main(){
         }
         int ds[3]={4,8,12};
         for(int c:ds)for(int side=0;side<4&&elapsed()<TIME_LIMIT*0.955;++side)consider(pruneSide(best,c,ordDens,allowRot,side));
-        if(!allowRot&&g_bin.H*5>g_bin.W*6)for(int ln=1;ln<=2;++ln)for(int side=0;side<2&&elapsed()<TIME_LIMIT*0.965;++side){
+        if(!allowRot&&g_bin.H*4>g_bin.W*5)for(int ln=1;ln<=2;++ln)for(int side=0;side<2&&elapsed()<TIME_LIMIT*0.965;++side){
             consider(pruneLine(best,ln,ordDens,allowRot,side));
             if(elapsed()<TIME_LIMIT*0.965) consider(pruneLine(best,ln,ordMinDim,allowRot,side));
             if(elapsed()<TIME_LIMIT*0.965) consider(pruneLine(best,ln,ordVal,allowRot,side));
