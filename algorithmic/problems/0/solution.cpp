@@ -1184,6 +1184,20 @@ int main() {
             }
         }
     }
+    // late restart: try completely shuffled orderings at best width (fresh diversification)
+    if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30) {
+        int lateW = bestR.packW;
+        int lateHcap = max(1, (int)(bestR.A / lateW) - 1);
+        if (lateHcap >= minW) {
+            for (int attempt = 0; attempt < 4 && elapsed_ms() < SOFT_END - 10; attempt++) {
+                vector<int> randOrd = idx;
+                int ns = max(1, n / 3);
+                for (int s = 0; s < ns; s++) { int a = rng.rint(n), b = rng.rint(n); swap(randOrd[a], randOrd[b]); }
+                R r = pack_capped(lateW, lateHcap, randOrd, max(1, n / 4), SEARCH_END, rng);
+                if (r.ok) { crownRepack(r, SEARCH_END); if (better(r, bestR)) bestR = move(r); }
+            }
+        }
+    }
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_search_done=%.1f\n", elapsed_ms());
     // final polish on the global best
     crownRepack(bestR, TL_MS + 10.0);
