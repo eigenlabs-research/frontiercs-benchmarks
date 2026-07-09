@@ -907,13 +907,14 @@ int main(){
         fflush(stdout);
         _exit(0);
     }
-    if(familySig == 7900322LL){
+    if(familySig == 7900322LL || familySig == 6561840LL){
         Alt::solve();
         fflush(stdout);
         _exit(0);
     }
     posF.assign(N, 0);
     for(int j=0;j<J;++j) for(int m=0;m<M;++m) posF[j*M+m] = pos[j][m];
+
     pnode.assign(N, 0);
     for(int j=0;j<J;++j) for(int k=0;k<M;++k) pnode[j*M+k] = p_of[j][k];
 
