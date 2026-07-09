@@ -307,7 +307,7 @@ return bestRr;
 }
 static double tryLattice(CntFn cnt, GenFn gen, int n, double& bestR,
 vector<array<double,3>>& bestP, double tcap){
-static const double offs[][3]={{-1,-1,-1},{0,0,0},{-1,-1,0},{-1,0,0},{0.25,0.25,0.25},{0.125,0.125,0.125},{0,0.25,0.5},{0.5,0.5,0},{0.375,0.375,0.375}};int nof=9;
+static const double offs[][3]={{0,0,0},{0.25,0.25,0.25},{0.125,0.125,0.125},{0,0.25,0.5},{0.5,0.5,0},{0.375,0.375,0.375},{0.2,0.3,0.4},{0.4,0.2,0.3},{0.3,0.4,0.2},{0.166,0.166,0.166},{0.083,0.167,0.25},{0.5,0.25,0.125},{0.125,0.25,0.5},{0.05,0.15,0.25},{0.33,0.33,0.33}};int nof=15;
 for(int oi=0; oi<nof && elapsed()<tcap; ++oi){
 const double* o = offs[oi];
 vector<array<double,3>> p;
@@ -426,19 +426,26 @@ return p;
 static void relaxOptimize(vector<array<double,3>>& best, double& bestR){
 int n=(int)best.size();
 if(n<2) return;
-if(n<=350){
-optimize(best, bestR, 0.28*TIME_LIMIT, 0);
+optimize(best, bestR, 0.25*TIME_LIMIT, 0);
 int restarts;
-if(n<=64)       restarts = 12;
-else if(n<=150) restarts = 8;
-else            restarts = 5;
-double reserve = 0.18*TIME_LIMIT;
+if(n<=64)       restarts = 16;
+else if(n<=100) restarts = 14;
+else if(n<=150) restarts = 12;
+else if(n<=250) restarts = 10;
+else if(n<=350) restarts = 8;
+else            restarts = 6;
+double reserve = 0.15*TIME_LIMIT;
 double slice = (TIME_LIMIT - reserve - elapsed()) / restarts;
 if(slice > 0.01){
 for(int rs=0; rs<restarts && elapsed()<TIME_LIMIT-reserve; rs++){
 vector<array<double,3>> cand;
-if(rs&1){ cand=best; jitter(cand, (0.6+0.1*rs)*bestR); }
-else cand = randomConfig(n);
+if(rs&1){ 
+    cand=best; 
+    jitter(cand, (0.5+0.05*rs)*bestR); 
+}
+else {
+    cand = randomConfig(n);
+}
 double candR = geomFast(cand, 0.4/pow((double)n,1.0/3.0));
 double dl = min(TIME_LIMIT-reserve, elapsed()+slice);
 optimize(cand, candR, dl, 1);
@@ -446,9 +453,6 @@ if(candR > bestR){ bestR=candR; best=cand; }
 }
 }
 optimize(best, bestR, TIME_LIMIT, 0);
-} else {
-optimize(best, bestR, TIME_LIMIT, 0);
-}
 double r=expandFill(best, bestR);
 if(r>bestR) bestR=r;
 }
