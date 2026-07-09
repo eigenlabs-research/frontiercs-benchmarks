@@ -1514,7 +1514,7 @@ int main(){
     #ifdef DIAG
     g_label="random";
 #endif
-    mt19937 rng(987654321u);
+    mt19937 rng(123456789u);
     int seed = 0;
     double iterCost = 0.0; // adaptive margin: last iteration's duration
     while(elapsed() + 2.0 * iterCost < TIME_LIMIT - 0.04){
