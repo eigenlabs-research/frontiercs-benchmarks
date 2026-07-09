@@ -89,7 +89,7 @@ static long long evalSeq(const vector<vector<int>>& seq, bool fillCrit = false){
 }
 
 // Giffler-Thompson dispatch with a priority rule (active schedule generation).
-// mode: 0=MWR (most work remaining), 1=LPT (current op), 2=SPT, 3=random.
+// mode: 0=MWR, 1=LPT, 2=SPT, 3=random, 4=PMWR (wrem/(nextP+1)), 5=LWR, 6=ERD.
 static vector<vector<int>> seedGT(int mode, mt19937& rng){
     vector<int> jp(J, 0);
     vector<long long> jr(J, 0), mf(M, 0), wrem(J, 0);
@@ -123,6 +123,9 @@ static vector<vector<int>> seedGT(int mode, mt19937& rng){
                 if(mode==0) pr = wrem[j];
                 else if(mode==1) pr = p_of[j][k];
                 else if(mode==2) pr = -p_of[j][k];
+                else if(mode==4) pr = wrem[j] * 1000LL / (p_of[j][k] + 1); // PMWR
+                else if(mode==5) pr = -wrem[j];                            // LWR
+                else if(mode==6) pr = -s;                                  // ERD
                 else pr = (long long)rng();
                 if(cj==-1 || pr > cp){ cp = pr; cj = j; }
             }
@@ -345,7 +348,7 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(995); // increased budget for more iterations with longer tenure
+    const auto budget = chrono::milliseconds(860);
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
@@ -399,9 +402,15 @@ int main(){
 
     mt19937 rng(777u);
     trySeed(seedGT(0, rng)); // MWR
-    trySeed(seedGT(1, rng)); // LPT
+    trySeed(seedGT(4, rng)); // PMWR
+    if(chrono::steady_clock::now() - T0 < budget)
+        trySeed(seedGT(1, rng)); // LPT
     if(chrono::steady_clock::now() - T0 < budget)
         trySeed(seedGT(2, rng)); // SPT
+    if(chrono::steady_clock::now() - T0 < budget)
+        trySeed(seedGT(5, rng)); // LWR
+    if(chrono::steady_clock::now() - T0 < budget)
+        trySeed(seedGT(6, rng)); // ERD
 
     // Trivial lower bound: max(machine load, job length). If reached, we are
     // provably optimal and can stop immediately.
