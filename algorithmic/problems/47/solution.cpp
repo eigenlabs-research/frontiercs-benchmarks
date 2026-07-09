@@ -1392,23 +1392,23 @@ int main(){
         double oldAlphaSplit2 = g_msAlpha;
         if(!allowRot && g_bin.H * 5 > g_bin.W * 6) g_msAlpha = 0.94;
         vector<int> splits2 = cuts(g_bin.W, false);
-        for(uint32_t seed = 1; seed <= 3 && elapsed() < TIME_LIMIT * 0.78; ++seed){
+        for(uint32_t seed = 1; seed <= 3 && elapsed() < TIME_LIMIT * 0.84; ++seed){
 #ifdef DIAG
             g_label="split2";
 #endif
             for(int sw : splits2){
-                for(int mask = 0; mask < 8 && elapsed() < TIME_LIMIT * 0.78; ++mask)
+                for(int mask = 0; mask < 8 && elapsed() < TIME_LIMIT * 0.84; ++mask)
                     consider(polish(splitMixedPlan(allowRot, sw, mask, seed)));
-                if(elapsed() > TIME_LIMIT * 0.78) break;
+                if(elapsed() > TIME_LIMIT * 0.84) break;
             }
 #ifdef DIAG
             g_label="split2y";
 #endif
             vector<int> ys2 = cuts(g_bin.H, true);
             for(int sh : ys2){
-                for(int mask = 0; mask < 8 && elapsed() < TIME_LIMIT * 0.78; ++mask)
+                for(int mask = 0; mask < 8 && elapsed() < TIME_LIMIT * 0.84; ++mask)
                     consider(polish(splitMixedPlanY(allowRot, sh, mask, seed)));
-                if(elapsed() > TIME_LIMIT * 0.78) break;
+                if(elapsed() > TIME_LIMIT * 0.84) break;
             }
         }
         g_msAlpha = oldAlphaSplit2;
