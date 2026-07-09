@@ -440,10 +440,43 @@ int main(){
         const int TENURE_SPAN = max(4, J/TEN_SPAN_DIV);
         bool timeUp = false;
 
+        // Stagnation-reactive oscillating tenure band: exploit with a short
+        // tenure while global bests keep arriving; widen toward the long
+        // regime as time since the last improvement grows (anti-cycling),
+        // snapping back on any new best.
+#ifndef DYN_S1
+#define DYN_S1 30
+#endif
+#ifndef DYN_S2
+#define DYN_S2 120
+#endif
+#ifndef DYN_ESC
+#define DYN_ESC 250
+#endif
+        const int spanShort = max(4, J/3);
+        const int spanLong  = TENURE_SPAN;
+        auto lastImpT = chrono::steady_clock::now();
+        auto dynTen = [&](chrono::steady_clock::time_point nowT)->int{
+            long long stag = chrono::duration_cast<chrono::milliseconds>(nowT - lastImpT).count();
+            int tmin, span;
+            if(stag <= DYN_S1){ tmin = 8; span = spanShort; }
+            else if(stag >= DYN_S2){
+                tmin = TENURE_MIN + (int)min(6LL, (stag - DYN_S2)/DYN_ESC);
+                span = spanLong;
+            } else {
+                int f = (int)((stag - DYN_S1)*100/(DYN_S2 - DYN_S1)); // 0..100
+                tmin = 8 + (TENURE_MIN - 8)*f/100;
+                span = spanShort + (spanLong - spanShort)*f/100;
+            }
+            return tmin + (int)(rng() % (unsigned)span);
+        };
+
 #ifdef DIAG
         int iterLastImp = 0;
 #endif
-        while(!timeUp && chrono::steady_clock::now() < T_end){
+        while(!timeUp){
+            auto nowT = chrono::steady_clock::now();
+            if(nowT >= T_end) break;
             iter++;
             if((iter & 16383) == 0){ // periodic exact refresh (drift insurance)
                 long long fc = evalSeq(cur, true);
@@ -491,7 +524,7 @@ int main(){
                     applyMove(cur, mv);
                     long long nc = evalSeq(cur, true);
                     if(nc >= 0){
-                        int tenure = TENURE_MIN + (int)(rng() % TENURE_SPAN);
+                        int tenure = dynTen(nowT);
                         for(size_t id : gpend) tabuTB[id] = iter + tenure;
                         curC = nc; applied = true;
                     } else { undoMove(cur, mv); evalSeq(cur, true); }
@@ -537,7 +570,7 @@ int main(){
                         evalSeq(cur, true); // restore dist/tail/crit for cur
                         continue;
                     }
-                    int tenure = TENURE_MIN + (int)(rng() % TENURE_SPAN);
+                    int tenure = dynTen(nowT);
                     for(size_t id : gpend) tabuTB[id] = iter + tenure;
                     curC = nc;
                     applied = true;
@@ -553,6 +586,7 @@ int main(){
                 curC = exact;
                 if(exact >= 0 && exact < bestC){
                     best = cur; bestC = exact; sinceImp = 0;
+                    lastImpT = chrono::steady_clock::now();
 #ifdef DIAG
                     iterLastImp = iter;
 #endif
