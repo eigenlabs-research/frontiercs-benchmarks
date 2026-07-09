@@ -77,14 +77,14 @@ static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0,
         int limCnt = max(1, dynLIM);
         int lim = min(nm, t + limCnt);
         long long bestg = LLONG_MAX; int bti = -1, bx = 0, by = 0, bl = INT_MAX;
-        long long bds = LLONG_MAX, bdr = LLONG_MAX; int by0 = INT_MAX, bx0 = INT_MAX;
+        long long bds = LLONG_MAX, bdr = LLONG_MAX, bds_extra = LLONG_MAX, best_bds_extra = LLONG_MAX; int by0 = INT_MAX, bx0 = INT_MAX;
         int bestpos = t, bestid = -1;
         for (int pos = t; pos < lim; pos++) {
             if (!panic && deadlineMs > 0 && ((++checkCnt & 7) == 0) && elapsed_ms() > deadlineMs) return R{};
             int id = o[pos];
             auto& p = ps[id];
             long long bestg2 = LLONG_MAX; int bti2 = -1, bx2 = 0, by2 = 0, bl2 = INT_MAX;
-            long long bds2 = LLONG_MAX, bdr2 = LLONG_MAX; int by02 = INT_MAX, bx02 = INT_MAX;
+            long long bds2 = LLONG_MAX, bdr2 = LLONG_MAX, bds_extra = LLONG_MAX; int by02 = INT_MAX, bx02 = INT_MAX;
             for (int ti = 0; ti < (int)p.t.size(); ti++) {
                 auto& tsh = p.t[ti];
                 if (tsh.w > W) continue;
@@ -95,14 +95,23 @@ static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0,
                         if (tsh.lo[j] != INT_MAX) { int v = h[x0 + j] - tsh.lo[j] + 1; if (v > y0) y0 = v; }
                     }
                     int nhbuf[32];
-                    int l = -1; long long dsum = 0;
+                    int l = -1; long long dsum = 0, waste = 0;
                     for (int j = 0; j < tsh.w; j++) {
                         int nh = h[x0 + j];
                         if (tsh.hi[j] != INT_MIN) { int cand = y0 + tsh.hi[j]; if (nh < cand) nh = cand; }
                         nhbuf[j] = nh;
                         if (nh > l) l = nh;
                     }
-                    for (int j = 0; j < tsh.w; j++) { int inc = nhbuf[j] - h[x0 + j]; if (inc > 0) dsum += inc; }
+                    for (int j = 0; j < tsh.w; j++) {
+                        int inc = nhbuf[j] - h[x0 + j]; if (inc > 0) dsum += inc;
+                        // waste = gap between new skyline and piece's top surface in each column.
+                        // This directly measures dead space created above the piece — a piece that
+                        // fills the available vertical space well has low waste.
+                        if (tsh.hi[j] != INT_MIN) {
+                            int gap = nhbuf[j] - (y0 + tsh.hi[j]);
+                            if (gap > 0) waste += gap;
+                        }
+                    }
                     long long dr = 0;
                     if (x0 > 0) {
                         long long old = llabs((long long)h[x0] - h[x0 - 1]);
@@ -123,22 +132,25 @@ static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0,
                     bool take = false;
                     if (gg < bestg2) take = true;
                     else if (gg == bestg2) {
-                        if (dsum < bds2) take = true;
-                        else if (dsum == bds2) {
-                            if (l < bl2) take = true;
-                            else if (l == bl2) {
-                                if (dr < bdr2) take = true;
-                                else if (dr == bdr2) {
-                                    if (y0 < by02) take = true;
-                                    else if (y0 == by02) {
-                                        if (x0 < bx02) take = true;
-                                        else if (x0 == bx02 && randtie && rng.coin()) take = true;
+                        if (waste < bds2) take = true;
+                        else if (waste == bds2) {
+                            if (dsum < bds_extra) take = true;
+                            else if (dsum == bds_extra) {
+                                if (l < bl2) take = true;
+                                else if (l == bl2) {
+                                    if (dr < bdr2) take = true;
+                                    else if (dr == bdr2) {
+                                        if (y0 < by02) take = true;
+                                        else if (y0 == by02) {
+                                            if (x0 < bx02) take = true;
+                                            else if (x0 == bx02 && randtie && rng.coin()) take = true;
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                    if (take) { bestg2 = gg; bti2 = ti; bx2 = x0; by2 = y0; bl2 = l; bds2 = dsum; bdr2 = dr; by02 = y0; bx02 = x0; }
+                    if (take) { bestg2 = gg; bti2 = ti; bx2 = x0; by2 = y0; bl2 = l; bds2 = waste; bds_extra = dsum; bdr2 = dr; by02 = y0; bx02 = x0; }
                 }
             }
             if (bti2 == -1) continue;
@@ -147,20 +159,23 @@ static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0,
             else if (bestg2 == bestg) {
                 if (bds2 < bds) take = true;
                 else if (bds2 == bds) {
-                    if (bl2 < bl) take = true;
-                    else if (bl2 == bl) {
-                        if (bdr2 < bdr) take = true;
-                        else if (bdr2 == bdr) {
-                            if (by02 < by0) take = true;
-                            else if (by02 == by0) {
-                                if (bx02 < bx0) take = true;
-                                else if (bx02 == bx0 && randtie && rng.coin()) take = true;
+                    if (bds_extra < best_bds_extra) take = true;
+                    else if (bds_extra == best_bds_extra) {
+                        if (bl2 < bl) take = true;
+                        else if (bl2 == bl) {
+                            if (bdr2 < bdr) take = true;
+                            else if (bdr2 == bdr) {
+                                if (by02 < by0) take = true;
+                                else if (by02 == by0) {
+                                    if (bx02 < bx0) take = true;
+                                    else if (bx02 == bx0 && randtie && rng.coin()) take = true;
+                                }
                             }
                         }
                     }
                 }
             }
-            if (take) { bestg = bestg2; bti = bti2; bx = bx2; by = by2; bl = bl2; bds = bds2; bdr = bdr2; by0 = by02; bx0 = bx02; bestpos = pos; bestid = id; }
+            if (take) { bestg = bestg2; bti = bti2; bx = bx2; by = by2; bl = bl2; bds = bds2; best_bds_extra = bds_extra; bdr = bdr2; by0 = by02; bx0 = bx02; bestpos = pos; bestid = id; }
         }
         auto adapt = [&]() {
             if (adaptive && stepCnt == 5) {
