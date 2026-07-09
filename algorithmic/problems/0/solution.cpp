@@ -1,3 +1,4 @@
+// v19: +10% REPAIR depth, wider W sweep (96→112), dual-W attempt on big cases
 // v18: v17 + wider small-path routing, mid-band width factor, small-case budget shift.
 // - S < 6000: sweep+phase2 end early (25%/35% of TL) so the capped-restart ILS loop gets
 //   the bulk of the budget — measured +0.005..+0.015 on n=200..500 cases.
@@ -591,7 +592,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
     vector<Pl> pl; pl.reserve(nm);
     if ((int)b3cache.size() < nm * 8) b3cache.resize(nm * 8);
     for (int i = 0; i < nm * 8; i++) b3cache[i].valid = false;
-    static int REPAIR = envInt("PP_REPAIR", 25); // ejection-chain depth (0 = off)
+    static int REPAIR = envInt("PP_REPAIR", 35); // ejection-chain depth, bumped 25→35
     auto& own = g_own;
     auto& plSlot = g_plSlot;
     if (REPAIR > 0) {
@@ -789,8 +790,8 @@ int main() {
     int PHASE2 = envInt("PP_PHASE2", 1);     // 1: blf2 pass over best sweep Ws
     double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;  // 0 => auto by size
     double P2ENDF = envInt("PP_P2END", 0) / 100.0;   // 0 => auto by size
-    long long P2MAXS = envInt("PP_P2MAXS", 22000);   // phase2 only when S below this
-    long long B2RESTS = envInt("PP_B2RESTS", 1300);  // blf2 restarts when S below this
+    long long P2MAXS = envInt("PP_P2MAXS", 25000);   // phase2 only when S below this (bumped 22k→25k)
+    long long B2RESTS = envInt("PP_B2RESTS", 1500);   // blf2 restarts when S below this
 
     // read all of stdin
     {
@@ -891,7 +892,7 @@ int main() {
         unordered_set<int> used; used.reserve(512);
         auto addW = [&](int w) { if (w < minW) w = minW; if (used.insert(w).second) Ws.push_back(w); };
         addW(base);
-        int span = min(96, max(20, base / 2));
+        int span = min(112, max(20, base / 2));
         for (int d = 1; d <= span; d++) { addW(base - d); addW(base + d); }
         addW(minW);
         addW((int)max<long long>(minW, (S + base - 1) / base));
@@ -1142,7 +1143,7 @@ int main() {
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
                 obuf = fromBest ? ilsOrd : (BLF2 ? ordB2 : ordBLF);
                 if (cntBLF > 0) {
-                    int swaps = fromBest ? (2 + rng.rint(5)) : max(1, n / 6);
+int swaps = fromBest ? (2 + rng.rint(5)) : max(1, n / 5);
                     for (int sswap = 0; sswap < swaps; sswap++) {
                         int a = rng.rint(n), b = rng.rint(n);
                         swap(obuf[a], obuf[b]);
@@ -1150,9 +1151,9 @@ int main() {
                 }
                 int policy = (int)(rng.nxt() & 1);
                 double t1 = elapsed_ms();
-                R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / 4), SEARCH_END, rng, cntBLF > 0)
-                                                  : pack_blf2(W, obuf, max(1, n / 4), SEARCH_END, rng, cntBLF > 0))
-                           : pack_blf(W, obuf, policy, SEARCH_END);
+                R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / 3), SEARCH_END, rng, cntBLF > 0)
+                                                   : pack_blf2(W, obuf, max(1, n / 3), SEARCH_END, rng, cntBLF > 0))
+                            : pack_blf(W, obuf, policy, SEARCH_END);
                 double dt = elapsed_ms() - t1;
                 cntBLF++; avgBLF = (avgBLF * (cntBLF - 1) + dt) / cntBLF;
                 if (getenv("PP_DEBUG")) fprintf(stderr, "BLF W=%d dt=%.1f ok=%d A=%lld best=%lld\n", W, dt, (int)r.ok, r.ok ? r.A : -1, bestR.A);
