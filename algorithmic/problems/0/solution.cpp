@@ -1,3 +1,6 @@
+// v18.14: v18.13 + ultra-aggressive ILS for S<3k (where we still trail champ)
+// v18.13 scored 0.926205 (delta -0.000076): S>=25k +0.015 mean (fixed), S<2k -0.00079.
+// Push tiny instances harder; leave large-case mild path unchanged.
 // v18: v17 + wider small-path routing, mid-band width factor, small-case budget shift.
 // - S < 6000: sweep+phase2 end early (25%/35% of TL) so the capped-restart ILS loop gets
 //   the bulk of the budget — measured +0.005..+0.015 on n=200..500 cases.
@@ -302,111 +305,92 @@ static bool crownRepack(R& r, double deadlineMs) {
         for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] |= ((uint64_t)t.rmask[dy]) << p.x;
     }
     bool improvedAny = false;
-    // Save original placement so we can revert if the new packing has a larger area.
-    long long origA = r.A;
-    int origW = r.W, origH = r.H;
-    vector<Pl> origPl = r.pl;
     int rounds = 0;
     while (rounds++ < 64) {
         if (deadlineMs > 0 && elapsed_ms() > deadlineMs) break;
         int H = (int)grid.size();
         while (H > 0 && grid[H - 1] == 0) H--;
         if (H <= 1) break;
-        // Try increasing crown depths: first try just the top row (fast), then 2 rows, then 3.
-        // Deeper crowns remove more pieces, creating more empty space and increasing the chance
-        // that all removed pieces can be reinserted at a lower y-position.
-        bool anyDepthOk = false;
-        for (int crownDepth = 1; crownDepth <= 3; crownDepth++) {
-            if (H - crownDepth < 1) break;
-            // crown: placements with any cell in the top `crownDepth` rows
-            vector<int> crown;
-            for (int i = 0; i < (int)r.pl.size(); i++) {
-                auto& p = r.pl[i];
-                auto& t = ps[p.idx].t[p.ti];
-                if (p.y + t.h > H - crownDepth) crown.push_back(i);
-            }
-            if (crown.empty()) { anyDepthOk = true; break; } // nothing to relocate, H is fine
-            // remove crown from grid
-            for (int ci : crown) {
-                auto& p = r.pl[ci];
-                auto& t = ps[p.idx].t[p.ti];
-                for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] &= ~(((uint64_t)t.rmask[dy]) << p.x);
-            }
-            // biggest first
-            sort(crown.begin(), crown.end(), [&](int a, int b) { return ps[r.pl[a].idx].k > ps[r.pl[b].idx].k; });
-            int targetH = H - crownDepth;
-            vector<array<int,3>> newPos(crown.size()); // ti, x, y
-            bool ok = true;
-            for (size_t c = 0; c < crown.size() && ok; c++) {
-                auto& p = r.pl[crown[c]];
-                auto& piece = ps[p.idx];
-                int bTi = -1, bX = 0, bY = INT_MAX;
-                for (int ti = 0; ti < (int)piece.t.size(); ti++) {
-                    auto& t = piece.t[ti];
-                    if (t.w > W || t.h > targetH) continue;
-                    uint64_t limMask = (W - t.w + 1 >= 64) ? ~0ULL : ((1ULL << (W - t.w + 1)) - 1);
-                    int ymax = targetH - t.h;
-                    for (int y = 0; y <= ymax; y++) {
-                        if (bY <= y) break;
-                        uint64_t conflict = 0;
-                        for (int dy = 0; dy < t.h; dy++) {
-                            uint64_t g = grid[y + dy];
-                            if (!g) continue;
-                            unsigned m = t.rmask[dy];
-                            while (m) { int b = __builtin_ctz(m); conflict |= (g >> b); m &= m - 1; }
-                        }
-                        uint64_t allowed = ~conflict & limMask;
-                        if (allowed) {
-                            int x = (int)__builtin_ctzll(allowed);
-                            if (y < bY || (y == bY && x < bX)) { bY = y; bX = x; bTi = ti; }
-                            break;
-                        }
-                    }
-                }
-                if (bTi < 0) { ok = false; break; }
-                auto& t = piece.t[bTi];
-                for (int dy = 0; dy < t.h; dy++) grid[bY + dy] |= ((uint64_t)t.rmask[dy]) << bX;
-                newPos[c] = {bTi, bX, bY};
-            }
-            if (ok) {
-                // Check that the new packing actually has a smaller area before committing.
-                // Recompute area from the current grid state.
-                uint64_t colU = 0; int rows = 0;
-                for (auto& g : grid) if (g) { colU |= g; rows++; }
-                int newW = max(1, __builtin_popcountll(colU));
-                int newH = max(1, rows);
-                long long newA = (long long)newW * newH;
-                if (newA < r.A) {
-                    // commit
-                    for (size_t c = 0; c < crown.size(); c++) {
-                        auto& p = r.pl[crown[c]];
-                        p.ti = newPos[c][0]; p.x = newPos[c][1]; p.y = newPos[c][2];
-                    }
-                    r.W = newW; r.H = newH; r.A = newA;
-                    improvedAny = true;
-                    anyDepthOk = true;
-                    if (getenv("PP_DEBUG")) fprintf(stderr, "crown: shaved %d row(s) (crown size %zu) A=%lld->%lld\n", crownDepth, crown.size(), origA, newA);
-                    break; // success at this depth, move to next round
-                } else {
-                    // New area is not better — restore grid and try next depth.
-                    ok = false;
-                }
-            }
-            if (!ok) {
-                // restore grid for next depth attempt
-                fill(grid.begin(), grid.end(), 0ULL);
-                for (auto& p : r.pl) {
-                    auto& t = ps[p.idx].t[p.ti];
-                    for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] |= ((uint64_t)t.rmask[dy]) << p.x;
-                }
-            }
+        // crown: placements with any cell in row H-1
+        vector<int> crown;
+        for (int i = 0; i < (int)r.pl.size(); i++) {
+            auto& p = r.pl[i];
+            auto& t = ps[p.idx].t[p.ti];
+            if (p.y + t.h == H) crown.push_back(i);
         }
-        if (!anyDepthOk) break; // all depths failed, can't improve further
+        if (crown.empty()) break;
+        // remove crown from grid
+        for (int ci : crown) {
+            auto& p = r.pl[ci];
+            auto& t = ps[p.idx].t[p.ti];
+            for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] &= ~(((uint64_t)t.rmask[dy]) << p.x);
+        }
+        // biggest first
+        sort(crown.begin(), crown.end(), [&](int a, int b) { return ps[r.pl[a].idx].k > ps[r.pl[b].idx].k; });
+        int targetH = H - 1;
+        vector<array<int,3>> newPos(crown.size()); // ti, x, y
+        bool ok = true;
+        for (size_t c = 0; c < crown.size() && ok; c++) {
+            auto& p = r.pl[crown[c]];
+            auto& piece = ps[p.idx];
+            int bTi = -1, bX = 0, bY = INT_MAX;
+            for (int ti = 0; ti < (int)piece.t.size(); ti++) {
+                auto& t = piece.t[ti];
+                if (t.w > W || t.h > targetH) continue;
+                uint64_t limMask = (W - t.w + 1 >= 64) ? ~0ULL : ((1ULL << (W - t.w + 1)) - 1);
+                int ymax = targetH - t.h;
+                for (int y = 0; y <= ymax; y++) {
+                    if (bY <= y) break; // can't beat current best with this orientation
+                    uint64_t conflict = 0;
+                    for (int dy = 0; dy < t.h; dy++) {
+                        uint64_t g = grid[y + dy];
+                        if (!g) continue;
+                        unsigned m = t.rmask[dy];
+                        while (m) { int b = __builtin_ctz(m); conflict |= (g >> b); m &= m - 1; }
+                    }
+                    uint64_t allowed = ~conflict & limMask;
+                    if (allowed) {
+                        int x = (int)__builtin_ctzll(allowed);
+                        if (y < bY || (y == bY && x < bX)) { bY = y; bX = x; bTi = ti; }
+                        break;
+                    }
+                }
+            }
+            if (bTi < 0) { ok = false; break; }
+            auto& t = piece.t[bTi];
+            for (int dy = 0; dy < t.h; dy++) grid[bY + dy] |= ((uint64_t)t.rmask[dy]) << bX;
+            newPos[c] = {bTi, bX, bY};
+        }
+        if (!ok) {
+            // restore: clear whatever we placed this round, re-add originals
+            for (size_t c = 0; c < crown.size(); c++) {
+                if (newPos[c][0] == 0 && newPos[c][1] == 0 && newPos[c][2] == 0) {} // may be unset; handle below
+            }
+            // rebuild grid from placements (simplest correct restore)
+            int HH = (int)grid.size();
+            fill(grid.begin(), grid.end(), 0ULL);
+            for (auto& p : r.pl) {
+                auto& t = ps[p.idx].t[p.ti];
+                for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] |= ((uint64_t)t.rmask[dy]) << p.x;
+            }
+            (void)HH;
+            break;
+        }
+        // commit
+        for (size_t c = 0; c < crown.size(); c++) {
+            auto& p = r.pl[crown[c]];
+            p.ti = newPos[c][0]; p.x = newPos[c][1]; p.y = newPos[c][2];
+        }
+        improvedAny = true;
+        if (getenv("PP_DEBUG")) fprintf(stderr, "crown: shaved row %d (crown size %zu)\n", H - 1, crown.size());
     }
-    if (!improvedAny) {
-        // Restore original placement if no improvement was made.
-        r.pl = move(origPl);
-        r.W = origW; r.H = origH; r.A = origA;
+    if (improvedAny) {
+        // recompute compressed W/H/A
+        uint64_t colU = 0; int rows = 0;
+        for (auto& g : grid) if (g) { colU |= g; rows++; }
+        r.W = max(1, __builtin_popcountll(colU));
+        r.H = max(1, rows);
+        r.A = (long long)r.W * r.H;
     }
     return improvedAny;
 }
@@ -1110,7 +1094,8 @@ int main() {
             } else if (used + avgSky * 1.3 > SOFT_END) {
                 if (used + avgBLF * 1.3 <= SOFT_END) doBLF = true; else break;
             }
-            static int CAPSHARE = envInt("PP_CAPSHARE", 95);
+            int CAPSHARE = envInt("PP_CAPSHARE", 0);
+            if (CAPSHARE <= 0) CAPSHARE = (S < 3000) ? 98 : (S < 12000) ? 95 : (S < 25000) ? 92 : 88;
             bool capEligible = !big || (n <= envInt("PP_CAPBIGN", 2500));
             if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
                 // area-driven capped attempt: pack into W' x Hcap' with W'*Hcap' < bestA
@@ -1132,7 +1117,12 @@ int main() {
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
                 obuf = fromBest ? ilsOrd : ordB2;
-                int swaps = 1 + rng.rint(12);
+                // size-adaptive: ultra on tiny, heavy on small, mild on large
+                int swaps;
+                if (S < 3000) swaps = 1 + rng.rint(18);        // ultra (trail champ on S<2k)
+                else if (S < 12000) swaps = 1 + rng.rint(14);
+                else if (S < 25000) swaps = 1 + rng.rint(8);
+                else swaps = 1 + rng.rint(6);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
                     swap(obuf[a], obuf[b]);
@@ -1161,7 +1151,11 @@ int main() {
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
                 obuf = fromBest ? ilsOrd : (BLF2 ? ordB2 : ordBLF);
                 if (cntBLF > 0) {
-                    int swaps = fromBest ? (2 + rng.rint(10)) : max(1, n / 4);
+                    int swaps;
+                    if (S < 3000) swaps = fromBest ? (2 + rng.rint(16)) : max(1, n / 3);
+                    else if (S < 12000) swaps = fromBest ? (2 + rng.rint(12)) : max(1, n / 4);
+                    else if (S < 25000) swaps = fromBest ? (2 + rng.rint(7)) : max(1, n / 5);
+                    else swaps = fromBest ? (2 + rng.rint(5)) : max(1, n / 6);
                     for (int sswap = 0; sswap < swaps; sswap++) {
                         int a = rng.rint(n), b = rng.rint(n);
                         swap(obuf[a], obuf[b]);
@@ -1169,8 +1163,10 @@ int main() {
                 }
                 int policy = (int)(rng.nxt() & 1);
                 double t1 = elapsed_ms();
-                R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / 4), SEARCH_END, rng, cntBLF > 0)
-                                                  : pack_blf2(W, obuf, max(1, n / 4), SEARCH_END, rng, cntBLF > 0))
+                // v18.6-style window: n/3 when S<30k (quality), n/5 when larger
+                int b2win = max(1, n / (S > 30000 ? 5 : 3));
+                R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, b2win, SEARCH_END, rng, cntBLF > 0)
+                                                  : pack_blf2(W, obuf, b2win, SEARCH_END, rng, cntBLF > 0))
                            : pack_blf(W, obuf, policy, SEARCH_END);
                 double dt = elapsed_ms() - t1;
                 cntBLF++; avgBLF = (avgBLF * (cntBLF - 1) + dt) / cntBLF;
@@ -1182,7 +1178,7 @@ int main() {
                 int W = bw + (rng.rint(7) - 3);
                 if (W < minW) W = minW;
                 obuf = baseOrder;
-                int swaps = max(1, n / 4);
+                int swaps = max(1, S < 3000 ? n / 3 : (S < 12000 ? n / 4 : (S < 25000 ? n / 6 : n / 8)));
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
                     swap(obuf[a], obuf[b]);
