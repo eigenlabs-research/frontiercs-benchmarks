@@ -1,4 +1,4 @@
-// v19.9: v19.5 + PP_CAPDW default 3 (was 2); local small-band A/B winner
+// v19.10: v19.9 + CAPWIDEP default 15 (was 25); less wide W jitter in pack_capped
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -1188,7 +1188,7 @@ int main() {
                 {
                     static int dwBase = envInt("PP_CAPDW", 3); // v19.9: was 2; local A/B +holdout
                     static int dwWide = envInt("PP_CAPDWW", 6);
-                    static int wideP = envInt("PP_CAPWIDEP", 25);
+                    static int wideP = envInt("PP_CAPWIDEP", 15); // v19.10: was 25; local A/B +holdout
                     int dw = ((int)(rng.nxt() % 100) < wideP) ? dwWide : dwBase;
                     W = bestR.packW + (dw > 0 ? (rng.rint(2 * dw + 1) - dw) : 0);
                     if (W < minW) W = minW;
