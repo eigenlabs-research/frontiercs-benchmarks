@@ -1304,6 +1304,13 @@ int main(){
         }
         g_msAlpha = oldA;
     }
+    if((allowRot||g_bin.H*5<=g_bin.W*6)&&elapsed()<TIME_LIMIT*0.26){
+        g_msAlpha=0.92;
+        consider(polish(mixedShelfPlan(allowRot,0,0,false)));
+        if(elapsed()<TIME_LIMIT*0.26)
+            consider(polish(mixedShelfPlan(allowRot,0,0,true)));
+        g_msAlpha=1.0;
+    }
 #ifdef DIAG
     g_label="beam";
 #endif
