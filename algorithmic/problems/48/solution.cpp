@@ -691,6 +691,7 @@ TIME_LIMIT=TLfull-0.04;
 relaxOptimize(best, bestR);
 TIME_LIMIT=TLfull;
 microPolish(best, bestR, TIME_LIMIT);
+{ double r=expandFill(best, bestR); if(r>bestR) bestR=r; }
 if((int)best.size()!=n){ best=cubicGrid(n); }
 for(auto& p : best){ p[0]=clamp01(p[0]); p[1]=clamp01(p[1]); p[2]=clamp01(p[2]); }
 for(const auto& p : best) printf("%.17g %.17g %.17g\n"
