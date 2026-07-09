@@ -1,4 +1,4 @@
-// Traveling Santa (carrot-penalty TSP).
+// Traveling Santa (carrot-penalty TSP). [rev b]
 // The objective is dominated by Euclidean tour length: the 1.1x penalty applies only
 // to every 10th edge and only when its source city is non-prime, so minimizing plain
 // Euclidean length is the right target. The checker's baseline is the x-sorted identity
@@ -11,7 +11,7 @@
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 2400.0;
+static double TL_MS = 2000.0;
 static inline double el_ms(){ return chrono::duration<double,milli>(chrono::steady_clock::now()-T0).count(); }
 
 static int N;
@@ -39,13 +39,6 @@ int main(){
     if(N==1){ printf("2\n0\n0\n"); return 0; }
     if(N==2){ printf("3\n0\n1\n0\n"); return 0; }
 
-    // prime table over city ids (every 10th step costs 1.1x unless source id is prime)
-    vector<char> pr((size_t)N,0);
-    { vector<char> comp((size_t)N,0); for(long long i=2;i<N;i++) if(!comp[i]){ pr[i]=1; for(long long q=i*i;q<N;q+=i) comp[q]=1; } }
-    if(N>100000) TL_MS -= 20.0;
-    double RESERVE = N>150000?220.0:(N>50000?90.0:(N>5000?50.0:40.0));
-    TL_MS -= RESERVE; // reserve tail for endgame touch-up
-
     // ---- spatial grid (~2 pts/cell) ----
     double minx=X[0],maxx=X[0],miny=Y[0],maxy=Y[0];
     for(int i=1;i<N;i++){ minx=min(minx,X[i]);maxx=max(maxx,X[i]);miny=min(miny,Y[i]);maxy=max(maxy,Y[i]); }
@@ -60,7 +53,7 @@ int main(){
     vector<int> bucket(N); { vector<int> tmp=cnt; for(int i=0;i<N;i++) bucket[tmp[cellOf[i]]++]=i; }
 
     // ---- k nearest neighbors per city ----
-    int K=min(N-1, N>50000?6:(N>5000?24:10));
+    int K=min(N-1, N>50000?6:(N>5000?8:10));
     vector<int> nbr((size_t)N*K,-1);
     {
         vector<pair<double,int>> cand; cand.reserve(128);
@@ -186,8 +179,10 @@ int main(){
     // next to geometric neighbours). Keeps `order`/`pos` consistent.
     auto orOptPass=[&]()->bool{
         bool anyImp=false;
+        // Each accepted move costs O(N) (rebuild + reindex), so check the deadline every
+        // iteration — not on a masked counter — to guarantee we never overrun on any N.
         for(int qi=0; qi<N; qi++){
-            if(((++clock)&1023)==0 && el_ms()>TL_MS) return anyImp;
+            if(el_ms()>TL_MS) return anyImp;
             int s0=q[qi];
             if(dontlook[s0]) continue;
             bool moved=false;
@@ -264,31 +259,19 @@ int main(){
     };
     localSearch();
 
-    // exact penalized cost of the output tour (rotation fixed: city 0 leads);
-    // dir=0 forward, dir=1 reversed traversal of the cyclic order
-    auto evalDir=[&](int dir)->double{
-        int z=pos[0]; double L=0; int prev=0;
-        for(int t=1;t<=N;t++){
-            int idx = dir==0 ? (z+t)%N : (z-(t%N)+N)%N;
-            int b=order[idx];
-            double d=dist(prev,b);
-            if(t%10==0 && !pr[prev]) d*=1.1;
-            L+=d; prev=b;
-        }
-        return L;
-    };
-    auto evalBest=[&](int&dir)->double{
-        double f=evalDir(0), r=evalDir(1);
-        if(f<=r){ dir=0; return f; } dir=1; return r;
-    };
-
-    // ---- ILS: perturb (double-bridge) + re-optimize, keep best (penalized), until deadline ----
-    vector<int> best=order; int bestDir=0;
-    double bestLen=evalBest(bestDir);
+    // ---- ILS: perturb (double-bridge) + re-optimize, keep best, until deadline ----
     if(N>=8){
+        // best tour snapshot
+        vector<int> best=order;
+        auto tourLen=[&]()->double{ double L=0; for(int i=0;i<N;i++) L+=dist(order[i],order[nextIdx(i)]); return L; };
+        double bestLen=tourLen();
         uint64_t rng=0x9e3779b97f4a7c15ULL ^ (uint64_t)N*2654435761ULL;
         auto rnd=[&](){ rng^=rng<<7; rng^=rng>>9; return rng; };
-        while(el_ms()<TL_MS){
+        // Leave headroom for the final tourLen + output on the largest N. Each ILS iteration
+        // does O(N) work (rebuild + re-opt + length), so stop starting new ones early enough
+        // that one in-flight iteration can't overrun the hard limit.
+        double ILS_STOP = TL_MS - max(5.0, N/40000.0*40.0);
+        while(el_ms()<ILS_STOP){
             // double bridge: pick 3 cut points 1<=a<b<c<N, reconnect A D C B
             int a=1+(int)(rnd()%(N-3)), b=1+(int)(rnd()%(N-3)), c=1+(int)(rnd()%(N-3));
             int lo=min({a,b,c}), hi=max({a,b,c}), mid=a+b+c-lo-hi;
@@ -300,56 +283,45 @@ int main(){
             for(int i=hi;i<N;i++) nt.push_back(order[i]);
             order.swap(nt);
             for(int i=0;i<N;i++) pos[order[i]]=i;
-            // re-optimize only the disturbed neighborhood cheaply: wake all, 2-opt to convergence
+            // re-optimize: wake all, 2-opt to convergence (Or-opt only for moderate N — its O(N)
+            // rebuild is too slow to be worth it at large N and risks overrun).
             fill(dontlook.begin(),dontlook.end(),0);
             while(el_ms()<TL_MS){ if(!twoOptPass()) break; }
-            if(N<=50000){ fill(dontlook.begin(),dontlook.end(),0); orOptPass(); while(el_ms()<TL_MS){ if(!twoOptPass()) break; } }
-            int d2=0; double L=evalBest(d2);
-            if(L<bestLen-1e-6){ bestLen=L; best=order; bestDir=d2; }
+            if(N<=20000){ fill(dontlook.begin(),dontlook.end(),0); orOptPass(); while(el_ms()<TL_MS){ if(!twoOptPass()) break; } }
+            double L=tourLen();
+            if(L<bestLen-1e-6){ bestLen=L; best=order; }
             else { order=best; for(int i=0;i<N;i++) pos[order[i]]=i; } // revert
         }
         order=best; for(int i=0;i<N;i++) pos[order[i]]=i;
     }
 
-    // ---- materialize chosen direction with city 0 leading ----
-    TL_MS += RESERVE;
-    vector<int> seq(N);
-    { int z=pos[0]; for(int i=0;i<N;i++) seq[i]= bestDir==0? order[(z+i)%N] : order[(z-i+N)%N]; }
+    // ---- build the route with city 0 leading, then pick the cheaper orientation ----
+    // The judge's true objective is the PENALIZED length (every 10th edge costs 1.1x when its
+    // source city is non-prime). Our local search minimized plain Euclidean length; as a final
+    // zero-risk polish, evaluate the exact penalized cost of the forward route and its
+    // interior-reversal (same edges, different per-position sources) and output the cheaper one.
+    int z=pos[0];
+    vector<int> route(N+1);
+    for(int i=0;i<N;i++) route[i]=order[(z+i)%N];
+    route[N]=0;
 
-    // ---- endgame touch-up: swap a nearby prime into each penalized source slot (exact delta) ----
-    if(N>=12){
-        auto sAt=[&](int p)->int{ return p<N? seq[p]:0; };
-        auto stepCost=[&](int t)->double{ int a=seq[t-1], b=sAt(t); double d=dist(a,b); if(t%10==0&&!pr[a]) d*=1.1; return d; };
-        int w = N<=1200? N : (N<=5000?120:(N<=20000?140:80));
-        for(int rep=0;rep<4 && el_ms()<TL_MS;rep++){
-            bool ch=false;
-            for(int p=9;p<N;p+=10){
-                if(el_ms()>TL_MS) break;
-                if(pr[seq[p]]) continue;
-                int lo=max(1,p-w), hi=min(N-1,p+w);
-                double bd=-1e-7; int bj=-1;
-                for(int j=lo;j<=hi;j++){
-                    if(j==p||!pr[seq[j]]) continue;
-                    int T[4]={p,p+1,j,j+1}, U[4], m=0;
-                    for(int t2=0;t2<4;t2++){ bool dup=false; for(int u=0;u<m;u++) if(U[u]==T[t2]) dup=true; if(!dup) U[m++]=T[t2]; }
-                    double bef=0, aft=0;
-                    for(int u=0;u<m;u++) bef+=stepCost(U[u]);
-                    swap(seq[p],seq[j]);
-                    for(int u=0;u<m;u++) aft+=stepCost(U[u]);
-                    swap(seq[p],seq[j]);
-                    double dl=aft-bef;
-                    if(dl<bd){ bd=dl; bj=j; }
-                }
-                if(bj>=0){ swap(seq[p],seq[bj]); ch=true; }
-            }
-            if(!ch) break;
-        }
-    }
+    // prime sieve over city ids [0,N)
+    vector<char> isPrime(max(2,N), true);
+    isPrime[0]=false; if(N>1) isPrime[1]=false;
+    for(int i=2;(long long)i*i<N;i++) if(isPrime[i]) for(int j=i*i;j<N;j+=i) isPrime[j]=false;
+    auto penCost=[&](const vector<int>& r)->double{
+        double tot=0.0;
+        for(int t=1;t<=N;t++){ int a=r[t-1],b=r[t]; double m=(t%10==0 && !isPrime[a])?1.1:1.0; tot+=m*dist(a,b); }
+        return tot;
+    };
+    double cf=penCost(route);
+    vector<int> rev(N+1); rev[0]=0; for(int i=1;i<N;i++) rev[i]=route[N-i]; rev[N]=0;
+    double cr=penCost(rev);
+    const vector<int>& outR = (cr<cf)? rev : route;
 
     string out; out.reserve((size_t)N*7+16);
     out+=to_string(N+1); out+='\n';
-    for(int i=0;i<N;i++){ out+=to_string(seq[i]); out+='\n'; }
-    out+="0\n";
+    for(int i=0;i<=N;i++){ out+=to_string(outR[i]); out+='\n'; }
     fwrite(out.data(),1,out.size(),stdout);
     fflush(stdout);
     _Exit(0);
