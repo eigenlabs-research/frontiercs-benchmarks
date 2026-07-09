@@ -1404,6 +1404,7 @@ int main(){
 #ifdef DIAG
             g_label="split2y";
 #endif
+            if(!allowRot && g_bin.H * 5 > g_bin.W * 6) g_msAlpha = 0.90;
             vector<int> ys2 = cuts(g_bin.H, true);
             for(int sh : ys2){
                 for(int mask = 0; mask < 8 && elapsed() < TIME_LIMIT * 0.78; ++mask)
