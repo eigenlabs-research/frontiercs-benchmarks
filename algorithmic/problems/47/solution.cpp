@@ -1325,7 +1325,7 @@ int main(){
         consider(polish(beamMixedShelfPlan(allowRot, allowRot ? 14 : 7, allowRot ? 5 : 4, allowRot ? 9 : 7, allowRot ? TIME_LIMIT * 0.78 : TIME_LIMIT * 0.66)));
     if(elapsed() < TIME_LIMIT * 0.7){
         g_msAlpha = allowRot ? 0.935 : 1.0;
-        consider(polish(beamMixedShelfPlanT(allowRot, allowRot ? 22 : 7, allowRot ? 5 : 4, allowRot ? 9 : 7, allowRot ? TIME_LIMIT * 0.9 : TIME_LIMIT * 0.82)));
+        consider(polish(beamMixedShelfPlanT(allowRot, allowRot ? 22 : 7, allowRot ? 5 : 4, allowRot ? 9 : 7, allowRot ? TIME_LIMIT * 0.87 : TIME_LIMIT * 0.82)));
         g_msAlpha = 1.0;
     }
     // Focused beam with alpha=0.94 and reduced depth for shorter shelves
@@ -1337,6 +1337,12 @@ int main(){
     // Wide-and-shallow beam for broad exploration
     if(allowRot && elapsed() < TIME_LIMIT * 0.85){
         consider(polish(beamMixedShelfPlan(allowRot, 22, 8, 3, TIME_LIMIT * 0.85)));
+    }
+    // Deeper alpha=0.94 beam for more thorough shelf height exploration
+    if(allowRot && elapsed() < TIME_LIMIT * 0.88){
+        g_msAlpha = 0.94;
+        consider(polish(beamMixedShelfPlan(allowRot, 12, 4, 8, TIME_LIMIT * 0.88)));
+        g_msAlpha = 1.0;
     }
 #endif
 #ifdef DIAG
@@ -1354,6 +1360,8 @@ int main(){
         stripCands.push_back(g_bin.W / 3);
         stripCands.push_back(g_bin.W / 2);
         stripCands.push_back((2 * g_bin.W) / 3);
+        stripCands.push_back(g_bin.W / 6);
+        stripCands.push_back((5 * g_bin.W) / 6);
         sort(stripCands.begin(), stripCands.end());
         stripCands.erase(unique(stripCands.begin(), stripCands.end()), stripCands.end());
         {
@@ -1365,7 +1373,7 @@ int main(){
             sort(stripCands.begin(), stripCands.end());
             stripCands.erase(unique(stripCands.begin(), stripCands.end()), stripCands.end());
         }
-        if((int)stripCands.size() > (allowRot ? 8 : 10)) stripCands.resize(allowRot ? 8 : 10);
+        if((int)stripCands.size() > (allowRot ? 10 : 12)) stripCands.resize(allowRot ? 10 : 12);
         for(int d : stripCands){
             if(elapsed() > TIME_LIMIT * 0.45) break;
             consider(polish(mixedShelfPlan(allowRot, 0, d, false)));
@@ -1489,7 +1497,7 @@ int main(){
             if(elapsed() > TIME_LIMIT * 0.93) break;
             consider(pruneLow(best, c, ordAreaAsc, allowRot));
         }
-        int ds[3]={4,8,12};
+        int ds[5]={4,8,12,16,20};
         for(int c:ds)for(int side=0;side<4&&elapsed()<TIME_LIMIT*0.955;++side)consider(pruneSide(best,c,ordDens,allowRot,side));
         if(!allowRot&&g_bin.H*5>g_bin.W*6)for(int ln=1;ln<=2;++ln)for(int side=0;side<2&&elapsed()<TIME_LIMIT*0.965;++side){
             consider(pruneLine(best,ln,ordDens,allowRot,side));
