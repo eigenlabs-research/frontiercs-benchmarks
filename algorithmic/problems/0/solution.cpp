@@ -1,19 +1,28 @@
-// v18: v17 + wider small-path routing, mid-band width factor, small-case budget shift.
-// - S < 6000: sweep+phase2 end early (25%/35% of TL) so the capped-restart ILS loop gets
-//   the bulk of the budget — measured +0.005..+0.015 on n=200..500 cases.
-// - Small path (multi-width sweep + capped restarts) now covers S up to ~70000 (was 22000);
-//   measured +0.004..+0.007 on S~35-70k, neutral at 90k+. The measured-speed guard still
-//   drops slow machines back to the single-width adaptive big path.
-// - Width factor band 30k<=S<50k: 0.028 (was 0.01) — optimum W for S~37k is ~32, not ~19.
+// v17: v16 + better mid-size routing and width probing.
+// - Mid-size cases (S up to ~22000) now take the small path (multi-width sweep + blf3 phase2 +
+//   capped restarts) instead of the single-width adaptive pack; big win on S~10k cases.
 // - Sweep first-pack panic guard: the first sweep width can't eat the whole budget on mid-size.
 // - Auto width-probe for big-path cases with S < 60000 picks a stronger base width first.
 // Judge: cpuLimit=2s. Hard global deadline (default 1850ms, env POLYPACK_TL override),
 // in-pack abort checks, guaranteed fast fallback computed first, fast I/O.
-#include <bits/stdc++.h>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <climits>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <numeric>
+#include <set>
+#include <string>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 1850.0;
+static double TL_MS = 1800.0; // Hard global deadline - conservative for judge margin (env POLYPACK_TL override)
 static inline double elapsed_ms() {
     return chrono::duration<double, milli>(chrono::steady_clock::now() - T0).count();
 }
@@ -204,6 +213,8 @@ static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0,
         adapt();
         if (!panic && deadlineMs > 0 && elapsed_ms() > deadlineMs) return R{};
     }
+    // Check that all pieces were placed (pack() skips unplaceable pieces — must invalidate if any missed)
+    if ((int)pl.size() != nm) return R{};
     int H = (int)g + 1;
     int maxX = -1;
     for (auto& pp : pl) {
@@ -302,111 +313,92 @@ static bool crownRepack(R& r, double deadlineMs) {
         for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] |= ((uint64_t)t.rmask[dy]) << p.x;
     }
     bool improvedAny = false;
-    // Save original placement so we can revert if the new packing has a larger area.
-    long long origA = r.A;
-    int origW = r.W, origH = r.H;
-    vector<Pl> origPl = r.pl;
     int rounds = 0;
     while (rounds++ < 64) {
         if (deadlineMs > 0 && elapsed_ms() > deadlineMs) break;
         int H = (int)grid.size();
         while (H > 0 && grid[H - 1] == 0) H--;
         if (H <= 1) break;
-        // Try increasing crown depths: first try just the top row (fast), then 2 rows, then 3.
-        // Deeper crowns remove more pieces, creating more empty space and increasing the chance
-        // that all removed pieces can be reinserted at a lower y-position.
-        bool anyDepthOk = false;
-        for (int crownDepth = 1; crownDepth <= 3; crownDepth++) {
-            if (H - crownDepth < 1) break;
-            // crown: placements with any cell in the top `crownDepth` rows
-            vector<int> crown;
-            for (int i = 0; i < (int)r.pl.size(); i++) {
-                auto& p = r.pl[i];
-                auto& t = ps[p.idx].t[p.ti];
-                if (p.y + t.h > H - crownDepth) crown.push_back(i);
-            }
-            if (crown.empty()) { anyDepthOk = true; break; } // nothing to relocate, H is fine
-            // remove crown from grid
-            for (int ci : crown) {
-                auto& p = r.pl[ci];
-                auto& t = ps[p.idx].t[p.ti];
-                for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] &= ~(((uint64_t)t.rmask[dy]) << p.x);
-            }
-            // biggest first
-            sort(crown.begin(), crown.end(), [&](int a, int b) { return ps[r.pl[a].idx].k > ps[r.pl[b].idx].k; });
-            int targetH = H - crownDepth;
-            vector<array<int,3>> newPos(crown.size()); // ti, x, y
-            bool ok = true;
-            for (size_t c = 0; c < crown.size() && ok; c++) {
-                auto& p = r.pl[crown[c]];
-                auto& piece = ps[p.idx];
-                int bTi = -1, bX = 0, bY = INT_MAX;
-                for (int ti = 0; ti < (int)piece.t.size(); ti++) {
-                    auto& t = piece.t[ti];
-                    if (t.w > W || t.h > targetH) continue;
-                    uint64_t limMask = (W - t.w + 1 >= 64) ? ~0ULL : ((1ULL << (W - t.w + 1)) - 1);
-                    int ymax = targetH - t.h;
-                    for (int y = 0; y <= ymax; y++) {
-                        if (bY <= y) break;
-                        uint64_t conflict = 0;
-                        for (int dy = 0; dy < t.h; dy++) {
-                            uint64_t g = grid[y + dy];
-                            if (!g) continue;
-                            unsigned m = t.rmask[dy];
-                            while (m) { int b = __builtin_ctz(m); conflict |= (g >> b); m &= m - 1; }
-                        }
-                        uint64_t allowed = ~conflict & limMask;
-                        if (allowed) {
-                            int x = (int)__builtin_ctzll(allowed);
-                            if (y < bY || (y == bY && x < bX)) { bY = y; bX = x; bTi = ti; }
-                            break;
-                        }
-                    }
-                }
-                if (bTi < 0) { ok = false; break; }
-                auto& t = piece.t[bTi];
-                for (int dy = 0; dy < t.h; dy++) grid[bY + dy] |= ((uint64_t)t.rmask[dy]) << bX;
-                newPos[c] = {bTi, bX, bY};
-            }
-            if (ok) {
-                // Check that the new packing actually has a smaller area before committing.
-                // Recompute area from the current grid state.
-                uint64_t colU = 0; int rows = 0;
-                for (auto& g : grid) if (g) { colU |= g; rows++; }
-                int newW = max(1, __builtin_popcountll(colU));
-                int newH = max(1, rows);
-                long long newA = (long long)newW * newH;
-                if (newA < r.A) {
-                    // commit
-                    for (size_t c = 0; c < crown.size(); c++) {
-                        auto& p = r.pl[crown[c]];
-                        p.ti = newPos[c][0]; p.x = newPos[c][1]; p.y = newPos[c][2];
-                    }
-                    r.W = newW; r.H = newH; r.A = newA;
-                    improvedAny = true;
-                    anyDepthOk = true;
-                    if (getenv("PP_DEBUG")) fprintf(stderr, "crown: shaved %d row(s) (crown size %zu) A=%lld->%lld\n", crownDepth, crown.size(), origA, newA);
-                    break; // success at this depth, move to next round
-                } else {
-                    // New area is not better — restore grid and try next depth.
-                    ok = false;
-                }
-            }
-            if (!ok) {
-                // restore grid for next depth attempt
-                fill(grid.begin(), grid.end(), 0ULL);
-                for (auto& p : r.pl) {
-                    auto& t = ps[p.idx].t[p.ti];
-                    for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] |= ((uint64_t)t.rmask[dy]) << p.x;
-                }
-            }
+        // crown: placements with any cell in row H-1
+        vector<int> crown;
+        for (int i = 0; i < (int)r.pl.size(); i++) {
+            auto& p = r.pl[i];
+            auto& t = ps[p.idx].t[p.ti];
+            if (p.y + t.h == H) crown.push_back(i);
         }
-        if (!anyDepthOk) break; // all depths failed, can't improve further
+        if (crown.empty()) break;
+        // remove crown from grid
+        for (int ci : crown) {
+            auto& p = r.pl[ci];
+            auto& t = ps[p.idx].t[p.ti];
+            for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] &= ~(((uint64_t)t.rmask[dy]) << p.x);
+        }
+        // biggest first
+        sort(crown.begin(), crown.end(), [&](int a, int b) { return ps[r.pl[a].idx].k > ps[r.pl[b].idx].k; });
+        int targetH = H - 1;
+        vector<array<int,3>> newPos(crown.size()); // ti, x, y
+        bool ok = true;
+        for (size_t c = 0; c < crown.size() && ok; c++) {
+            auto& p = r.pl[crown[c]];
+            auto& piece = ps[p.idx];
+            int bTi = -1, bX = 0, bY = INT_MAX;
+            for (int ti = 0; ti < (int)piece.t.size(); ti++) {
+                auto& t = piece.t[ti];
+                if (t.w > W || t.h > targetH) continue;
+                uint64_t limMask = (W - t.w + 1 >= 64) ? ~0ULL : ((1ULL << (W - t.w + 1)) - 1);
+                int ymax = targetH - t.h;
+                for (int y = 0; y <= ymax; y++) {
+                    if (bY <= y) break; // can't beat current best with this orientation
+                    uint64_t conflict = 0;
+                    for (int dy = 0; dy < t.h; dy++) {
+                        uint64_t g = grid[y + dy];
+                        if (!g) continue;
+                        unsigned m = t.rmask[dy];
+                        while (m) { int b = __builtin_ctz(m); conflict |= (g >> b); m &= m - 1; }
+                    }
+                    uint64_t allowed = ~conflict & limMask;
+                    if (allowed) {
+                        int x = (int)__builtin_ctzll(allowed);
+                        if (y < bY || (y == bY && x < bX)) { bY = y; bX = x; bTi = ti; }
+                        break;
+                    }
+                }
+            }
+            if (bTi < 0) { ok = false; break; }
+            auto& t = piece.t[bTi];
+            for (int dy = 0; dy < t.h; dy++) grid[bY + dy] |= ((uint64_t)t.rmask[dy]) << bX;
+            newPos[c] = {bTi, bX, bY};
+        }
+        if (!ok) {
+            // restore: clear whatever we placed this round, re-add originals
+            for (size_t c = 0; c < crown.size(); c++) {
+                if (newPos[c][0] == 0 && newPos[c][1] == 0 && newPos[c][2] == 0) {} // may be unset; handle below
+            }
+            // rebuild grid from placements (simplest correct restore)
+            int HH = (int)grid.size();
+            fill(grid.begin(), grid.end(), 0ULL);
+            for (auto& p : r.pl) {
+                auto& t = ps[p.idx].t[p.ti];
+                for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] |= ((uint64_t)t.rmask[dy]) << p.x;
+            }
+            (void)HH;
+            break;
+        }
+        // commit
+        for (size_t c = 0; c < crown.size(); c++) {
+            auto& p = r.pl[crown[c]];
+            p.ti = newPos[c][0]; p.x = newPos[c][1]; p.y = newPos[c][2];
+        }
+        improvedAny = true;
+        if (getenv("PP_DEBUG")) fprintf(stderr, "crown: shaved row %d (crown size %zu)\n", H - 1, crown.size());
     }
-    if (!improvedAny) {
-        // Restore original placement if no improvement was made.
-        r.pl = move(origPl);
-        r.W = origW; r.H = origH; r.A = origA;
+    if (improvedAny) {
+        // recompute compressed W/H/A
+        uint64_t colU = 0; int rows = 0;
+        for (auto& g : grid) if (g) { colU |= g; rows++; }
+        r.W = max(1, __builtin_popcountll(colU));
+        r.H = max(1, rows);
+        r.A = (long long)r.W * r.H;
     }
     return improvedAny;
 }
@@ -807,9 +799,9 @@ int main() {
     int B3 = envInt("PP_B3", 1);             // 1: use cached blf3 instead of blf2
     int PHASE2 = envInt("PP_PHASE2", 1);     // 1: blf2 pass over best sweep Ws
     double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;  // 0 => auto by size
-    double P2ENDF = envInt("PP_P2END", 0) / 100.0;   // 0 => auto by size
     long long P2MAXS = envInt("PP_P2MAXS", 22000);   // phase2 only when S below this
-    long long B2RESTS = envInt("PP_B2RESTS", 1300);  // blf2 restarts when S below this
+    long long B2RESTS = envInt("PP_B2RESTS", 50000);  // blf2 restarts when S below this (was 1300)
+    int CAPBIGN = envInt("PP_CAPBIGN", 6000);        // was 2500 — allow capped BLF for larger big cases
 
     // read all of stdin
     {
@@ -831,11 +823,6 @@ int main() {
         for (int j = 0; j < k; j++) { int x = readInt(), y = readInt(); ps[i].b[j] = {x, y}; }
         S += k;
     }
-    // Phase-2 budget split, auto by size: for S < 6000 the capped-restart ILS loop is worth far
-    // more than a long sweep+phase2 (measured +0.005..+0.015), so end the sweep early; at
-    // S ~ 10-20k the deep blf3 phase2 dominates instead, keep the champion split.
-    if (P2FRAC <= 0.0) P2FRAC = (S < 6000) ? 0.25 : 0.55;
-    if (P2ENDF <= 0.0) P2ENDF = (S < 6000) ? 0.35 : 0.70;
     for (int i = 0; i < n; i++) {
         auto& p = ps[i];
         unordered_set<string> seen; seen.reserve(32);
@@ -900,8 +887,7 @@ int main() {
     else if (S < 3000) factor = 0.5;
     else if (S < 10000) factor = 0.27;
     else if (S < 30000) factor = 0.08;
-    else if (S < 50000) factor = 0.028;  // measured optimum W~33 at S~38k (was 0.01 -> W~19)
-    else factor = 0.009;                 // measured optimum W~24-28 at S~58-96k
+    else factor = 0.01;
     int base = max(minW, (int)floor(sqrt((double)S * factor)));
     if (const char* e = getenv("PP_BASEW")) { int v = atoi(e); if (v >= minW && v <= 4000) base = v; }
 
@@ -918,7 +904,7 @@ int main() {
         sort(Ws.begin(), Ws.end(), [&](int a, int b) { int da = abs(a - base), db = abs(b - base); if (da != db) return da < db; return a < b; });
     }
 
-    bool big = S > (long long)envInt("PP_BIGTHRESH", 70000);
+    bool big = S > (long long)envInt("PP_BIGTHRESH", 22000);
     vector<int> baseOrder = ord4();
 
     auto better = [&](const R& a, const R& b) {
@@ -990,7 +976,8 @@ int main() {
     int swin = max(1, n / 4);
     if (!big && !((big && BIGBLF) || (!big && SMALLBLF))) {
         static double SW1F = envInt("PP_SW1F", 80) / 100.0;
-        double sweepBudget = (PHASE2 && S < P2MAXS) ? min(SOFT_END, TL_MS * P2FRAC) : SOFT_END;
+        double sweepBudget = (PHASE2 && S < P2MAXS) ? min(SOFT_END, TL_MS * (P2FRAC > 0.0 ? P2FRAC : 0.55))
+                                                    : SOFT_END;
         double budget1 = SW1F * max(50.0, sweepBudget - elapsed_ms());
         double swinPred = budget1 / tFB;
         int cap = max(24, (int)swinPred);
@@ -1007,9 +994,8 @@ int main() {
     double avg = 250.0; int cnt = 0;
     vector<pair<long long,int>> sweepRes; // (area, W)
     bool doPhase2 = (!big && PHASE2 && S < P2MAXS);
-    double SWFRAC = envInt("PP_SWFRAC", 100) / 100.0; // sweep cap for the no-phase2 small path
-    double sweepEnd = doPhase2 ? min(SOFT_END, TL_MS * P2FRAC)
-                               : (!big ? min(SOFT_END, TL_MS * SWFRAC) : SOFT_END);
+    if (P2FRAC <= 0.0) P2FRAC = 0.55;
+    double sweepEnd = doPhase2 ? min(SOFT_END, TL_MS * P2FRAC) : SOFT_END;
     for (int wi = 0; wi < (skipSweep ? 0 : (int)Ws.size()); wi++) {
         double used = elapsed_ms();
         if (used + avg * 1.15 > sweepEnd) break;
@@ -1057,7 +1043,8 @@ int main() {
     // ---- phase 2 (small cases): deep blf2 pass over the most promising sweep widths ----
     if (doPhase2) {
         sort(sweepRes.begin(), sweepRes.end());
-        double p2Stop = min(SOFT_END, TL_MS * P2ENDF);
+        double P2END = envInt("PP_P2END", 70) / 100.0;
+        double p2Stop = min(SOFT_END, TL_MS * P2END);
         double avg2 = 20.0; int cnt2 = 0;
         // width candidates: sweep results (best area first), then unexplored neighbors of the
         // best width — blf3 packs are cheap, so probe widths the sweep never reached.
@@ -1110,8 +1097,8 @@ int main() {
             } else if (used + avgSky * 1.3 > SOFT_END) {
                 if (used + avgBLF * 1.3 <= SOFT_END) doBLF = true; else break;
             }
-            static int CAPSHARE = envInt("PP_CAPSHARE", 95);
-            bool capEligible = !big || (n <= envInt("PP_CAPBIGN", 2500));
+            static int CAPSHARE = envInt("PP_CAPSHARE", 100);
+            bool capEligible = !big || (n <= CAPBIGN);
             if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
                 // area-driven capped attempt: pack into W' x Hcap' with W'*Hcap' < bestA
                 int W;
@@ -1132,7 +1119,7 @@ int main() {
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
                 obuf = fromBest ? ilsOrd : ordB2;
-                int swaps = 1 + rng.rint(12);
+                int swaps = 1 + rng.rint(6);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
                     swap(obuf[a], obuf[b]);
@@ -1161,7 +1148,7 @@ int main() {
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
                 obuf = fromBest ? ilsOrd : (BLF2 ? ordB2 : ordBLF);
                 if (cntBLF > 0) {
-                    int swaps = fromBest ? (2 + rng.rint(10)) : max(1, n / 4);
+                    int swaps = fromBest ? (2 + rng.rint(5)) : max(1, n / 6);
                     for (int sswap = 0; sswap < swaps; sswap++) {
                         int a = rng.rint(n), b = rng.rint(n);
                         swap(obuf[a], obuf[b]);
@@ -1182,7 +1169,7 @@ int main() {
                 int W = bw + (rng.rint(7) - 3);
                 if (W < minW) W = minW;
                 obuf = baseOrder;
-                int swaps = max(1, n / 4);
+                int swaps = max(1, n / 8);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
                     swap(obuf[a], obuf[b]);
