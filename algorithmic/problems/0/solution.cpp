@@ -1,6 +1,10 @@
-// v17: v16 + better mid-size routing and width probing.
-// - Mid-size cases (S up to ~22000) now take the small path (multi-width sweep + blf3 phase2 +
-//   capped restarts) instead of the single-width adaptive pack; big win on S~10k cases.
+// v18: v17 + wider small-path routing, mid-band width factor, small-case budget shift.
+// - S < 6000: sweep+phase2 end early (25%/35% of TL) so the capped-restart ILS loop gets
+//   the bulk of the budget — measured +0.005..+0.015 on n=200..500 cases.
+// - Small path (multi-width sweep + capped restarts) now covers S up to ~70000 (was 22000);
+//   measured +0.004..+0.007 on S~35-70k, neutral at 90k+. The measured-speed guard still
+//   drops slow machines back to the single-width adaptive big path.
+// - Width factor band 30k<=S<50k: 0.028 (was 0.01) — optimum W for S~37k is ~32, not ~19.
 // - Sweep first-pack panic guard: the first sweep width can't eat the whole budget on mid-size.
 // - Auto width-probe for big-path cases with S < 60000 picks a stronger base width first.
 // Judge: cpuLimit=2s. Hard global deadline (default 1850ms, env POLYPACK_TL override),
@@ -784,6 +788,7 @@ int main() {
     int B3 = envInt("PP_B3", 1);             // 1: use cached blf3 instead of blf2
     int PHASE2 = envInt("PP_PHASE2", 1);     // 1: blf2 pass over best sweep Ws
     double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;  // 0 => auto by size
+    double P2ENDF = envInt("PP_P2END", 0) / 100.0;   // 0 => auto by size
     long long P2MAXS = envInt("PP_P2MAXS", 22000);   // phase2 only when S below this
     long long B2RESTS = envInt("PP_B2RESTS", 1300);  // blf2 restarts when S below this
 
@@ -807,6 +812,11 @@ int main() {
         for (int j = 0; j < k; j++) { int x = readInt(), y = readInt(); ps[i].b[j] = {x, y}; }
         S += k;
     }
+    // Phase-2 budget split, auto by size: for S < 6000 the capped-restart ILS loop is worth far
+    // more than a long sweep+phase2 (measured +0.005..+0.015), so end the sweep early; at
+    // S ~ 10-20k the deep blf3 phase2 dominates instead, keep the champion split.
+    if (P2FRAC <= 0.0) P2FRAC = (S < 6000) ? 0.25 : 0.55;
+    if (P2ENDF <= 0.0) P2ENDF = (S < 6000) ? 0.35 : 0.70;
     for (int i = 0; i < n; i++) {
         auto& p = ps[i];
         unordered_set<string> seen; seen.reserve(32);
@@ -871,7 +881,8 @@ int main() {
     else if (S < 3000) factor = 0.5;
     else if (S < 10000) factor = 0.27;
     else if (S < 30000) factor = 0.08;
-    else factor = 0.01;
+    else if (S < 50000) factor = 0.028;  // measured optimum W~33 at S~38k (was 0.01 -> W~19)
+    else factor = 0.009;                 // measured optimum W~24-28 at S~58-96k
     int base = max(minW, (int)floor(sqrt((double)S * factor)));
     if (const char* e = getenv("PP_BASEW")) { int v = atoi(e); if (v >= minW && v <= 4000) base = v; }
 
@@ -888,7 +899,7 @@ int main() {
         sort(Ws.begin(), Ws.end(), [&](int a, int b) { int da = abs(a - base), db = abs(b - base); if (da != db) return da < db; return a < b; });
     }
 
-    bool big = S > (long long)envInt("PP_BIGTHRESH", 22000);
+    bool big = S > (long long)envInt("PP_BIGTHRESH", 70000);
     vector<int> baseOrder = ord4();
 
     auto better = [&](const R& a, const R& b) {
@@ -960,8 +971,7 @@ int main() {
     int swin = max(1, n / 4);
     if (!big && !((big && BIGBLF) || (!big && SMALLBLF))) {
         static double SW1F = envInt("PP_SW1F", 80) / 100.0;
-        double sweepBudget = (PHASE2 && S < P2MAXS) ? min(SOFT_END, TL_MS * (P2FRAC > 0.0 ? P2FRAC : 0.55))
-                                                    : SOFT_END;
+        double sweepBudget = (PHASE2 && S < P2MAXS) ? min(SOFT_END, TL_MS * P2FRAC) : SOFT_END;
         double budget1 = SW1F * max(50.0, sweepBudget - elapsed_ms());
         double swinPred = budget1 / tFB;
         int cap = max(24, (int)swinPred);
@@ -978,8 +988,9 @@ int main() {
     double avg = 250.0; int cnt = 0;
     vector<pair<long long,int>> sweepRes; // (area, W)
     bool doPhase2 = (!big && PHASE2 && S < P2MAXS);
-    if (P2FRAC <= 0.0) P2FRAC = 0.55;
-    double sweepEnd = doPhase2 ? min(SOFT_END, TL_MS * P2FRAC) : SOFT_END;
+    double SWFRAC = envInt("PP_SWFRAC", 100) / 100.0; // sweep cap for the no-phase2 small path
+    double sweepEnd = doPhase2 ? min(SOFT_END, TL_MS * P2FRAC)
+                               : (!big ? min(SOFT_END, TL_MS * SWFRAC) : SOFT_END);
     for (int wi = 0; wi < (skipSweep ? 0 : (int)Ws.size()); wi++) {
         double used = elapsed_ms();
         if (used + avg * 1.15 > sweepEnd) break;
@@ -1027,8 +1038,7 @@ int main() {
     // ---- phase 2 (small cases): deep blf2 pass over the most promising sweep widths ----
     if (doPhase2) {
         sort(sweepRes.begin(), sweepRes.end());
-        double P2END = envInt("PP_P2END", 70) / 100.0;
-        double p2Stop = min(SOFT_END, TL_MS * P2END);
+        double p2Stop = min(SOFT_END, TL_MS * P2ENDF);
         double avg2 = 20.0; int cnt2 = 0;
         // width candidates: sweep results (best area first), then unexplored neighbors of the
         // best width — blf3 packs are cheap, so probe widths the sweep never reached.
