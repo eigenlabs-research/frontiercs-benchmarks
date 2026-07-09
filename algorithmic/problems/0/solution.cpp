@@ -1,4 +1,4 @@
-// v19.3: BF crown + more GRASP budget (autopsy: BF +ve, skip-crown left gains)
+// v19.5: v19.3 + bf W-search d<=30 only (v19.4 overfit/regressed)
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -846,7 +846,7 @@ static R bfSolve(int minW, int base, double deadline) {
     }
     long long bestA = LLONG_MAX; int bestW = 0, bestH = 0; vector<int> bK, bO, bX, bY, tK, tO, tX, tY;
     double lastPass = 0;
-    for (int d = 0; d <= 24; d++) {
+    for (int d = 0; d <= 30; d++) { // v19.5: wider W only
         for (int sgn = (d ? -1 : 1); sgn <= 1; sgn += 2) {
             int W = base + sgn * d; if (W < minW || W > 63) continue;
             for (int tie = 1; tie >= 0; tie--) {   // try both tie-break directions, keep best area
