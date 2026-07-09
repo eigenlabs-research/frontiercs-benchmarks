@@ -687,9 +687,23 @@ if(sr>bestR){bestR=sr;best=sd;}
 }
 }
 double TLfull=TIME_LIMIT;
-TIME_LIMIT=TLfull-0.04;
+TIME_LIMIT=TLfull-0.05;
 relaxOptimize(best, bestR);
 TIME_LIMIT=TLfull;
+// Attempt tiny-jitter + polish restart to escape numerical stalls.
+{
+    vector<array<double,3>> cand=best;
+    double amp=1e-6*bestR;
+    std::uniform_real_distribution<double> U(-1.0,1.0);
+    for(auto& p:cand){
+        p[0]=clamp01(p[0]+amp*U(RNG));
+        p[1]=clamp01(p[1]+amp*U(RNG));
+        p[2]=clamp01(p[2]+amp*U(RNG));
+    }
+    double cr=geomFast(cand,bestR);
+    microPolish(cand, cr, TLfull-0.005);
+    if(cr>bestR){ bestR=cr; best=cand; }
+}
 microPolish(best, bestR, TIME_LIMIT);
 if((int)best.size()!=n){ best=cubicGrid(n); }
 for(auto& p : best){ p[0]=clamp01(p[0]); p[1]=clamp01(p[1]); p[2]=clamp01(p[2]); }
