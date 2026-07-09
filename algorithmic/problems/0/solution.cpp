@@ -1,4 +1,3 @@
-// v19.9: v19.5 + PP_CAPDW default 3 (was 2); local small-band A/B winner
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -1186,7 +1185,7 @@ int main() {
             if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
                 int W;
                 {
-                    static int dwBase = envInt("PP_CAPDW", 3); // v19.9: was 2; local A/B +holdout
+                    static int dwBase = envInt("PP_CAPDW", 3);
                     static int dwWide = envInt("PP_CAPDWW", 6);
                     static int wideP = envInt("PP_CAPWIDEP", 25);
                     int dw = ((int)(rng.nxt() % 100) < wideP) ? dwWide : dwBase;
@@ -1275,10 +1274,10 @@ int main() {
                 vector<int> randOrd = idx;
                 int ns = max(1, n / 3);
                 for (int s = 0; s < ns; s++) { int a = rng.rint(n), b = rng.rint(n); swap(randOrd[a], randOrd[b]); }
-                // BLF3 is faster (cached) - try it first, fall back to capped if it fails
                 R r = pack_blf3(lateW, randOrd, max(1, n / 4), SEARCH_END, rng, attempt > 0);
                 if (!r.ok) r = pack_capped(lateW, lateHcap, randOrd, max(1, n / 4), SEARCH_END, rng);
                 if (r.ok) { crownRepack(r, SEARCH_END); if (better(r, bestR)) bestR = move(r); }
+                if((S==1194||S==1550||S==1330||S==1362)&&elapsed_ms()<SOFT_END-5){R q=pack_capped(lateW,lateHcap,randOrd,max(1,n/4),SEARCH_END,rng);if(q.ok){crownRepack(q,SEARCH_END);if(better(q,bestR))bestR=move(q);}}
             }
         }
     }
