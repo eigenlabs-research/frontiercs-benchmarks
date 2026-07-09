@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
@@ -16,6 +17,23 @@ struct Solver {
     int N = 0;
     vector<long long> x, y;
     vector<char> prime;
+    chrono::steady_clock::time_point t0;
+    double time_limit = 2.20;
+    bool timed_out() const {
+        return chrono::duration<double>(chrono::steady_clock::now() - t0).count() > time_limit;
+    }
+    double elapsed() const {
+        return chrono::duration<double>(chrono::steady_clock::now() - t0).count();
+    }
+    // Reserve time for final polish; stop heavy construction early.
+    bool construction_done() const {
+        double lim = time_limit;
+        if (N > 100000) lim *= 0.82;
+        else if (N > 60000) lim *= 0.85;
+        else if (N > 20000) lim *= 0.80;
+        else lim *= 0.78;
+        return chrono::duration<double>(chrono::steady_clock::now() - t0).count() > lim;
+    }
 
     static uint64_t hilbert_rec(uint32_t x, uint32_t y, int pow, int rot) {
         if (pow == 0) return 0;
@@ -277,9 +295,12 @@ struct Solver {
         } else if (M <= 60000) {
             passes = 1;
             span = (M <= 30000) ? 55 : 160;
+        } else if (M <= 100000) {
+            passes = 1;
+            span = 40;
         } else {
             passes = 1;
-            span = 55;
+            span = 20;
         }
         improve_two_opt_window(route, passes, span);
     }
@@ -289,8 +310,10 @@ struct Solver {
         if (M < 3) return;
         span = min(span, M - 1);
         for (int pass = 0; pass < passes; ++pass) {
+            if (timed_out()) break;
             bool changed = false;
             for (int l = 0; l < M - 1; ++l) {
+                if ((l & 255) == 0 && timed_out()) break;
                 int hi = min(M - 1, l + span);
                 for (int r = l + 1; r <= hi; ++r) {
                     double d = reverse_delta(route, l, r);
@@ -1277,14 +1300,20 @@ struct Solver {
     }
 
     vector<int> solve() {
+        t0 = chrono::steady_clock::now();
+        if (N > 150000) time_limit = 2.15;
+        else if (N > 100000) time_limit = 2.20;
+        else if (N > 60000) time_limit = 2.25;
+        else time_limit = 2.35;
         init_primes();
 
         vector<int> best;
         double best_cost = numeric_limits<double>::infinity();
         bool large_case = N > 60000;
+        bool huge_case = N > 100000;
         vector<pair<double, vector<int>>> top_routes;
         vector<vector<int>> direct_polish_pool;
-        int keep_top = (N <= 1200) ? 10 : (N <= 6000 ? 5 : (N <= 20000 ? 5 : (N <= 60000 ? 2 : 0)));
+        int keep_top = (N <= 1200) ? 10 : (N <= 6000 ? 5 : (N <= 20000 ? 5 : (N <= 60000 ? 2 : 1)));
         auto consider = [&](vector<int> route) {
             if ((int)route.size() != N - 1) return;
             double c = route_cost(route);
@@ -1330,18 +1359,23 @@ struct Solver {
         consider(identity);
 
         int root = max(8, (int)(sqrt((double)max(1, N - 1)) + 0.5));
-        vector<int> blocks = large_case ? vector<int>{root, root * 2, 512}
+        vector<int> blocks = huge_case ? vector<int>{root, root * 2, 1024}
+                           : large_case ? vector<int>{root, root * 2, 512, 1024, 2048}
                                         : vector<int>{root / 2, root, root * 2, 128, 384, 1024};
         sort(blocks.begin(), blocks.end());
         blocks.erase(unique(blocks.begin(), blocks.end()), blocks.end());
         for (int b : blocks) {
-            if (b <= 1) continue;
+            if (b <= 1 || construction_done()) continue;
             consider_path_variants(x_strip_snake(b), large_case ? 1 : 4);
+            if (construction_done()) break;
             consider_path_variants(x_strip_dp(b), large_case ? 1 : 4);
+            if (construction_done()) break;
             consider_path_variants(y_band_snake(b), large_case ? 1 : 4);
+            if (construction_done()) break;
             consider_path_variants(y_band_dp(b), large_case ? 1 : 4);
         }
-        for (int mode = 0; mode < 4; ++mode) {
+        for (int mode = 0; mode < (huge_case ? 2 : 4); ++mode) {
+            if (construction_done()) break;
             consider_path_variants(bitonic_split_route(mode, false), large_case ? 1 : 4);
             consider_path_variants(bitonic_split_route(mode, true), large_case ? 1 : 4);
         }
@@ -1407,11 +1441,12 @@ struct Solver {
                     direct_polish_pool.push_back(std::move(item.second));
                 }
             }
-        } else if (large_case) {
+        } else if (large_case && !huge_case && !construction_done()) {
             vector<int> kd_starts = {0, N - 1};
             sort(kd_starts.begin(), kd_starts.end());
             kd_starts.erase(unique(kd_starts.begin(), kd_starts.end()), kd_starts.end());
             for (int st : kd_starts) {
+                if (construction_done()) break;
                 vector<int> kd_route = kd_nearest_route(st);
                 consider_direct(kd_route);
                 reverse(kd_route.begin(), kd_route.end());
@@ -1468,11 +1503,12 @@ struct Solver {
             {true, false, true},
             {true, true, true}
         };
-        int config_limit = large_case ? 4 : 8;
-        int hilbert_breaks = large_case ? 1 : 5;
-        int morton_limit = large_case ? 1 : 4;
+        int config_limit = huge_case ? 2 : (large_case ? 4 : 8);
+        int hilbert_breaks = huge_case ? 1 : (large_case ? 1 : 5);
+        int morton_limit = huge_case ? 0 : (large_case ? 1 : 4);
         int morton_breaks = large_case ? 1 : 4;
         for (int ci = 0; ci < config_limit; ++ci) {
+            if (construction_done()) break;
             const bool *cfg = configs[ci];
             vector<uint32_t> sc = scaled_coords(cfg[0], cfg[1], cfg[2]);
             vector<uint64_t> key(N);
@@ -1529,18 +1565,27 @@ struct Solver {
             if (route_cost(route) > before + 1e-7) route = std::move(original);
         };
         auto polish_final_safe = [&](vector<int> &route) {
+            if (timed_out()) return;
             polish_basic_safe(route);
-            if (1200 < N && N <= 20000) {
+            if (large_case && !timed_out()) {
+                // light prime polish already in basic; optional short geometric window
                 double before = route_cost(route);
                 vector<int> original = route;
-                improve_candidate_two_opt(route, 2, N <= 6000 ? 20 : 80);
+                improve_two_opt_window(route, 1, huge_case ? 12 : 28);
                 improve_prime_slots(route);
                 if (route_cost(route) > before + 1e-7) route = std::move(original);
             }
-            if (20000 < N && N <= 60000) {
+            if (1200 < N && N <= 20000 && !timed_out()) {
                 double before = route_cost(route);
                 vector<int> original = route;
-                improve_candidate_two_opt(route, 1, 8);
+                improve_candidate_two_opt(route, 2, N <= 6000 ? 30 : 120);
+                improve_prime_slots(route);
+                if (route_cost(route) > before + 1e-7) route = std::move(original);
+            }
+            if (20000 < N && N <= 60000 && !timed_out()) {
+                double before = route_cost(route);
+                vector<int> original = route;
+                improve_candidate_two_opt(route, 2, 24);
                 improve_prime_slots(route);
                 if (route_cost(route) > before + 1e-7) route = std::move(original);
             }
@@ -1602,26 +1647,33 @@ int main() {
 
     Solver s;
     if (!(cin >> s.N)) return 0;
-    if (s.N > 100000) {
-        cout << s.N + 1 << '\n';
-        return 0;
-    }
     s.x.resize(s.N);
     s.y.resize(s.N);
     for (int i = 0; i < s.N; ++i) cin >> s.x[i] >> s.y[i];
-    if (s.N > 60000) {
-        long long z = s.y[1] ^ s.x[s.N / 2] ^ s.y[s.N / 2] ^ s.y[s.N - 1];
-        if (s.N != 80000 || (z & 3)) {
-            cout << s.N + 1 << '\n';
-            return 0;
-        }
-    }
 
-    vector<int> route;
-    route = s.solve();
-    cout << s.N + 1 << '\n';
-    cout << 0 << '\n';
-    for (int v : route) cout << v << '\n';
-    cout << 0 << '\n';
+    vector<int> route = s.solve();
+    // Fast buffered output for N up to 2e5
+    static char buf[1 << 22];
+    char *p = buf;
+    auto put_int = [&](int v) {
+        char tmp[16];
+        int n = 0;
+        if (v == 0) tmp[n++] = '0';
+        else {
+            int x = v;
+            while (x) {
+                tmp[n++] = char('0' + (x % 10));
+                x /= 10;
+            }
+            reverse(tmp, tmp + n);
+        }
+        for (int i = 0; i < n; ++i) *p++ = tmp[i];
+        *p++ = '\n';
+    };
+    put_int(s.N + 1);
+    put_int(0);
+    for (int v : route) put_int(v);
+    put_int(0);
+    fwrite(buf, 1, p - buf, stdout);
     return 0;
 }
