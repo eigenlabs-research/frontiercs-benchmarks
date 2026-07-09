@@ -1,3 +1,7 @@
+// v18.9: fix v18.8 gravity baseline (compare vs grid-compressed A0, not skyline r.A)
+// and only run gravity for S<25k where small-case gains live. v18.8 regressed big
+// cases because r.A over-counted empty interior rows, so "improvements" could worsen
+// true compressed area.
 // v18.6: BLF2 window n/3 for S<30k (smaller is better for large S)
 // v18: v17 + wider small-path routing, mid-band width factor, small-case budget shift.
 // - S < 6000: sweep+phase2 end early (25%/35% of TL) so the capped-restart ILS loop gets
@@ -391,6 +395,76 @@ static bool crownRepack(R& r, double deadlineMs) {
         r.A = (long long)r.W * r.H;
     }
     return improvedAny;
+}
+
+// ---------- same-orient gravity polish: sink pieces down/left without reorient ----------
+// Applied only to the final best packing. Commits only if compressed A improves.
+static bool gravitySink(R& r, double deadlineMs) {
+    if (!r.ok || r.packW <= 0 || r.packW > 64 || r.pl.empty()) return false;
+    int W = r.packW;
+    vector<Pl> snap = r.pl;
+    int H0 = 0;
+    for (auto& p : r.pl) H0 = max(H0, p.y + ps[p.idx].t[p.ti].h);
+    if (H0 <= 1) return false;
+    auto& grid = c_grid;
+    grid.assign(H0 + 4, 0ULL);
+    for (auto& p : r.pl) {
+        auto& t = ps[p.idx].t[p.ti];
+        for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] |= ((uint64_t)t.rmask[dy]) << p.x;
+    }
+    auto areaOf = [&]() -> long long {
+        // compressed A: drop empty rows AND empty columns (matches final output)
+        uint64_t colU = 0; int rows = 0;
+        for (auto& g : grid) if (g) { colU |= g; rows++; }
+        return 1LL * max(1, __builtin_popcountll(colU)) * max(1, rows);
+    };
+    // IMPORTANT: baseline from grid, not r.A (skyline H can count empty interior rows)
+    long long A0 = areaOf();
+    bool moved = false;
+    for (int pass = 0; pass < 3; pass++) {
+        if (deadlineMs > 0 && elapsed_ms() > deadlineMs) break;
+        bool any = false;
+        vector<int> ord(r.pl.size()); iota(ord.begin(), ord.end(), 0);
+        sort(ord.begin(), ord.end(), [&](int a, int b) {
+            return r.pl[a].y + ps[r.pl[a].idx].t[r.pl[a].ti].h >
+                   r.pl[b].y + ps[r.pl[b].idx].t[r.pl[b].ti].h;
+        });
+        for (int oi : ord) {
+            if (deadlineMs > 0 && elapsed_ms() > deadlineMs) break;
+            auto& p = r.pl[oi];
+            auto& t = ps[p.idx].t[p.ti];
+            int ox = p.x, oy = p.y;
+            for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] &= ~(((uint64_t)t.rmask[dy]) << p.x);
+            uint64_t limMask = (W - t.w + 1 >= 64) ? ~0ULL : ((1ULL << (W - t.w + 1)) - 1);
+            int bY = oy, bX = ox;
+            for (int y = 0; y <= oy; y++) {
+                uint64_t conflict = 0;
+                for (int dyy = 0; dyy < t.h; dyy++) {
+                    uint64_t g = grid[y + dyy];
+                    if (!g) continue;
+                    unsigned m = t.rmask[dyy];
+                    while (m) { int b = __builtin_ctz(m); conflict |= (g >> b); m &= m - 1; }
+                }
+                uint64_t allowed = ~conflict & limMask;
+                if (!allowed) continue;
+                int x = (int)__builtin_ctzll(allowed);
+                if (y < bY || (y == bY && x < bX)) { bY = y; bX = x; }
+                break;
+            }
+            for (int dy = 0; dy < t.h; dy++) grid[bY + dy] |= ((uint64_t)t.rmask[dy]) << bX;
+            if (bX != ox || bY != oy) { p.x = bX; p.y = bY; any = true; moved = true; }
+        }
+        if (!any) break;
+    }
+    if (!moved) return false;
+    long long A1 = areaOf();
+    if (A1 >= A0) { r.pl = move(snap); return false; }
+    uint64_t colU = 0; int rows = 0;
+    for (auto& g : grid) if (g) { colU |= g; rows++; }
+    r.W = max(1, __builtin_popcountll(colU));
+    r.H = max(1, rows);
+    r.A = A1;
+    return true;
 }
 
 // ---------- blf2: hole-aware windowed best-fit (W<=64) ----------
@@ -1182,6 +1256,11 @@ R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / (S > 30000 ? 5
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_search_done=%.1f\n", elapsed_ms());
     // final polish on the global best
     crownRepack(bestR, TL_MS + 10.0);
+    // gravity helps most on small/mid packs; skip huge instances (time + noise)
+    if (S < 25000) {
+        gravitySink(bestR, TL_MS + 10.0);
+        crownRepack(bestR, TL_MS + 10.0);
+    }
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_crown_done=%.1f\n", elapsed_ms());
 
     // ---- output with column AND row compression ----
