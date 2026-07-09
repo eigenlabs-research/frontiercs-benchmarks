@@ -771,7 +771,7 @@ static inline void bf_put(const T& o, int x, int y) {
 }
 static inline uint64_t bf_key(int w, const int* v) { uint64_t k = (uint64_t)w << 52; for (int j = 0; j < w; j++) { int s = v[j] + 16; if (s < 0) s = 0; if (s > 31) s = 31; k |= (uint64_t)s << (5 * j); } return k; }
 static int bf_pass(int W, const vector<int>& repr, const unordered_map<uint64_t, vector<pair<int,int>>>& idx,
-                   vector<int>& avail, int total, vector<int>& outKind, vector<int>& outOri, vector<int>& outX, vector<int>& outY, int tie) {
+                   vector<int>& avail, int total, vector<int>& outKind, vector<int>& outOri, vector<int>& outX, vector<int>& outY, int tie, RNG* rng = nullptr) {
     bf_W = W; bf_occ.assign(8, 0ULL); bf_colH.assign(W, 0);
     outKind.clear(); outOri.clear(); outX.clear(); outY.clear();
     int rem = total; int p[12];
@@ -787,7 +787,9 @@ static int bf_pass(int W, const vector<int>& repr, const unordered_map<uint64_t,
     };
     while (rem > 0) {
         int mh = INT_MAX; curH0 = 0; for (int c = 0; c < W; c++) { if (bf_colH[c] < mh) mh = bf_colH[c]; if (bf_colH[c] > curH0) curH0 = bf_colH[c]; }
-        int nc = 0; while (nc < W && bf_colH[nc] != mh) nc++;
+        int nc;
+        if (rng) { int lows[64], nl = 0; for (int c = 0; c < W; c++) if (bf_colH[c] == mh) lows[nl++] = c; nc = lows[rng->rint(nl)]; }
+        else { nc = 0; while (nc < W && bf_colH[nc] != mh) nc++; }
         bH = LLONG_MAX; bW = LLONG_MAX; bC = -1; bk = -1; bo = -1; bx = -1; by = -1;
         for (int w = 1; w <= 10; w++) {
             int xlo = nc - w + 1; if (xlo < 0) xlo = 0; int xhi = nc; if (xhi > W - w) xhi = W - w;
@@ -845,6 +847,18 @@ static R bfSolve(int minW, int base, double deadline) {
                 lastPass = elapsed_ms() - t0;
                 if (H > 0) { long long A = (long long)W * H; if (A < bestA) { bestA = A; bestW = W; bestH = H; swap(bK, tK); swap(bO, tO); swap(bX, tX); swap(bY, tY); } }
             }
+        }
+    }
+    // phase 2: random-niche GRASP restarts around bestW while time remains (never regresses phase 1)
+    if (bestW > 0 && envInt("PP_G", 1)) {
+        RNG rng(0x9e3779b97f4a7c15ULL ^ ((unsigned long long)S << 1));
+        while (elapsed_ms() + lastPass * 1.3 < deadline) {
+            int W = bestW + (rng.rint(5) - 2); if (W < minW || W > 63) continue;
+            int tie = rng.rint(2);
+            vector<int> avail = kcnt; double t0 = elapsed_ms();
+            int H = bf_pass(W, repr, idx, avail, n, tK, tO, tX, tY, tie, &rng);
+            lastPass = elapsed_ms() - t0;
+            if (H > 0) { long long A = (long long)W * H; if (A < bestA) { bestA = A; bestW = W; bestH = H; swap(bK, tK); swap(bO, tO); swap(bX, tX); swap(bY, tY); } }
         }
     }
     DONE:;
