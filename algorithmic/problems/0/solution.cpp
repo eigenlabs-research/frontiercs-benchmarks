@@ -985,11 +985,16 @@ int main() {
         unordered_set<int> used; used.reserve(512);
         auto addW = [&](int w) { if (w < minW) w = minW; if (used.insert(w).second) Ws.push_back(w); };
         addW(base);
-        int span = min(96, max(20, base / 2));
+        int span = min(120, max(20, base));
         for (int d = 1; d <= span; d++) { addW(base - d); addW(base + d); }
         addW(minW);
         addW((int)max<long long>(minW, (S + base - 1) / base));
         for (int m = 2; m <= 6; m++) { addW(base * m / 3); addW((int)max<long long>(minW, S / ((base * m / 3) ? (base * m / 3) : 1))); }
+        // Additional systematic candidates: probe W from area/S ratios
+        int theoryH = max(1, (int)ceil((double)S / base));
+        for (int h = max(1, theoryH / 2); h <= theoryH * 2 && h <= 200; h++) {
+            addW((int)ceil((double)S / h));
+        }
         sort(Ws.begin(), Ws.end(), [&](int a, int b) { int da = abs(a - base), db = abs(b - base); if (da != db) return da < db; return a < b; });
     }
 
