@@ -1264,6 +1264,12 @@ int main(){
     g_label="beam";
 #endif
     g_densOrd = orderByDensity();
+    // Brief mid-style narrow beam (hard wall ~80ms) before wide beam; recovers residual cases.
+    if(elapsed() < TIME_LIMIT * 0.12){
+        double tcap = elapsed() + 0.08;
+        if(tcap > TIME_LIMIT * 0.30) tcap = TIME_LIMIT * 0.30;
+        consider(polish(beamMixedShelfPlan(allowRot, 4, 3, 5, tcap)));
+    }
 #ifdef DIAG
     {
         int bw = allowRot ? 14 : 7, br = allowRot ? 5 : 4, bd = allowRot ? 9 : 7;
