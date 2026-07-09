@@ -1,4 +1,4 @@
-// v19.5: v19.3 + bf W-search d<=30 only (v19.4 overfit/regressed)
+// v19.8: v19.5 + bfSolve deadline TL-20 (was TL-40); more GRASP, no W change
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -1013,7 +1013,7 @@ int main() {
     long long BF_N = envInt("PP_BFN", 450);
     bool useBF = (bfEnv < 0) ? (n >= BF_N && base <= 63 && minW <= 63) : (bfEnv > 0);
     if (useBF) {
-        bestR = bfSolve(minW, min(base, 63), TL_MS - 40.0); // more leftover for GRASP
+        bestR = bfSolve(minW, min(base, 63), TL_MS - 20.0); // v19.8: more GRASP (was TL-40)
         // BF path previously skipped final crown — multi-row crown can shave BF packings
         if (bestR.ok) crownRepack(bestR, TL_MS - 5.0);
     }
