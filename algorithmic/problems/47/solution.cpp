@@ -373,6 +373,27 @@ static PackResult fillGaps(const PackResult& base, const vector<int>& order,
     return res;
 }
 
+static PackResult compactYFill(PackResult base,const vector<int>& order,bool allowRotate){
+    sort(base.placements.begin(),base.placements.end(),[](const Placed&a,const Placed&b){
+        if(a.y!=b.y) return a.y<b.y;
+        return a.x<b.x;
+    });
+    vector<Placed> out; out.reserve(base.placements.size());
+    for(Placed p:base.placements){
+        const ItemType& it=g_items[p.typeId];
+        int w=p.rot?it.h:it.w;
+        int y=0;
+        for(const Placed&q:out){
+            const ItemType& iq=g_items[q.typeId];
+            int qw=q.rot?iq.h:iq.w,qh=q.rot?iq.w:iq.h;
+            if(p.x<q.x+qw&&q.x<p.x+w) y=max(y,q.y+qh);
+        }
+        p.y=y; out.push_back(p);
+    }
+    base.placements=std::move(out);
+    return fillGaps(base,order,allowRotate,allowRotate);
+}
+
 static PackResult pruneLow(const PackResult& base, int cnt, const vector<int>& order, bool allowRotate){
     int n = (int)base.placements.size();
     if(cnt <= 0 || n == 0) return base;
@@ -1439,6 +1460,7 @@ int main(){
             if(elapsed()<TIME_LIMIT*0.965) consider(pruneLine(best,ln,ordMinDim,allowRot,side));
             if(elapsed()<TIME_LIMIT*0.965) consider(pruneLine(best,ln,ordVal,allowRot,side));
         }
+        if(elapsed()<TIME_LIMIT*0.968) consider(compactYFill(best,ordDens,allowRot));
     }
     #ifdef DIAG
     g_label="maxrects";
