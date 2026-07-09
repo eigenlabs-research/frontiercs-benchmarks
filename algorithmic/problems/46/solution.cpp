@@ -399,9 +399,9 @@ int main(){
 
     mt19937 rng(777u);
     trySeed(seedGT(0, rng)); // MWR
-    trySeed(seedGT(1, rng)); // LPT
+    trySeed(seedGT(4, rng)); // PMWR (wrem/(nextP+1))
     if(chrono::steady_clock::now() - T0 < budget)
-        trySeed(seedGT(2, rng)); // SPT
+        trySeed(seedGT(1, rng)); // LPT
 
     // Trivial lower bound: max(machine load, job length). If reached, we are
     // provably optimal and can stop immediately.
