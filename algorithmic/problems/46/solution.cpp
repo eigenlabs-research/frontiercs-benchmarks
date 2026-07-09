@@ -344,8 +344,8 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 }
 
 int main(){
-    auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(995); // increased budget for more iterations with longer tenure
+    chrono::steady_clock::time_point T0;
+    const auto budget = chrono::milliseconds(995); // spend search budget after input/setup
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
@@ -373,6 +373,7 @@ int main(){
     qbuf.reserve(N);
     gord.resize(J); gestC.resize(J);
     tabuTB.assign((size_t)N*J, 0);
+    T0 = chrono::steady_clock::now();
 
     // Feasibility fallback: job-index order on every machine (always acyclic).
     vector<vector<int>> best(M, vector<int>(J));
