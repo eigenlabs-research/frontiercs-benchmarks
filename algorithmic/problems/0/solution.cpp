@@ -1,4 +1,4 @@
-// v18.6: BLF2 window n/3 for S<30k (smaller is better for large S)
+// v18.7: deeper REPAIR for S>45k, finer P2MAXS window
 // v18: v17 + wider small-path routing, mid-band width factor, small-case budget shift.
 // - S < 6000: sweep+phase2 end early (25%/35% of TL) so the capped-restart ILS loop gets
 //   the bulk of the budget — measured +0.005..+0.015 on n=200..500 cases.
@@ -592,7 +592,9 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
     vector<Pl> pl; pl.reserve(nm);
     if ((int)b3cache.size() < nm * 8) b3cache.resize(nm * 8);
     for (int i = 0; i < nm * 8; i++) b3cache[i].valid = false;
-    static int REPAIR = envInt("PP_REPAIR", 25); // ejection-chain depth (0 = off)
+    static int REPAIR_BASE = envInt("PP_REPAIR", 25);
+    int REPAIR = REPAIR_BASE;
+    if (S > 45000) REPAIR = max(REPAIR_BASE, 32);  // deeper ejections for very large packed cases
     auto& own = g_own;
     auto& plSlot = g_plSlot;
     if (REPAIR > 0) {
