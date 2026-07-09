@@ -399,9 +399,9 @@ int main(){
 
     mt19937 rng(777u);
     trySeed(seedGT(0, rng)); // MWR
-    trySeed(seedGT(1, rng)); // LPT
+    trySeed(seedGT(4, rng)); // PMWR (wrem/(nextP+1))
     if(chrono::steady_clock::now() - T0 < budget)
-        trySeed(seedGT(2, rng)); // SPT
+        trySeed(seedGT(1, rng)); // LPT
 
     // Trivial lower bound: max(machine load, job length). If reached, we are
     // provably optimal and can stop immediately.
@@ -424,6 +424,13 @@ int main(){
     if(bestC > LB){
         long long c = evalSeq(cur, true);
         if(c > 0) curC = c; else { cur = best; curC = evalSeq(cur, true); }
+
+        // Elite pool: keep top-K best solutions we've seen. Used for
+        // diversification restarts. Each entry is (makespan, sequences).
+        const int ELITE_SIZE = 4;
+        vector<pair<long long, vector<vector<int>>>> elite;
+        elite.reserve(ELITE_SIZE);
+        elite.push_back({bestC, best});
 
         int iter = 0, sinceImp = 0;
 #ifndef STUCK_LIM
@@ -587,6 +594,14 @@ int main(){
                 if(exact >= 0 && exact < bestC){
                     best = cur; bestC = exact; sinceImp = 0;
                     lastImpT = chrono::steady_clock::now();
+                    // Insert into elite pool
+                    if((int)elite.size() < ELITE_SIZE) elite.push_back({bestC, best});
+                    else {
+                        // Replace worst if better
+                        int wi = 0;
+                        for(int e=1; e<(int)elite.size(); ++e) if(elite[e].first > elite[wi].first) wi = e;
+                        if(elite[wi].first > bestC){ elite[wi].first = bestC; elite[wi].second = best; }
+                    }
 #ifdef DIAG
                     iterLastImp = iter;
 #endif
@@ -615,6 +630,38 @@ int main(){
                 }
                 fill(tabuTB.begin(), tabuTB.end(), 0);
                 sinceImp = 0;
+            }
+            else {
+                // Wall-clock based diversification: if wall-time stagnation > 300ms,
+                // do a small perturbation to escape hard local optima.
+                long long stagMs = chrono::duration_cast<chrono::milliseconds>(nowT - lastImpT).count();
+                if(stagMs >= 300 && sinceImp > 3000){
+                    // Sometimes restart from an elite solution (not just best)
+                    // to explore other basins.
+                    if(elite.size() > 1 && (rng() % 3) == 0){
+                        int idx = 1 + (int)(rng() % (elite.size() - 1)); // skip best (index 0 typically)
+                        cur = elite[idx].second;
+                    } else {
+                        cur = best;
+                    }
+                    long long cc = evalSeq(cur, true);
+                    curC = (cc >= 0) ? cc : bestC;
+                    if(cc < 0){ cur = best; evalSeq(cur, true); curC = bestC; }
+                    // 3-5 random block moves for stronger perturbation
+                    int nk = 3 + (int)(rng() % 3);
+                    for(int r=0; r<nk; ++r){
+                        genMoves(cur);
+                        if(gmoves.empty()) break;
+                        const Mv& mv = gmoves[rng() % gmoves.size()];
+                        applyMove(cur, mv);
+                        long long nc = evalSeq(cur, true);
+                        if(nc < 0){ undoMove(cur, mv); evalSeq(cur, true); }
+                        else curC = nc;
+                    }
+                    fill(tabuTB.begin(), tabuTB.end(), 0);
+                    sinceImp = 0;
+                    lastImpT = chrono::steady_clock::now();
+                }
             }
         }
 #ifdef DIAG
