@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <bitset>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
@@ -9,6 +10,11 @@
 using namespace std;
 
 static const int MAXS = 320;
+
+static chrono::steady_clock::time_point T_START;
+static double elapsed_s() {
+    return chrono::duration<double>(chrono::steady_clock::now() - T_START).count();
+}
 
 struct Candidate {
     vector<vector<int>> blocks;
@@ -994,6 +1000,175 @@ static vector<vector<int>> pbd_316_exact_blocks(int small, int large) {
     return {};
 }
 
+static vector<bitset<MAXS>> build_avail(const vector<vector<int>>& blocks, int small) {
+    bitset<MAXS> all;
+    for (int i = 0; i < small; ++i) all.set(i);
+    vector<bitset<MAXS>> avail(small);
+    for (int v = 0; v < small; ++v) { avail[v] = all; avail[v].reset(v); }
+    for (const auto& b : blocks)
+        for (int i = 0; i < (int)b.size(); ++i)
+            for (int j = i + 1; j < (int)b.size(); ++j)
+                { avail[b[i]].reset(b[j]); avail[b[j]].reset(b[i]); }
+    return avail;
+}
+
+static void mark_used(vector<bitset<MAXS>>& avail, const vector<int>& b) {
+    for (int i = 0; i < (int)b.size(); ++i)
+        for (int j = i + 1; j < (int)b.size(); ++j)
+            { avail[b[i]].reset(b[j]); avail[b[j]].reset(b[i]); }
+}
+
+static void mark_free(vector<bitset<MAXS>>& avail, const vector<int>& b) {
+    for (int i = 0; i < (int)b.size(); ++i)
+        for (int j = i + 1; j < (int)b.size(); ++j)
+            { avail[b[i]].set(b[j]); avail[b[j]].set(b[i]); }
+}
+
+static vector<int> clique_from_avail(const vector<bitset<MAXS>>& avail, int small, int cap, int start) {
+    vector<int> cur; cur.push_back(start);
+    bitset<MAXS> cand = avail[start];
+    while ((int)cur.size() < cap && cand.any()) {
+        int chosen = -1; long long best_sc = -1;
+        for (int v = 0; v < small; ++v)
+            if (cand.test(v)) {
+                long long sc = 1000LL * (long long)((cand & avail[v]).count()) + (long long)avail[v].count();
+                if (sc > best_sc) { best_sc = sc; chosen = v; }
+            }
+        if (chosen < 0) break;
+        cur.push_back(chosen); cand &= avail[chosen]; cand.reset(chosen);
+    }
+    return cur;
+}
+
+static bool augment_pass(vector<vector<int>>& blocks, int small,
+                         vector<bitset<MAXS>>& avail, double deadline) {
+    bool changed = false;
+    for (auto& b : blocks) {
+        if ((int)b.size() >= small) continue;
+        if (elapsed_s() > deadline) break;
+        bitset<MAXS> mask;
+        for (int v : b) mask.set(v);
+        for (int v = 0; v < small; ++v)
+            if (!mask.test(v) && !(mask & ~avail[v]).any()) {
+                b.push_back(v); mask.set(v);
+                for (int u : b) if (u != v) { avail[u].reset(v); avail[v].reset(u); }
+                changed = true;
+            }
+    }
+    return changed;
+}
+
+struct Rng2 {
+    uint64_t s;
+    explicit Rng2(uint64_t seed) : s(seed) {}
+    uint64_t next_u64() {
+        uint64_t z = (s += 0x9e3779b97f4a7c15ULL);
+        z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
+        z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
+        return z ^ (z >> 31);
+    }
+    int next_int(int bound) { return (int)(next_u64() % (uint64_t)bound); }
+};
+
+static void lns_improve(vector<vector<int>>& blocks, int small, int large,
+                        vector<bitset<MAXS>>& avail, double deadline) {
+    int nb = (int)blocks.size();
+    if (nb < 2 || small < 4) return;
+    long long P = 0;
+    for (int v = 0; v < small; ++v) P += (long long)avail[v].count();
+    P /= 2;
+    int maxb = 0; for (auto& b : blocks) maxb = max(maxb, (int)b.size());
+    if (P == 0 && maxb <= 2) return;
+    Rng2 rng(0xC0FFEEULL ^ ((uint64_t)small << 32) ^ (uint64_t)nb ^ (uint64_t)8);
+    int fail_streak = 0;
+    const int GIVE_UP = 60000;
+    vector<int> uni;
+
+    auto try_rebuild = [&](int r) -> int {
+        if (r > nb) r = nb;
+        int idx[3]; idx[0] = rng.next_int(nb);
+        idx[1] = (idx[0] + 1 + rng.next_int(nb - 1)) % nb;
+        if (r >= 3) { int g = 0; do { idx[2] = rng.next_int(nb); } while ((idx[2] == idx[0] || idx[2] == idx[1]) && ++g < 8); if (idx[2] == idx[0] || idx[2] == idx[1]) r = 2; }
+        vector<vector<int>> olds(r); int old_pts = 0, max_old = 0; long long old_pairs = 0;
+        for (int t = 0; t < r; ++t) {
+            olds[t] = blocks[idx[t]]; old_pts += (int)olds[t].size();
+            max_old = max(max_old, (int)olds[t].size());
+            old_pairs += (long long)olds[t].size() * ((long long)olds[t].size() - 1) / 2;
+        }
+        if (old_pairs == 0 && P == 0) return 0;
+        uni.clear();
+        for (int t = 0; t < r; ++t) { mark_free(avail, olds[t]); uni.insert(uni.end(), olds[t].begin(), olds[t].end()); }
+        auto pick_start = [&]() {
+            int bv = -1, bc = -1;
+            for (int v : uni) { int c = (int)avail[v].count(); if (c > bc) { bc = c; bv = v; } }
+            for (int t = 0; t < 2; ++t) { int v = rng.next_int(small); int c = (int)avail[v].count(); if (c > bc) { bc = c; bv = v; } }
+            return bv;
+        };
+        vector<vector<int>> news(r); int new_pts = 0; long long new_pairs = 0;
+        int target = old_pts + 1;
+        for (int t = 0; t < r; ++t) {
+            int rem = target - new_pts, cap = (t == 0) ? (rng.next_int(2) ? max_old + 1 : (target + r - 1) / r) : rem;
+            if (cap < 1) cap = 1;
+            int s = pick_start();
+            if (s >= 0) news[t] = clique_from_avail(avail, small, cap, s);
+            if (news[t].empty()) news[t].push_back(olds[t][0]);
+            mark_used(avail, news[t]); new_pts += (int)news[t].size(); new_pairs += (long long)news[t].size() * ((long long)news[t].size() - 1) / 2;
+        }
+        bool accept = (new_pts > old_pts) || (new_pts == old_pts && new_pairs < old_pairs);
+        if (accept) { for (int t = 0; t < r; ++t) blocks[idx[t]] = news[t]; P += old_pairs - new_pairs; return (new_pts > old_pts) ? 1 : 0; }
+        for (int t = 0; t < r; ++t) mark_free(avail, news[t]);
+        for (int t = 0; t < r; ++t) mark_used(avail, olds[t]);
+        return 0;
+    };
+
+    auto try_swap = [&]() -> int {
+        int bi = rng.next_int(nb); auto& B = blocks[bi]; int bs = (int)B.size();
+        if (bs < 2 || bs >= small) return 0;
+        bitset<MAXS> mask; for (int w : B) mask.set(w);
+        int vs = rng.next_int(small);
+        for (int t = 0; t < small; ++t) {
+            int v = vs + t; if (v >= small) v -= small;
+            if (mask.test(v)) continue;
+            bitset<MAXS> confl = mask & ~avail[v];
+            if ((int)confl.count() != 1) continue;
+            int u = 0; while (!confl.test(u)) ++u;
+            for (int w : B) if (w != u) { avail[u].set(w); avail[w].set(u); }
+            for (auto& w : B) if (w == u) { w = v; break; }
+            for (int w : B) if (w != v) { avail[v].reset(w); avail[w].reset(v); }
+            int placed = -1;
+            for (int j = 0; j < nb; ++j) {
+                if (j == bi) continue;
+                auto& C = blocks[j];
+                if ((int)C.size() >= small) continue;
+                bool ok = true;
+                for (int w : C) if (!avail[u].test(w)) { ok = false; break; }
+                if (!ok) continue;
+                placed = j; break;
+            }
+            if (placed >= 0) {
+                auto& C = blocks[placed]; P -= (long long)C.size();
+                for (int w : C) { avail[u].reset(w); avail[w].reset(u); }
+                C.push_back(u); return 1;
+            }
+            for (int w : B) if (w != v) { avail[v].set(w); avail[w].set(v); }
+            for (auto& w : B) if (w == v) { w = u; break; }
+            for (int w : B) if (w != u) { avail[u].reset(w); avail[w].reset(u); }
+            return 0;
+        }
+        return 0;
+    };
+
+    while (fail_streak < GIVE_UP) {
+        if (elapsed_s() > deadline) break;
+        int roll = rng.next_int(7);
+        int gained;
+        if (roll < 4) gained = try_rebuild(2);
+        else if (roll < 5) gained = try_rebuild(3);
+        else gained = try_swap();
+        if (gained) fail_streak = 0; else ++fail_streak;
+    }
+}
+
 static bool valid_blocks(const vector<vector<int>>& blocks, int small) {
     vector<bitset<MAXS>> seen(small);
     for (const auto& block : blocks) {
@@ -1013,6 +1188,7 @@ static bool valid_blocks(const vector<vector<int>>& blocks, int small) {
 }
 
 int main() {
+    T_START = chrono::steady_clock::now();
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
 
@@ -1037,8 +1213,24 @@ int main() {
     if (!valid_blocks(best.blocks, small)) {
         best.blocks.clear();
         for (int i = 0; i < large; ++i) best.blocks.push_back({0});
+        best.score = block_score(best.blocks);
     }
 
+    if (small >= 4 && !best.blocks.empty() && elapsed_s() < 0.50) {
+        vector<vector<int>> blocks = best.blocks;
+        auto avail = build_avail(blocks, small);
+        double dl = 0.85;
+        while (elapsed_s() < dl && augment_pass(blocks, small, avail, dl)) {}
+        lns_improve(blocks, small, large, avail, dl);
+        while (elapsed_s() < dl && augment_pass(blocks, small, avail, dl)) {}
+        long long sc = block_score(blocks);
+        if (sc > best.score && valid_blocks(blocks, small)) {
+            best.blocks = std::move(blocks);
+            best.score = sc;
+        }
+    }
+
+    best.score = block_score(best.blocks);
     cout << best.score << '\n';
     for (int b = 0; b < (int)best.blocks.size(); ++b) {
         for (int v : best.blocks[b]) {
@@ -1051,3 +1243,4 @@ int main() {
     }
     return 0;
 }
+// Final attempt
