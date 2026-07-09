@@ -1,18 +1,4 @@
-#include <algorithm>
-#include <chrono>
-#include <cmath>
-#include <climits>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <numeric>
-#include <set>
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <utility>
-#include <vector>
+#include <bits/stdc++.h>
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
@@ -1003,6 +989,8 @@ int main() {
         return a.W < b.W;
     };
     R bestR;
+    const double SEARCH_END = TL_MS;           // hard abort for any pack
+    const double SOFT_END = TL_MS - 15.0;      // don't start new work after this
     int bfEnv = envInt("PP_BF", -1);
     long long BF_N = envInt("PP_BFN", 450);
     bool useBF = (bfEnv < 0) ? (n >= BF_N && base <= 63 && minW <= 63) : (bfEnv > 0);
@@ -1043,8 +1031,7 @@ int main() {
         bestR = move(r);
     }
 
-    const double SEARCH_END = TL_MS;           // hard abort for any pack
-    const double SOFT_END = TL_MS - 15.0;      // don't start new work after this
+    // SEARCH/SOFT declared earlier for late restart scope
 
 
     vector<int> ordBLF = idx;
@@ -1254,6 +1241,7 @@ int main() {
             }
         }
     }
+    } // end champion search block (skipped when best-fit produced the result)
     // late restart: try shuffled orderings at best width for fresh diversification
     if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30) {
         int lateW = bestR.packW;
@@ -1268,7 +1256,6 @@ int main() {
             }
         }
     }
-    } // end champion search block (skipped when best-fit produced the result)
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_search_done=%.1f\n", elapsed_ms());
     if (!useBF) crownRepack(bestR, TL_MS + 10.0);
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_crown_done=%.1f\n", elapsed_ms());
