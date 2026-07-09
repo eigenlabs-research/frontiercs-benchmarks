@@ -1380,6 +1380,12 @@ int main(){
                     }
                 }
             }
+            if(ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6) for(int a = 0; a < M && a < 3; ++a) for(int b = a; b < M && b < 3; ++b){
+                const ItemType& ia = g_items[ordDens[a]];
+                const ItemType& ib = g_items[ordDens[b]];
+                int s[4] = {ia.h + ib.h, ia.h + ib.w, ia.w + ib.h, ia.w + ib.w};
+                for(int x : s){ add(x); add(L - x); }
+            }
             add(L/3); add(L/2); add((2*L)/3); add(L/4); add((3*L)/4); add((2*L)/5); add((3*L)/5);
             for(int z = 0; !allowRot && z < M && z < 5; ++z){
                 const ItemType& it = g_items[ordDens[z]];
