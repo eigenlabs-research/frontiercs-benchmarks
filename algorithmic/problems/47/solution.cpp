@@ -1321,6 +1321,14 @@ int main(){
         g_msAlpha = 1.0;
     }
 #else
+    bool recordBeamT=(allowRot&&(g_bin.W*5>g_bin.H*8||M<=8))||
+                     (!allowRot&&M<=8&&g_bin.H*5<=g_bin.W*6);
+    if(recordBeamT&&elapsed()<TIME_LIMIT*0.64){
+        g_msAlpha=allowRot?0.935:0.96;
+        consider(polish(beamMixedShelfPlanT(allowRot,allowRot?30:14,allowRot?6:5,allowRot?11:9,
+                                            allowRot?TIME_LIMIT*0.74:TIME_LIMIT*0.68)));
+        g_msAlpha=1.0;
+    }
     if(elapsed() < TIME_LIMIT * 0.55)
         consider(polish(beamMixedShelfPlan(allowRot, allowRot ? 14 : 7, allowRot ? 5 : 4, allowRot ? 9 : 7, allowRot ? TIME_LIMIT * 0.78 : TIME_LIMIT * 0.66)));
     if(elapsed() < TIME_LIMIT * 0.7){
