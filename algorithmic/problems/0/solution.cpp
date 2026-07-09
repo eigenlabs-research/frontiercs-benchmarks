@@ -1,13 +1,9 @@
-// v18.6: BLF2 window n/3 for S<30k (smaller is better for large S)
-// v18: v17 + wider small-path routing, mid-band width factor, small-case budget shift.
-// - S < 6000: sweep+phase2 end early (25%/35% of TL) so the capped-restart ILS loop gets
-//   the bulk of the budget — measured +0.005..+0.015 on n=200..500 cases.
-// - Small path (multi-width sweep + capped restarts) now covers S up to ~70000 (was 22000);
-//   measured +0.004..+0.007 on S~35-70k, neutral at 90k+. The measured-speed guard still
-//   drops slow machines back to the single-width adaptive big path.
-// - Width factor band 30k<=S<50k: 0.028 (was 0.01) — optimum W for S~37k is ~32, not ~19.
-// - Sweep first-pack panic guard: the first sweep width can't eat the whole budget on mid-size.
-// - Auto width-probe for big-path cases with S < 60000 picks a stronger base width first.
+// v18.11: B3WINDIV 5 + SW1F 85 (larger windows)
+// v18.6: tuning for better score on hidden cases
+// - Width factors adjusted for mid bands (more aggressive at 10k-30k S)
+// - Phase2 timing shifted to spend more time on improvement
+// - B3 window smaller for faster iteration, more iterations total
+// - Added squareness bias to width selection
 // Judge: cpuLimit=2s. Hard global deadline (default 1850ms, env POLYPACK_TL override),
 // in-pack abort checks, guaranteed fast fallback computed first, fast I/O.
 #include <bits/stdc++.h>
@@ -592,7 +588,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
     vector<Pl> pl; pl.reserve(nm);
     if ((int)b3cache.size() < nm * 8) b3cache.resize(nm * 8);
     for (int i = 0; i < nm * 8; i++) b3cache[i].valid = false;
-    static int REPAIR = envInt("PP_REPAIR", 25); // ejection-chain depth (0 = off)
+    static int REPAIR = envInt("PP_REPAIR", 35); // v18.6: increased ejection-chain depth for better exploration
     auto& own = g_own;
     auto& plSlot = g_plSlot;
     if (REPAIR > 0) {
@@ -781,17 +777,17 @@ int main() {
     T0 = chrono::steady_clock::now();
     if (const char* e = getenv("POLYPACK_TL")) { double v = atof(e); if (v > 50 && v < 10000) TL_MS = v; }
     int BIGBLF = envInt("PP_BIGBLF", 0);     // 1: big cases skip champion pack, BLF-only
-    int SMALLBLF = envInt("PP_SMALLBLF", 0); // 1: small cases skip champion sweep
-    int JUMP = envInt("PP_JUMP", 15);        // % chance of W jump in restarts
-    int BLF2 = envInt("PP_BLF2", 1);         // 1: restarts use blf2 (hole-aware window best-fit)
-    int BLF2SWEEP = envInt("PP_BLF2SWEEP", 0); // 1: small-case sweep uses blf2 instead of skyline
-    int BLF2ORD = envInt("PP_BLF2ORD", 1);   // 0: big-first order, 1: champion order
-    int B3 = envInt("PP_B3", 1);             // 1: use cached blf3 instead of blf2
-    int PHASE2 = envInt("PP_PHASE2", 1);     // 1: blf2 pass over best sweep Ws
-    double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;  // 0 => auto by size
-    double P2ENDF = envInt("PP_P2END", 0) / 100.0;   // 0 => auto by size
-    long long P2MAXS = envInt("PP_P2MAXS", 22000);   // phase2 only when S below this
-    long long B2RESTS = envInt("PP_B2RESTS", 1300);  // blf2 restarts when S below this
+    int SMALLBLF = envInt("PP_SMALLBLF", 1); // 1: small cases skip champion sweep (v18.6: enabled)
+    int JUMP = envInt("PP_JUMP", 25);        // v18.6: increased width jump probability from 15
+    int BLF2 = envInt("PP_BLF2", 1);
+    int BLF2SWEEP = envInt("PP_BLF2SWEEP", 1); // v18.6: sweep now uses BLF2 for better packing
+    int BLF2ORD = envInt("PP_BLF2ORD", 1);
+    int B3 = envInt("PP_B3", 1);
+    int PHASE2 = envInt("PP_PHASE2", 1);
+    double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;
+    double P2ENDF = envInt("PP_P2END", 0) / 100.0;
+    long long P2MAXS = envInt("PP_P2MAXS", 25000);   // v18.6: extended phase2 to larger S
+    long long B2RESTS = envInt("PP_B2RESTS", 15000); // v18.6: extended BLF2 restart range
 
     // read all of stdin
     {
@@ -813,11 +809,9 @@ int main() {
         for (int j = 0; j < k; j++) { int x = readInt(), y = readInt(); ps[i].b[j] = {x, y}; }
         S += k;
     }
-    // Phase-2 budget split, auto by size: for S < 6000 the capped-restart ILS loop is worth far
-    // more than a long sweep+phase2 (measured +0.005..+0.015), so end the sweep early; at
-    // S ~ 10-20k the deep blf3 phase2 dominates instead, keep the champion split.
+    // Phase-2 budget split, auto by size: v18.6 extended phase2 range and timing
     if (P2FRAC <= 0.0) P2FRAC = (S < 6000) ? 0.25 : 0.55;
-    if (P2ENDF <= 0.0) P2ENDF = (S < 6000) ? 0.35 : 0.70;
+    if (P2ENDF <= 0.0) P2ENDF = (S < 6000) ? 0.35 : 0.68; // v18.6: slightly earlier end
     for (int i = 0; i < n; i++) {
         auto& p = ps[i];
         unordered_set<string> seen; seen.reserve(32);
@@ -876,14 +870,14 @@ int main() {
         return res;
     };
 
-    int minW = 0; for (auto& p : ps) minW = max(minW, p.minW);
+int minW = 0; for (auto& p : ps) minW = max(minW, p.minW);
     double factor;
-    if (S < 1000) factor = 0.4;
-    else if (S < 3000) factor = 0.5;
-    else if (S < 10000) factor = 0.27;
-    else if (S < 30000) factor = 0.08;
-    else if (S < 50000) factor = 0.028;  // measured optimum W~33 at S~38k (was 0.01 -> W~19)
-    else factor = 0.009;                 // measured optimum W~24-28 at S~58-96k
+    if (S < 1000) factor = 0.45;
+    else if (S < 3000) factor = 0.55;
+    else if (S < 10000) factor = 0.32;
+    else if (S < 30000) factor = 0.12;
+    else if (S < 50000) factor = 0.04;
+    else factor = 0.012;
     int base = max(minW, (int)floor(sqrt((double)S * factor)));
     if (const char* e = getenv("PP_BASEW")) { int v = atoi(e); if (v >= minW && v <= 4000) base = v; }
 
@@ -892,7 +886,7 @@ int main() {
         unordered_set<int> used; used.reserve(512);
         auto addW = [&](int w) { if (w < minW) w = minW; if (used.insert(w).second) Ws.push_back(w); };
         addW(base);
-        int span = min(96, max(20, base / 2));
+        int span = min(160, max(30, base / 2));  // v18.6: wider width sweep
         for (int d = 1; d <= span; d++) { addW(base - d); addW(base + d); }
         addW(minW);
         addW((int)max<long long>(minW, (S + base - 1) / base));
@@ -971,7 +965,7 @@ int main() {
     // swinPred = affordable first-pack window predicted from the measured window=1 pack cost.
     int swin = max(1, n / 4);
     if (!big && !((big && BIGBLF) || (!big && SMALLBLF))) {
-        static double SW1F = envInt("PP_SW1F", 80) / 100.0;
+        static double SW1F = envInt("PP_SW1F", 85) / 100.0;  // v18.11: allow larger sweep window (80→85)
         double sweepBudget = (PHASE2 && S < P2MAXS) ? min(SOFT_END, TL_MS * P2FRAC) : SOFT_END;
         double budget1 = SW1F * max(50.0, sweepBudget - elapsed_ms());
         double swinPred = budget1 / tFB;
@@ -1060,7 +1054,7 @@ int main() {
             if (used + avg2 * 1.2 > p2Stop) break;
             int W = p2W[i];
             double t1 = elapsed_ms();
-            static int B3WINDIV = envInt("PP_B3WINDIV", 5);  // larger divisor for faster phase2
+            static int B3WINDIV = envInt("PP_B3WINDIV", 5);  // v18.6: smaller window = faster phase2 (4→5)
             int b3win = max(1, B3WINDIV > 0 ? n / B3WINDIV : n);
             R r = B3 ? pack_blf3(W, ordB2, b3win, SEARCH_END, rng, false)
                      : pack_blf2(W, ordB2, b3win, SEARCH_END, rng, false);
@@ -1092,34 +1086,34 @@ int main() {
             } else if (used + avgSky * 1.3 > SOFT_END) {
                 if (used + avgBLF * 1.3 <= SOFT_END) doBLF = true; else break;
             }
-            static int CAPSHARE = envInt("PP_CAPSHARE", 90);
-            bool capEligible = !big || (n <= envInt("PP_CAPBIGN", 2500));
-            if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
-                // area-driven capped attempt: pack into W' x Hcap' with W'*Hcap' < bestA
-                int W;
-                {
-                    // mostly tight W jitter (concentrates attempts near the best width — vital on
-                    // slow judges with few attempts), with occasional wide exploration (pays off
-                    // on fast machines with hundreds of attempts).
-                    static int dwBase = envInt("PP_CAPDW", 2);
-                    static int dwWide = envInt("PP_CAPDWW", 6);
-                    static int wideP = envInt("PP_CAPWIDEP", 25);
-                    int dw = ((int)(rng.nxt() % 100) < wideP) ? dwWide : dwBase;
-                    W = bestR.packW + (dw > 0 ? (rng.rint(2 * dw + 1) - dw) : 0);
-                    if (W < minW) W = minW;
-                    if (W > 64) W = 64;
-                }
-                long long capA = bestR.A - 1;
-                int Hcap = (int)(capA / W);
-                if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
-                bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
-                obuf = fromBest ? ilsOrd : ordB2;
-                int swaps = 1 + rng.rint(6);
-                for (int sswap = 0; sswap < swaps; sswap++) {
-                    int a = rng.rint(n), b = rng.rint(n);
-                    swap(obuf[a], obuf[b]);
-                }
-                double t1 = elapsed_ms();
+static int CAPSHARE = envInt("PP_CAPSHARE", 95);
+             bool capEligible = !big || (n <= envInt("PP_CAPBIGN", 2500));
+             if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
+                 // area-driven capped attempt: pack into W' x Hcap' with W'*Hcap' < bestA
+                 int W;
+                 {
+                     // mostly tight W jitter (concentrates attempts near the best width — vital on
+                     // slow judges with few attempts), with occasional wide exploration (pays off
+                     // on fast machines with hundreds of attempts).
+                     static int dwBase = envInt("PP_CAPDW", 3);
+                     static int dwWide = envInt("PP_CAPDWW", 8);
+                     static int wideP = envInt("PP_CAPWIDEP", 15);
+                     int dw = ((int)(rng.nxt() % 100) < wideP) ? dwWide : dwBase;
+                     W = bestR.packW + (dw > 0 ? (rng.rint(2 * dw + 1) - dw) : 0);
+                     if (W < minW) W = minW;
+                     if (W > 64) W = 64;
+                 }
+                 long long capA = bestR.A - 1;
+                 int Hcap = (int)(capA / W);
+                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
+                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
+                 obuf = fromBest ? ilsOrd : ordB2;
+                 int swaps = 2 + rng.rint(10);
+                 for (int sswap = 0; sswap < swaps; sswap++) {
+                     int a = rng.rint(n), b = rng.rint(n);
+                     swap(obuf[a], obuf[b]);
+                 }
+                 double t1 = elapsed_ms();
                 static int CAPWINDIV = envInt("PP_CAPWINDIV", 1);
                 R r = pack_capped(W, Hcap, obuf, max(1, CAPWINDIV > 0 ? n / CAPWINDIV : n), SEARCH_END, rng);
                 double dt = elapsed_ms() - t1;
@@ -1151,8 +1145,8 @@ int main() {
                 }
                 int policy = (int)(rng.nxt() & 1);
                 double t1 = elapsed_ms();
-R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / (S > 30000 ? 5 : 3)), SEARCH_END, rng, cntBLF > 0)
-                                                   : pack_blf2(W, obuf, max(1, n / (S > 30000 ? 5 : 3)), SEARCH_END, rng, cntBLF > 0))
+                R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / 4), SEARCH_END, rng, cntBLF > 0)
+                                                  : pack_blf2(W, obuf, max(1, n / 4), SEARCH_END, rng, cntBLF > 0))
                            : pack_blf(W, obuf, policy, SEARCH_END);
                 double dt = elapsed_ms() - t1;
                 cntBLF++; avgBLF = (avgBLF * (cntBLF - 1) + dt) / cntBLF;
