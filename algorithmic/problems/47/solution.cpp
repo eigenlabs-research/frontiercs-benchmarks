@@ -1317,8 +1317,8 @@ int main(){
         g_msAlpha = 1.0;
     }
 #else
-    if(elapsed() < TIME_LIMIT * 0.55)
-        consider(polish(beamMixedShelfPlan(allowRot, allowRot ? 14 : 7, allowRot ? 5 : 4, allowRot ? 9 : 7, allowRot ? TIME_LIMIT * 0.78 : TIME_LIMIT * 0.66)));
+    if(elapsed() < TIME_LIMIT * 0.55){ g_msAlpha = allowRot ? 0.94 : 1.0;
+        consider(polish(beamMixedShelfPlan(allowRot, allowRot ? 14 : 7, allowRot ? 5 : 4, allowRot ? 9 : 7, allowRot ? TIME_LIMIT * 0.78 : TIME_LIMIT * 0.66))); g_msAlpha = 1.0; }
     if(elapsed() < TIME_LIMIT * 0.7){
         g_msAlpha = allowRot ? 0.935 : 1.0;
         consider(polish(beamMixedShelfPlanT(allowRot, allowRot ? 22 : 7, allowRot ? 5 : 4, allowRot ? 9 : 7, allowRot ? TIME_LIMIT * 0.9 : TIME_LIMIT * 0.82)));
