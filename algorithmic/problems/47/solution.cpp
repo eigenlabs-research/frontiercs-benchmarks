@@ -1328,12 +1328,6 @@ int main(){
         consider(polish(beamMixedShelfPlanT(allowRot, allowRot ? 22 : 7, allowRot ? 5 : 4, allowRot ? 9 : 7, allowRot ? TIME_LIMIT * 0.9 : TIME_LIMIT * 0.82)));
         g_msAlpha = 1.0;
     }
-    // Focused beam with alpha=0.94 and reduced depth for shorter shelves
-    if(allowRot && elapsed() < TIME_LIMIT * 0.80){
-        g_msAlpha = 0.94;
-        consider(polish(beamMixedShelfPlan(allowRot, 14, 5, 5, TIME_LIMIT * 0.80)));
-        g_msAlpha = 1.0;
-    }
     // Wide-and-shallow beam for broad exploration
     if(allowRot && elapsed() < TIME_LIMIT * 0.85){
         consider(polish(beamMixedShelfPlan(allowRot, 22, 8, 3, TIME_LIMIT * 0.85)));
