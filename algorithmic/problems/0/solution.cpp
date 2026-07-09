@@ -1,4 +1,4 @@
-// v19.9: v19.5 + PP_CAPDW default 3 (was 2); local small-band A/B winner
+// v19.11: eiso n/2 late + LATE=8 (was 4); pure pack_capped, no BLF3/reserve
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -1264,8 +1264,8 @@ int main() {
             }
         }
     }
-    // late restart: try shuffled orderings at best width for fresh diversification
-    static int LATE = envInt("PP_LATE", 4);
+    // late restart: eiso n/2 pack_capped; LATE=8 (eiso tip used 4 — more when time remains)
+    static int LATE = envInt("PP_LATE", 8);
     if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30 && LATE > 0) {
         int lateW = bestR.packW;
         int lateHcap = max(1, (int)(bestR.A / lateW) - 1);
