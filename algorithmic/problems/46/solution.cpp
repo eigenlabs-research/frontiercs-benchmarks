@@ -686,7 +686,7 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 
 int solveParsed(int Jin, int Min, const vector<vector<int>>& m_in, const vector<vector<long long>>& p_in){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(860);
+    const auto budget = chrono::milliseconds(920); // increased from 860 for more search time
 
     J = Jin; M = Min; N = J*M;
     m_of = m_in;
@@ -890,7 +890,7 @@ static long long signatureEarliestStartParsed(){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(995); // increased budget for more iterations with longer tenure
+    const auto budget = chrono::milliseconds(994); // 994ms with 7 GT seeds and adaptive tenure
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
