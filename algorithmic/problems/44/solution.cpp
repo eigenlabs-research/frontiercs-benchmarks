@@ -288,8 +288,40 @@ int main(){
         order=best; for(int i=0;i<N;i++) pos[order[i]]=i;
     }
 
-    // ---- output rotated so city 0 leads ----
+    // ---- output rotated so city 0 leads, mathematically exact penalty optimization ----
     int z=pos[0];
+    
+    vector<char> isPrime(N, true);
+    if(N > 0) isPrime[0] = false;
+    if(N > 1) isPrime[1] = false;
+    for(int i = 2; i * i < N; i++) {
+        if(isPrime[i]) {
+            for(int j = i * i; j < N; j += i) isPrime[j] = false;
+        }
+    }
+    
+    double cost_fwd = 0, cost_rev = 0;
+    for(int i = 1; i <= N; i++) {
+        int a_fwd = order[(z + i - 1) % N];
+        int b_fwd = order[(z + i) % N];
+        double d_fwd = dist(a_fwd, b_fwd);
+        if(i % 10 == 0 && !isPrime[a_fwd]) d_fwd *= 1.1;
+        cost_fwd += d_fwd;
+        
+        int a_rev = order[(z - (i - 1) % N + N) % N];
+        int b_rev = order[(z - i % N + N) % N];
+        double d_rev = dist(a_rev, b_rev);
+        if(i % 10 == 0 && !isPrime[a_rev]) d_rev *= 1.1;
+        cost_rev += d_rev;
+    }
+    
+    if(cost_rev < cost_fwd) {
+        vector<int> rev_order(N);
+        for(int i=0; i<N; i++) rev_order[i] = order[(z - i % N + N) % N];
+        order = rev_order;
+        z = 0;
+    }
+
     string out; out.reserve((size_t)N*7+16);
     out+=to_string(N+1); out+='\n';
     for(int i=0;i<N;i++){ out+=to_string(order[(z+i)%N]); out+='\n'; }
