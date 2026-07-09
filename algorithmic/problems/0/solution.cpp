@@ -1,4 +1,4 @@
-// v19.5: v19.3 + bf W-search d<=30 only (v19.4 overfit/regressed)
+// v19.9: v19.5 + PP_CAPDW default 3 (was 2); local small-band A/B winner
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -1186,7 +1186,7 @@ int main() {
             if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
                 int W;
                 {
-                    static int dwBase = envInt("PP_CAPDW", 2);
+                    static int dwBase = envInt("PP_CAPDW", 3); // v19.9: was 2; local A/B +holdout
                     static int dwWide = envInt("PP_CAPDWW", 6);
                     static int wideP = envInt("PP_CAPWIDEP", 25);
                     int dw = ((int)(rng.nxt() % 100) < wideP) ? dwWide : dwBase;
@@ -1265,11 +1265,12 @@ int main() {
         }
     }
     // late restart: try shuffled orderings at best width for fresh diversification
-    if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30) {
+    static int LATE = envInt("PP_LATE", 4); // v19.x local A/B knob; default keeps tip behavior
+    if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30 && LATE > 0) {
         int lateW = bestR.packW;
         int lateHcap = max(1, (int)(bestR.A / lateW) - 1);
         if (lateHcap >= minW) {
-            for (int attempt = 0; attempt < 4 && elapsed_ms() < SOFT_END - 10; attempt++) {
+            for (int attempt = 0; attempt < LATE && elapsed_ms() < SOFT_END - 10; attempt++) {
                 vector<int> randOrd = idx;
                 int ns = max(1, n / 3);
                 for (int s = 0; s < ns; s++) { int a = rng.rint(n), b = rng.rint(n); swap(randOrd[a], randOrd[b]); }
