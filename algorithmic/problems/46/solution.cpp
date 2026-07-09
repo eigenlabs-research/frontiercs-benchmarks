@@ -345,7 +345,7 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(940); // use more of the 1s TL
+    const auto budget = chrono::milliseconds(860);
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
@@ -389,22 +389,8 @@ int main(){
     vector<vector<int>> cur = best;
     long long curC = bestC;
 
-    auto trySeed = [&](const vector<vector<int>>& s){
-        long long c = evalSeq(s);
-        if(c > 0 && c < curC){
-            cur = s; curC = c;
-            if(c < bestC){ best = s; bestC = c; }
-        }
-    };
 
-    mt19937 rng(777u);
-    trySeed(seedGT(0, rng)); // MWR
-    trySeed(seedGT(1, rng)); // LPT
-    if(chrono::steady_clock::now() - T0 < budget)
-        trySeed(seedGT(2, rng)); // SPT
-
-    // Trivial lower bound: max(machine load, job length). If reached, we are
-    // provably optimal and can stop immediately.
+    // LB: trivial lower bound for early exit
     long long LB = 0;
     {
         vector<long long> mload(M, 0);
@@ -418,43 +404,33 @@ int main(){
 
     auto T_end = T0 + budget;
 
-    // ---- Tabu search over the N7 neighborhood with ILS kicks ----
-    // One exact eval per iteration (on the accepted move); all candidate moves
-    // ranked by an O(segment) head/tail re-estimation.
-    if(bestC > LB){
+    mt19937 rng(777u);
+    // ---- 2-pass tabu search (420ms each) ----
+    for(int pass=0; pass<2; ++pass){
+        auto s = seedGT(pass, rng);
+        cur = s; curC = evalSeq(s);
+        if(curC > 0 && curC < bestC){ best = cur; bestC = curC; }
+        if(bestC <= LB) break;
+
         long long c = evalSeq(cur, true);
         if(c > 0) curC = c; else { cur = best; curC = evalSeq(cur, true); }
 
         int iter = 0, sinceImp = 0;
-#ifndef STUCK_LIM
-#define STUCK_LIM 60000
-#endif
-#ifndef TEN_MIN
-#define TEN_MIN 8
-#endif
-#ifndef TEN_SPAN_DIV
-#define TEN_SPAN_DIV 3
-#endif
-        const int stuckLim = STUCK_LIM;
-        const int TENURE_MIN = TEN_MIN;
-        const int TENURE_SPAN = max(4, J/TEN_SPAN_DIV);
+        const int stuckLim = 60000;
+        const int TENURE_MIN = 8;
+        const int TENURE_SPAN = max(4, J/3);
+        auto T0_pass = chrono::steady_clock::now();
+        auto T_end = T0_pass + budget / 2;
         bool timeUp = false;
 
-#ifdef DIAG
-        int iterLastImp = 0;
-#endif
         while(!timeUp && chrono::steady_clock::now() < T_end){
             iter++;
-            if((iter & 16383) == 0){ // periodic exact refresh (drift insurance)
+            if((iter & 16383) == 0){
                 long long fc = evalSeq(cur, true);
                 if(fc >= 0) curC = fc;
             }
             genMoves(cur);
             int nmv = (int)gmoves.size();
-#ifdef DIAG
-            static long long totMv = 0; totMv += nmv;
-            if(iter % 50000 == 0) fprintf(stderr, "avg nmv=%.1f\n", (double)totMv/iter);
-#endif
             if(nmv == 0) break;
             gcand.clear();
             for(int idx=0; idx<nmv; ++idx)
@@ -464,49 +440,12 @@ int main(){
             bool sorted_all = (K == nmv);
 
             bool applied = false;
-#ifndef EVAL_TOP
-#define EVAL_TOP 1
-#endif
-#if EVAL_TOP > 1
-            // Exact-evaluate the EVAL_TOP best admissible candidates, keep the best.
-            {
-                int bestIdx = -1; long long bestNC = -1; int evald = 0;
-                for(int t=0; t<nmv && evald<EVAL_TOP; ++t){
+            for(int pass2=0; pass2<2 && !applied && !timeUp; ++pass2){
+                for(int t=0; t<nmv; ++t){
                     if((t & 7)==7 && chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
                     if(t >= K && !sorted_all){ sort(gcand.begin(), gcand.end()); sorted_all = true; }
                     const Mv& mv = gmoves[gcand[t].second];
-                    bool tb = isTabu(cur, mv, iter);
-                    bool asp = gcand[t].first < bestC;
-                    if(tb && !asp) continue;
-                    applyMove(cur, mv);
-                    long long nc = evalSeq(cur, false); // trashes dist_ only
-                    undoMove(cur, mv);
-                    if(nc < 0) continue;
-                    evald++;
-                    if(bestIdx < 0 || nc < bestNC){ bestNC = nc; bestIdx = gcand[t].second; }
-                }
-                if(bestIdx >= 0){
-                    const Mv& mv = gmoves[bestIdx];
-                    collectTabu(cur, mv);
-                    applyMove(cur, mv);
-                    long long nc = evalSeq(cur, true);
-                    if(nc >= 0){
-                        int tenure = TENURE_MIN + (int)(rng() % TENURE_SPAN);
-                        for(size_t id : gpend) tabuTB[id] = iter + tenure;
-                        curC = nc; applied = true;
-                    } else { undoMove(cur, mv); evalSeq(cur, true); }
-                }
-            }
-#endif
-            for(int pass=0; pass<2 && !applied && !timeUp; ++pass){
-                for(int t=0; t<nmv; ++t){
-                    if((t & 7)==7 && chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
-                    if(t >= K && !sorted_all){
-                        sort(gcand.begin(), gcand.end());
-                        sorted_all = true;
-                    }
-                    const Mv& mv = gmoves[gcand[t].second];
-                    if(pass==0){
+                    if(pass2==0){
                         bool tb = isTabu(cur, mv, iter);
                         bool asp = gcand[t].first < bestC;
                         if(tb && !asp) continue;
@@ -514,29 +453,8 @@ int main(){
                     collectTabu(cur, mv);
                     applyMove(cur, mv);
                     long long nc = incAfterMove(cur, mv);
-#ifdef VERIFY
-                    {
-                        static vector<long long> vd, vt; static long long mism = 0; static long long checks = 0;
-                        vd = dist_; vt = tail_;
-                        long long fc = evalSeq(cur, true);
-                        checks++;
-                        if(nc != -2){
-                            if(fc != nc || vd != dist_ || vt != tail_){
-                                mism++;
-                                fprintf(stderr, "MISMATCH iter=%d inc=%lld full=%lld distOK=%d tailOK=%d\n",
-                                        iter, nc, fc, (int)(vd==dist_), (int)(vt==tail_));
-                            }
-                        }
-                        if(checks % 20000 == 0) fprintf(stderr, "verify checks=%lld mism=%lld\n", checks, mism);
-                        nc = fc;
-                    }
-#endif
-                    if(nc == -2) nc = evalSeq(cur, true); // cap hit: exact recompute
-                    if(nc < 0){
-                        undoMove(cur, mv);
-                        evalSeq(cur, true); // restore dist/tail/crit for cur
-                        continue;
-                    }
+                    if(nc == -2) nc = evalSeq(cur, true);
+                    if(nc < 0){ undoMove(cur, mv); evalSeq(cur, true); continue; }
                     int tenure = TENURE_MIN + (int)(rng() % TENURE_SPAN);
                     for(size_t id : gpend) tabuTB[id] = iter + tenure;
                     curC = nc;
@@ -544,31 +462,18 @@ int main(){
                     break;
                 }
             }
-            if(!applied) break; // timed out or no feasible move at all
+            if(!applied) break;
 
             if(curC < bestC){
-                // Confirm with an exact evaluation before recording a new best
-                // (also refreshes dist/tail/crit exactly, washing out any drift).
                 long long exact = evalSeq(cur, true);
                 curC = exact;
-                if(exact >= 0 && exact < bestC){
-                    best = cur; bestC = exact; sinceImp = 0;
-#ifdef DIAG
-                    iterLastImp = iter;
-#endif
-                    if(bestC <= LB) break; // provably optimal
-                }
+                if(exact >= 0 && exact < bestC){ best = cur; bestC = exact; sinceImp = 0; if(bestC <= LB) break; }
             }
             else if(++sinceImp > stuckLim){
-                // ILS kick: restart from best with a few random critical-block moves.
                 cur = best;
                 long long cc = evalSeq(cur, true);
                 curC = cc;
-#ifndef KICK_BASE
-#define KICK_BASE 1
-#define KICK_RAND 2
-#endif
-                int kicks = KICK_BASE + (KICK_RAND ? (int)(rng() % KICK_RAND) : 0);
+                int kicks = 1 + (int)(rng() % 2);
                 for(int r=0; r<kicks; ++r){
                     if(chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
                     genMoves(cur);
@@ -583,10 +488,7 @@ int main(){
                 sinceImp = 0;
             }
         }
-#ifdef DIAG
-        extern long long g_pops, g_calls;
-        fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d)\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N);
-#endif
+        tabuTB.assign(tabuTB.size(), 0);
     }
 
     // Fast buffered output (single fwrite) then _exit to skip static-vector
