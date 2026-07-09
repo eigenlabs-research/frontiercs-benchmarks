@@ -567,7 +567,7 @@ static PackResult knapsackShelfPlan(bool allowRot){
         // Use steepest-ascent: try all single flips per pass, pick the best.
         bool improved = true;
         int passes = 0;
-        while(improved && passes < 5 && elapsed() < TIME_LIMIT * 0.30){
+        while(improved && passes < 7 && elapsed() < TIME_LIMIT * 0.30){
             improved = false; ++passes;
             int bestFlip = -1; ll bestFlipVal = bestVal;
             for(int t = 0; t < M && elapsed() < TIME_LIMIT * 0.30; ++t){
@@ -1119,8 +1119,6 @@ static vector<int> orderByMinDimAsc(){
     return idx;
 }
 
-static PackResult extraAlphaPlan(bool,bool);
-
 static void outputResult(const PackResult& res){
     string out;
     out.reserve(res.placements.size() * 40 + 32);
@@ -1289,22 +1287,22 @@ int main(){
         double oldA = g_msAlpha; g_msAlpha = 0.94;
         auto cutsE = [&](int L){
             vector<int> v; auto add=[&](int x){ if(x>20&&x<L-20&&find(v.begin(),v.end(),x)==v.end()) v.push_back(x); };
-            add(L/3); add(L/2); add((2*L)/3); add(L/4); add((3*L)/4);
+            add(L/3); add(L/2); add((2*L)/3); add(L/4); add((3*L)/4); add(L/6); add((5*L)/6);
             for(int z=0; z<M && z<3; ++z){ const ItemType& it=g_items[ordDens[z]]; int d[2]={it.w,it.h};
                 for(int q=0;q<2;++q) for(int k=1;k<=3;++k){ add(d[q]*k); add(L-d[q]*k);} }
-            if((int)v.size()>10) v.resize(10); return v;
+            if((int)v.size()>14) v.resize(14); return v;
         };
-        int pe=0;
-        for(int sh:cutsE(g_bin.H))for(int mask=0;mask<8&&pe<80&&elapsed()<TIME_LIMIT*0.55;++mask,++pe)
-            consider(polish(splitMixedPlanY(allowRot,sh,mask,0)));
-        pe=0;
-        for(int sw:cutsE(g_bin.W))for(int mask=0;mask<8&&pe<80&&elapsed()<TIME_LIMIT*0.75;++mask,++pe)
-            consider(polish(splitMixedPlan(allowRot,sw,mask,0)));
+        for(int sh: cutsE(g_bin.H)){
+            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.35; ++mask)
+                consider(polish(splitMixedPlanY(allowRot, sh, mask, 0)));
+            if(elapsed()>TIME_LIMIT*0.35) break;
+        }
+        for(int sw: cutsE(g_bin.W)){
+            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.40; ++mask)
+                consider(polish(splitMixedPlan(allowRot, sw, mask, 0)));
+            if(elapsed()>TIME_LIMIT*0.40) break;
+        }
         g_msAlpha = oldA;
-    }
-    if((allowRot||g_bin.H*5<=g_bin.W*6)&&elapsed()<TIME_LIMIT*0.26){
-        consider(polish(extraAlphaPlan(allowRot,false)));
-        if(elapsed()<TIME_LIMIT*0.26)consider(polish(extraAlphaPlan(allowRot,true)));
     }
 #ifdef DIAG
     g_label="beam";
@@ -1333,7 +1331,7 @@ int main(){
     // Focused beam with alpha=0.94 and reduced depth for shorter shelves
     if(allowRot && elapsed() < TIME_LIMIT * 0.80){
         g_msAlpha = 0.94;
-        consider(polish(beamMixedShelfPlan(allowRot, 14, 5, 5, TIME_LIMIT * 0.80)));
+        consider(polish(beamMixedShelfPlan(allowRot, 14, 5, 7, TIME_LIMIT * 0.80)));
         g_msAlpha = 1.0;
     }
     // Wide-and-shallow beam for broad exploration
@@ -1451,8 +1449,6 @@ int main(){
             if((int)v.size() > (ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 18 : 14)) v.resize(ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 18 : 14);
             return v;
         };
-        double oldAlphaSplit2=g_msAlpha;
-        if(!allowRot&&g_bin.H*10>g_bin.W*13)g_msAlpha=0.94;
         vector<int> splits2 = cuts(g_bin.W, false);
         for(uint32_t seed = 1; seed <= 3 && elapsed() < TIME_LIMIT * 0.78; ++seed){
 #ifdef DIAG
@@ -1473,7 +1469,6 @@ int main(){
                 if(elapsed() > TIME_LIMIT * 0.78) break;
             }
         }
-        g_msAlpha=oldAlphaSplit2;
     }
 #ifdef DIAG
     g_label="choicemr";
@@ -1494,7 +1489,7 @@ int main(){
             if(elapsed() > TIME_LIMIT * 0.93) break;
             consider(pruneLow(best, c, ordAreaAsc, allowRot));
         }
-        int ds[3]={4,8,12};
+        int ds[5]={4,8,12,16,20};
         for(int c:ds)for(int side=0;side<4&&elapsed()<TIME_LIMIT*0.955;++side)consider(pruneSide(best,c,ordDens,allowRot,side));
         if(!allowRot&&g_bin.H*5>g_bin.W*6)for(int ln=1;ln<=2;++ln)for(int side=0;side<2&&elapsed()<TIME_LIMIT*0.965;++side){
             consider(pruneLine(best,ln,ordDens,allowRot,side));
@@ -1591,11 +1586,4 @@ int main(){
     }
     outputResult(best);
     return 0;
-}
-
-__attribute__((noinline)) static PackResult extraAlphaPlan(bool allowRot,bool transposed){
-    double old=g_msAlpha;g_msAlpha=0.92;
-    PackResult r=mixedShelfPlan(allowRot,0,0,transposed);
-    g_msAlpha=old;
-    return r;
 }
