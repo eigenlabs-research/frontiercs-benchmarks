@@ -985,11 +985,19 @@ int main() {
         unordered_set<int> used; used.reserve(512);
         auto addW = [&](int w) { if (w < minW) w = minW; if (used.insert(w).second) Ws.push_back(w); };
         addW(base);
-        int span = min(96, max(20, base / 2));
+        // Enhanced systematic width search: expand span for better coverage
+        int span = min(120, max(20, base));  // increased from 96 to 120, base from base/2
         for (int d = 1; d <= span; d++) { addW(base - d); addW(base + d); }
         addW(minW);
         addW((int)max<long long>(minW, (S + base - 1) / base));
         for (int m = 2; m <= 6; m++) { addW(base * m / 3); addW((int)max<long long>(minW, S / ((base * m / 3) ? (base * m / 3) : 1))); }
+        // Additional systematic candidates: integer W around area/S ratios
+        // Probe W values that would give plausible H for area minimization
+        int theoreticalH = max(1, (int)ceil((double)S / base));
+        for (int candH = max(1, theoreticalH / 2); candH <= theoreticalH * 2 && candH <= 200; candH++) {
+            int candW = (int)ceil((double)S / candH);
+            if (candW >= minW && candW <= 64) addW(candW);
+        }
         sort(Ws.begin(), Ws.end(), [&](int a, int b) { int da = abs(a - base), db = abs(b - base); if (da != db) return da < db; return a < b; });
     }
 
