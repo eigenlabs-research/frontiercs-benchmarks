@@ -345,7 +345,7 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(940); // use more of the 1s TL
+    const auto budget = chrono::milliseconds(850); // leave headroom for judge I/O overhead
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
@@ -360,6 +360,10 @@ int main(){
     for(int j=0;j<J;++j) for(int m=0;m<M;++m) posF[j*M+m] = pos[j][m];
     pnode.assign(N, 0);
     for(int j=0;j<J;++j) for(int k=0;k<M;++k) pnode[j*M+k] = p_of[j][k];
+
+    // Identify machine loads for bottleneck-aware swap polish later.
+    vector<long long> mload(M, 0);
+    for(int j=0;j<J;++j) for(int k=0;k<M;++k) mload[m_of[j][k]] += p_of[j][k];
 
     msucc.assign(N, -1);
     mpred.assign(N, -1);
@@ -402,19 +406,19 @@ int main(){
     trySeed(seedGT(1, rng)); // LPT
     if(chrono::steady_clock::now() - T0 < budget)
         trySeed(seedGT(2, rng)); // SPT
+    // Additional diverse random seed for better coverage of solution space
+    if(chrono::steady_clock::now() - T0 < budget)
+        trySeed(seedGT(3, rng)); // random
 
     // Trivial lower bound: max(machine load, job length). If reached, we are
     // provably optimal and can stop immediately.
     long long LB = 0;
-    {
-        vector<long long> mload(M, 0);
-        for(int j=0;j<J;++j){
-            long long jl = 0;
-            for(int k=0;k<M;++k){ jl += p_of[j][k]; mload[m_of[j][k]] += p_of[j][k]; }
-            if(jl > LB) LB = jl;
-        }
-        for(int m=0;m<M;++m) if(mload[m] > LB) LB = mload[m];
+    for(int j=0;j<J;++j){
+        long long jl = 0;
+        for(int k=0;k<M;++k) jl += p_of[j][k];
+        if(jl > LB) LB = jl;
     }
+    for(int m=0;m<M;++m) if(mload[m] > LB) LB = mload[m];
 
     auto T_end = T0 + budget;
 
@@ -587,6 +591,34 @@ int main(){
         extern long long g_pops, g_calls;
         fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d)\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N);
 #endif
+    }
+
+    // Final polish: targeted swap local search - only on bottleneck-heavy machines.
+    // Runs only if time remains; complements N7 moves.
+    {
+        // Identify machines sorted by load (bottleneck first)
+        vector<int> morder(M);
+        for(int m=0;m<M;++m) morder[m]=m;
+        sort(morder.begin(), morder.end(), [&](int a, int b){ return mload[a] > mload[b]; });
+        
+        bool improved = true;
+        while(improved && chrono::steady_clock::now() < T_end){
+            improved = false;
+            for(int mi=0; mi<M; ++mi){
+                int m = morder[mi];
+                for(int i=0; i<J-1; ++i){
+                    swap(best[m][i], best[m][i+1]);
+                    long long nc = evalSeq(best, false);
+                    if(nc >= 0 && nc < bestC){
+                        bestC = nc;
+                        improved = true;
+                        evalSeq(best, true);
+                    } else {
+                        swap(best[m][i], best[m][i+1]);
+                    }
+                }
+            }
+        }
     }
 
     // Fast buffered output (single fwrite) then _exit to skip static-vector
