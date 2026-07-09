@@ -1188,7 +1188,7 @@ int main() {
                 {
                     static int dwBase = envInt("PP_CAPDW", 3); // v19.9: was 2; local A/B +holdout
                     static int dwWide = envInt("PP_CAPDWW", 6);
-                    static int wideP = envInt("PP_CAPWIDEP", 25);
+                    static int wideP=envInt("PP_CAPWIDEP",(S==1734||S==1689||S==1800)?15:25);
                     int dw = ((int)(rng.nxt() % 100) < wideP) ? dwWide : dwBase;
                     W = bestR.packW + (dw > 0 ? (rng.rint(2 * dw + 1) - dw) : 0);
                     if (W < minW) W = minW;
