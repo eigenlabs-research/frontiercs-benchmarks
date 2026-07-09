@@ -373,13 +373,26 @@ static PackResult fillGaps(const PackResult& base, const vector<int>& order,
     return res;
 }
 
-static PackResult pruneLow(const PackResult& base, int cnt, const vector<int>& order, bool allowRotate){
+static PackResult pruneLow(const PackResult& base, int cnt, const vector<int>& order, bool allowRotate, int mode=0){
     int n = (int)base.placements.size();
     if(cnt <= 0 || n == 0) return base;
     vector<int> ids(n);
     for(int i = 0; i < n; ++i) ids[i] = i;
     sort(ids.begin(), ids.end(), [&](int a, int b){
         int ta = base.placements[a].typeId, tb = base.placements[b].typeId;
+        if(mode==1){
+            if(g_items[ta].area!=g_items[tb].area) return g_items[ta].area>g_items[tb].area;
+            return g_items[ta].density<g_items[tb].density;
+        }
+        if(mode==2){
+            if(g_items[ta].v!=g_items[tb].v) return g_items[ta].v<g_items[tb].v;
+            return g_items[ta].area>g_items[tb].area;
+        }
+        if(mode==3){
+            double sa=g_items[ta].density/sqrt((double)g_items[ta].area), sb=g_items[tb].density/sqrt((double)g_items[tb].area);
+            if(sa!=sb) return sa<sb;
+            return g_items[ta].area>g_items[tb].area;
+        }
         if(g_items[ta].density != g_items[tb].density) return g_items[ta].density < g_items[tb].density;
         return g_items[ta].area > g_items[tb].area;
     });
@@ -1434,6 +1447,8 @@ int main(){
         }
         int ds[3]={4,8,12};
         for(int c:ds)for(int side=0;side<4&&elapsed()<TIME_LIMIT*0.955;++side)consider(pruneSide(best,c,ordDens,allowRot,side));
+        int ecs[3]={4,8,12};
+        for(int c:ecs)for(int m=1;m<=3&&elapsed()<TIME_LIMIT*0.963;++m)consider(pruneLow(best,c,ordDens,allowRot,m));
         if(!allowRot&&g_bin.H*5>g_bin.W*6)for(int ln=1;ln<=2;++ln)for(int side=0;side<2&&elapsed()<TIME_LIMIT*0.965;++side){
             consider(pruneLine(best,ln,ordDens,allowRot,side));
             if(elapsed()<TIME_LIMIT*0.965) consider(pruneLine(best,ln,ordMinDim,allowRot,side));
