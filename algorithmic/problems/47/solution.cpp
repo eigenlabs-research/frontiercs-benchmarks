@@ -510,11 +510,17 @@ static PackResult knapsackShelfPlan(bool allowRot){
     vector<int> par(H + 1, -1);
     ll bestVal = -1;
     vector<int> bestCombo(M, 0);
-    // Instead of 2^M combos (up to 4096 DPs), use greedy hill-climb: start from
-    // best-density rotation per item, then try flipping one item at a time until
-    // no single flip improves. On the judge this reclaims ~50% of the time budget
-    // for downstream phases where actual quality wins live.
-    auto evalCombo = [&](const vector<int>& combo, ll* outBest) -> ll {
+    int total = 1;
+    for(int t = 0; t < M; ++t) total *= 2;
+    if(!allowRot) total = 1;
+    int comboLimit = total;
+    for(int c = 0; c < comboLimit; ++c){
+        if((c & 63) == 0 && elapsed() > TIME_LIMIT * 0.6) { comboLimit = c; break; }
+        int code = c;
+        vector<int> combo(M, 0);
+        if(allowRot){
+            for(int t = 0; t < M; ++t){ combo[t] = code & 1; code >>= 1; }
+        }
         vector<KItem> kitems;
         kitems.reserve(M * 12);
         for(int t = 0; t < M; ++t){
@@ -537,52 +543,21 @@ static PackResult knapsackShelfPlan(bool allowRot){
         }
         fill(dp.begin(), dp.end(), -1);
         dp[0] = 0;
-        for(const KItem& ki : kitems){
+        fill(par.begin(), par.end(), -1);
+        for(int idx = 0; idx < (int)kitems.size(); ++idx){
+            const KItem& ki = kitems[idx];
             for(int x = H; x >= ki.w; --x){
                 if(dp[x - ki.w] >= 0 && dp[x - ki.w] + ki.val > dp[x]){
                     dp[x] = dp[x - ki.w] + ki.val;
+                    par[x] = idx;
                 }
             }
         }
-        ll bestV = 0;
-        for(int x = 0; x <= H; ++x){ if(dp[x] > bestV) bestV = dp[x]; }
-        if(outBest) *outBest = bestV;
-        return bestV;
-    };
-    // Seed 0: best density orientation per item.
-    vector<int> combo(M, 0);
-    if(allowRot){
-        for(int t = 0; t < M; ++t){
-            const ItemType& it = g_items[t];
-            // choose rot maximizing per-shelf density (perShelf / height)
-            double d0 = sd[t][0].valid ? (double)sd[t][0].perShelf * it.v / (double)sd[t][0].rh : -1;
-            double d1 = sd[t][1].valid ? (double)sd[t][1].perShelf * it.v / (double)sd[t][1].rh : -1;
-            combo[t] = (d1 > d0) ? 1 : 0;
-        }
-    }
-    bestVal = evalCombo(combo, nullptr);
-    bestCombo = combo;
-    if(allowRot){
-        // Hill-climb: repeatedly try flipping one item; accept improvements.
-        // Use steepest-ascent: try all single flips per pass, pick the best.
-        bool improved = true;
-        int passes = 0;
-        while(improved && passes < 5 && elapsed() < TIME_LIMIT * 0.30){
-            improved = false; ++passes;
-            int bestFlip = -1; ll bestFlipVal = bestVal;
-            for(int t = 0; t < M && elapsed() < TIME_LIMIT * 0.30; ++t){
-                if(!sd[t][0].valid || !sd[t][1].valid) continue;
-                combo[t] ^= 1;
-                ll v = evalCombo(combo, nullptr);
-                if(v > bestFlipVal){
-                    bestFlipVal = v; bestFlip = t;
-                }
-                combo[t] ^= 1; // revert for next trial
-            }
-            if(bestFlip >= 0){
-                combo[bestFlip] ^= 1;
-                bestVal = bestFlipVal; bestCombo = combo; improved = true;
-            }
+        ll bestV = 0; int bestX = 0;
+        for(int x = 0; x <= H; ++x){ if(dp[x] > bestV){ bestV = dp[x]; bestX = x; } }
+        if(bestV > bestVal){
+            bestVal = bestV;
+            bestCombo = combo;
         }
     }
     vector<KItem> kitems;
