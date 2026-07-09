@@ -11,7 +11,7 @@
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 2400.0;
+static double TL_MS = 2380.0;
 static inline double el_ms(){ return chrono::duration<double,milli>(chrono::steady_clock::now()-T0).count(); }
 
 static int N;
@@ -43,7 +43,7 @@ int main(){
     vector<char> pr((size_t)N,0);
     { vector<char> comp((size_t)N,0); for(long long i=2;i<N;i++) if(!comp[i]){ pr[i]=1; for(long long q=i*i;q<N;q+=i) comp[q]=1; } }
     if(N>100000) TL_MS -= 20.0;
-    double RESERVE = N>150000?220.0:(N>50000?90.0:(N>5000?50.0:40.0));
+    double RESERVE = N>150000?300.0:(N>50000?150.0:(N>5000?80.0:50.0));
     TL_MS -= RESERVE; // reserve tail for endgame touch-up
 
     // ---- spatial grid (~2 pts/cell) ----
@@ -321,7 +321,7 @@ int main(){
         auto sAt=[&](int p)->int{ return p<N? seq[p]:0; };
         auto stepCost=[&](int t)->double{ int a=seq[t-1], b=sAt(t); double d=dist(a,b); if(t%10==0&&!pr[a]) d*=1.1; return d; };
         int w = N<=1200? N : (N<=5000?120:(N<=20000?140:80));
-        for(int rep=0;rep<4 && el_ms()<TL_MS;rep++){
+        for(int rep=0;rep<6 && el_ms()<TL_MS;rep++){
             bool ch=false;
             for(int p=9;p<N;p+=10){
                 if(el_ms()>TL_MS) break;
