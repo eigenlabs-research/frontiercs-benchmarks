@@ -343,9 +343,31 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
     }
 }
 
+// Random adjacent swaps on a few machines (always tries to stay feasible).
+static void perturbRandom(vector<vector<int>>& s, mt19937& rng, int nSwaps){
+    for(int t=0;t<nSwaps;++t){
+        int m = (int)(rng() % M);
+        if(J < 2) break;
+        int i = (int)(rng() % (J-1));
+        swap(s[m][i], s[m][i+1]);
+    }
+}
+
+// Path-relink-ish: for each machine, copy order from A or B with coin flip,
+// then repair via a fresh GT-like rebuild is too heavy; instead just pick
+// whole-machine orders from A/B (always feasible if A,B are).
+static vector<vector<int>> mixElites(const vector<vector<int>>& A,
+                                     const vector<vector<int>>& B,
+                                     mt19937& rng){
+    vector<vector<int>> s = A;
+    for(int m=0;m<M;++m) if(rng() & 1) s[m] = B[m];
+    return s;
+}
+
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(940); // use more of the 1s TL
+    // Leave ~60-80ms for final I/O + margin under the 1s TL.
+    const auto budget = chrono::milliseconds(920);
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
@@ -389,19 +411,38 @@ int main(){
     vector<vector<int>> cur = best;
     long long curC = bestC;
 
+    // Elite pool (up to 6 diverse good solutions) for multi-start / path relinking.
+    struct Elite { long long C; vector<vector<int>> s; };
+    vector<Elite> elite;
+    auto pushElite = [&](const vector<vector<int>>& s, long long C){
+        if(C <= 0) return;
+        for(auto& e : elite) if(e.C == C){
+            // cheap diversity: reject exact same makespan twin
+            return;
+        }
+        elite.push_back({C, s});
+        sort(elite.begin(), elite.end(), [](const Elite& a, const Elite& b){ return a.C < b.C; });
+        if((int)elite.size() > 6) elite.resize(6);
+    };
+
     auto trySeed = [&](const vector<vector<int>>& s){
         long long c = evalSeq(s);
-        if(c > 0 && c < curC){
-            cur = s; curC = c;
-            if(c < bestC){ best = s; bestC = c; }
+        if(c > 0){
+            pushElite(s, c);
+            if(c < curC){
+                cur = s; curC = c;
+                if(c < bestC){ best = s; bestC = c; }
+            }
         }
     };
 
-    mt19937 rng(777u);
+    // Seed from multiple GT priorities + a few pure-random GT runs.
+    mt19937 rng((unsigned)chrono::steady_clock::now().time_since_epoch().count() ^ 0x9e3779b9u);
     trySeed(seedGT(0, rng)); // MWR
     trySeed(seedGT(1, rng)); // LPT
-    if(chrono::steady_clock::now() - T0 < budget)
-        trySeed(seedGT(2, rng)); // SPT
+    trySeed(seedGT(2, rng)); // SPT
+    for(int r=0; r<4 && chrono::steady_clock::now() - T0 < budget/8; ++r)
+        trySeed(seedGT(3, rng)); // random priority GT
 
     // Trivial lower bound: max(machine load, job length). If reached, we are
     // provably optimal and can stop immediately.
@@ -418,31 +459,79 @@ int main(){
 
     auto T_end = T0 + budget;
 
-    // ---- Tabu search over the N7 neighborhood with ILS kicks ----
-    // One exact eval per iteration (on the accepted move); all candidate moves
-    // ranked by an O(segment) head/tail re-estimation.
+    // Diversify: jump to a new start (GT / elite mix / best+kick) and clear tabu.
+    int restartCnt = 0;
+    auto diversify = [&](bool strong){
+        restartCnt++;
+        fill(tabuTB.begin(), tabuTB.end(), 0);
+        int mode = (int)(rng() % (strong ? 5 : 3));
+        if(mode == 0 && !elite.empty()){
+            // Restart from a random elite (prefer better ones).
+            int ei = (int)(rng() % elite.size());
+            if((rng() & 3) == 0) ei = 0; // bias toward global-best elite
+            cur = elite[ei].s;
+            // Strong: also mix with another elite (path relink).
+            if(strong && elite.size() >= 2 && (rng() & 1)){
+                int ej = (int)(rng() % elite.size());
+                if(ej != ei) cur = mixElites(cur, elite[ej].s, rng);
+            }
+        } else if(mode == 1){
+            cur = seedGT((int)(rng() % 4), rng);
+        } else if(mode == 2){
+            cur = best;
+        } else if(mode == 3){
+            cur = seedGT(0, rng); // MWR
+        } else {
+            cur = best;
+            perturbRandom(cur, rng, 2 + (int)(rng() % max(2, J/4)));
+        }
+        long long c = evalSeq(cur, true);
+        if(c < 0){
+            cur = best;
+            c = evalSeq(cur, true);
+        }
+        curC = c;
+        if(c > 0 && c < bestC){ best = cur; bestC = c; pushElite(best, bestC); }
+        // Extra critical-block kicks from the chosen start.
+        int kicks = (strong ? 3 : 1) + (int)(rng() % (strong ? 5 : 3));
+        for(int r=0; r<kicks; ++r){
+            if(chrono::steady_clock::now() >= T_end) break;
+            genMoves(cur);
+            if(gmoves.empty()){
+                perturbRandom(cur, rng, 1 + (int)(rng() % 3));
+                long long nc = evalSeq(cur, true);
+                if(nc < 0){ cur = best; evalSeq(cur, true); curC = bestC; break; }
+                curC = nc;
+                continue;
+            }
+            const Mv& mv = gmoves[rng() % gmoves.size()];
+            applyMove(cur, mv);
+            long long nc = evalSeq(cur, true);
+            if(nc < 0){ undoMove(cur, mv); evalSeq(cur, true); }
+            else {
+                curC = nc;
+                if(nc < bestC){ best = cur; bestC = nc; pushElite(best, bestC); }
+            }
+        }
+    };
+
+    // ---- Tabu search over the N7 neighborhood with multi-start ILS ----
+    // One exact/incremental eval per iteration; candidates ranked by O(segment)
+    // head/tail re-estimation. Diversify on stuck / empty neighborhood / failure.
     if(bestC > LB){
         long long c = evalSeq(cur, true);
         if(c > 0) curC = c; else { cur = best; curC = evalSeq(cur, true); }
+        pushElite(best, bestC);
 
         int iter = 0, sinceImp = 0;
-#ifndef STUCK_LIM
-#define STUCK_LIM 60000
-#endif
-#ifndef TEN_MIN
-#define TEN_MIN 8
-#endif
-#ifndef TEN_SPAN_DIV
-#define TEN_SPAN_DIV 3
-#endif
-        const int stuckLim = STUCK_LIM;
-        const int TENURE_MIN = TEN_MIN;
-        const int TENURE_SPAN = max(4, J/TEN_SPAN_DIV);
+        // Adaptive stuck limit: smaller instances get more diversification;
+        // large N can burn many cheap iters before kicking.
+        const int stuckLim = max(8000, min(40000, 250000 / max(1, N)));
+        const int TENURE_MIN = max(5, J / 6);
+        const int TENURE_SPAN = max(6, J / 2);
         bool timeUp = false;
+        int topK = (N <= 400 ? 32 : 20); // rank more candidates on smaller graphs
 
-#ifdef DIAG
-        int iterLastImp = 0;
-#endif
         while(!timeUp && chrono::steady_clock::now() < T_end){
             iter++;
             if((iter & 16383) == 0){ // periodic exact refresh (drift insurance)
@@ -451,53 +540,21 @@ int main(){
             }
             genMoves(cur);
             int nmv = (int)gmoves.size();
-#ifdef DIAG
-            static long long totMv = 0; totMv += nmv;
-            if(iter % 50000 == 0) fprintf(stderr, "avg nmv=%.1f\n", (double)totMv/iter);
-#endif
-            if(nmv == 0) break;
+            if(nmv == 0){
+                // No critical-block moves: diversify rather than halt.
+                if(chrono::steady_clock::now() >= T_end) break;
+                diversify(true);
+                sinceImp = 0;
+                continue;
+            }
             gcand.clear();
             for(int idx=0; idx<nmv; ++idx)
                 gcand.push_back({estMove(cur, gmoves[idx]), idx});
-            int K = nmv < 24 ? nmv : 24;
+            int K = nmv < topK ? nmv : topK;
             partial_sort(gcand.begin(), gcand.begin()+K, gcand.end());
             bool sorted_all = (K == nmv);
 
             bool applied = false;
-#ifndef EVAL_TOP
-#define EVAL_TOP 1
-#endif
-#if EVAL_TOP > 1
-            // Exact-evaluate the EVAL_TOP best admissible candidates, keep the best.
-            {
-                int bestIdx = -1; long long bestNC = -1; int evald = 0;
-                for(int t=0; t<nmv && evald<EVAL_TOP; ++t){
-                    if((t & 7)==7 && chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
-                    if(t >= K && !sorted_all){ sort(gcand.begin(), gcand.end()); sorted_all = true; }
-                    const Mv& mv = gmoves[gcand[t].second];
-                    bool tb = isTabu(cur, mv, iter);
-                    bool asp = gcand[t].first < bestC;
-                    if(tb && !asp) continue;
-                    applyMove(cur, mv);
-                    long long nc = evalSeq(cur, false); // trashes dist_ only
-                    undoMove(cur, mv);
-                    if(nc < 0) continue;
-                    evald++;
-                    if(bestIdx < 0 || nc < bestNC){ bestNC = nc; bestIdx = gcand[t].second; }
-                }
-                if(bestIdx >= 0){
-                    const Mv& mv = gmoves[bestIdx];
-                    collectTabu(cur, mv);
-                    applyMove(cur, mv);
-                    long long nc = evalSeq(cur, true);
-                    if(nc >= 0){
-                        int tenure = TENURE_MIN + (int)(rng() % TENURE_SPAN);
-                        for(size_t id : gpend) tabuTB[id] = iter + tenure;
-                        curC = nc; applied = true;
-                    } else { undoMove(cur, mv); evalSeq(cur, true); }
-                }
-            }
-#endif
             for(int pass=0; pass<2 && !applied && !timeUp; ++pass){
                 for(int t=0; t<nmv; ++t){
                     if((t & 7)==7 && chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
@@ -514,23 +571,6 @@ int main(){
                     collectTabu(cur, mv);
                     applyMove(cur, mv);
                     long long nc = incAfterMove(cur, mv);
-#ifdef VERIFY
-                    {
-                        static vector<long long> vd, vt; static long long mism = 0; static long long checks = 0;
-                        vd = dist_; vt = tail_;
-                        long long fc = evalSeq(cur, true);
-                        checks++;
-                        if(nc != -2){
-                            if(fc != nc || vd != dist_ || vt != tail_){
-                                mism++;
-                                fprintf(stderr, "MISMATCH iter=%d inc=%lld full=%lld distOK=%d tailOK=%d\n",
-                                        iter, nc, fc, (int)(vd==dist_), (int)(vt==tail_));
-                            }
-                        }
-                        if(checks % 20000 == 0) fprintf(stderr, "verify checks=%lld mism=%lld\n", checks, mism);
-                        nc = fc;
-                    }
-#endif
                     if(nc == -2) nc = evalSeq(cur, true); // cap hit: exact recompute
                     if(nc < 0){
                         undoMove(cur, mv);
@@ -544,7 +584,13 @@ int main(){
                     break;
                 }
             }
-            if(!applied) break; // timed out or no feasible move at all
+            if(!applied){
+                // All moves infeasible or timed out: diversify if time remains.
+                if(timeUp || chrono::steady_clock::now() >= T_end) break;
+                diversify(true);
+                sinceImp = 0;
+                continue;
+            }
 
             if(curC < bestC){
                 // Confirm with an exact evaluation before recording a new best
@@ -553,40 +599,17 @@ int main(){
                 curC = exact;
                 if(exact >= 0 && exact < bestC){
                     best = cur; bestC = exact; sinceImp = 0;
-#ifdef DIAG
-                    iterLastImp = iter;
-#endif
+                    pushElite(best, bestC);
                     if(bestC <= LB) break; // provably optimal
                 }
             }
             else if(++sinceImp > stuckLim){
-                // ILS kick: restart from best with a few random critical-block moves.
-                cur = best;
-                long long cc = evalSeq(cur, true);
-                curC = cc;
-#ifndef KICK_BASE
-#define KICK_BASE 1
-#define KICK_RAND 2
-#endif
-                int kicks = KICK_BASE + (KICK_RAND ? (int)(rng() % KICK_RAND) : 0);
-                for(int r=0; r<kicks; ++r){
-                    if(chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
-                    genMoves(cur);
-                    if(gmoves.empty()) break;
-                    const Mv& mv = gmoves[rng() % gmoves.size()];
-                    applyMove(cur, mv);
-                    long long nc = evalSeq(cur, true);
-                    if(nc < 0){ undoMove(cur, mv); evalSeq(cur, true); }
-                    else curC = nc;
-                }
-                fill(tabuTB.begin(), tabuTB.end(), 0);
+                // Escalating diversification: mild kick first, then strong multi-start.
+                bool strong = (sinceImp > stuckLim * 2) || ((restartCnt & 3) == 3);
+                diversify(strong);
                 sinceImp = 0;
             }
         }
-#ifdef DIAG
-        extern long long g_pops, g_calls;
-        fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d)\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N);
-#endif
     }
 
     // Fast buffered output (single fwrite) then _exit to skip static-vector
