@@ -397,7 +397,7 @@ int main(){
         }
     };
 
-    mt19937 rng(777u);
+    mt19937 rng(998);
     trySeed(seedGT(0, rng)); // MWR
     trySeed(seedGT(1, rng)); // LPT
     if(chrono::steady_clock::now() - T0 < budget)
