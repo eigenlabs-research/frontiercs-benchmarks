@@ -1282,28 +1282,6 @@ int main(){
         }
         g_msAlpha = 1.0;
     }
-    // Priority path: tall no-rotation split2 with alpha 0.94 early (protects c11).
-    if(!allowRot && g_bin.H * 5 > g_bin.W * 6 && elapsed() < TIME_LIMIT * 0.30){
-        double oldA = g_msAlpha; g_msAlpha = 0.94;
-        auto cutsE = [&](int L){
-            vector<int> v; auto add=[&](int x){ if(x>20&&x<L-20&&find(v.begin(),v.end(),x)==v.end()) v.push_back(x); };
-            add(L/3); add(L/2); add((2*L)/3); add(L/4); add((3*L)/4);
-            for(int z=0; z<M && z<3; ++z){ const ItemType& it=g_items[ordDens[z]]; int d[2]={it.w,it.h};
-                for(int q=0;q<2;++q) for(int k=1;k<=3;++k){ add(d[q]*k); add(L-d[q]*k);} }
-            if((int)v.size()>10) v.resize(10); return v;
-        };
-        for(int sh: cutsE(g_bin.H)){
-            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.35; ++mask)
-                consider(polish(splitMixedPlanY(allowRot, sh, mask, 0)));
-            if(elapsed()>TIME_LIMIT*0.35) break;
-        }
-        for(int sw: cutsE(g_bin.W)){
-            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.40; ++mask)
-                consider(polish(splitMixedPlan(allowRot, sw, mask, 0)));
-            if(elapsed()>TIME_LIMIT*0.40) break;
-        }
-        g_msAlpha = oldA;
-    }
 #ifdef DIAG
     g_label="beam";
 #endif
@@ -1579,6 +1557,16 @@ int main(){
         if(seed > 2000000) break;
     }
 
+    // Final polish with additional orderings not in gapOrders
+    if(elapsed() < TIME_LIMIT - 0.06){
+        vector<int> ordHd = orderByHeightDesc();
+        vector<int> ordWd = orderByWidthDesc();
+        vector<int> ordAreaDesc = orderByAreaDesc();
+        for(auto* op : {&ordHd, &ordWd, &ordAreaDesc}){
+            if(elapsed() > TIME_LIMIT) break;
+            consider(fillGaps(best, *op, allowRot, allowRot));
+        }
+    }
     if(elapsed() < TIME_LIMIT - 0.04) gapFill();
     if(best.totalValue < 0){
         best.totalValue = 0;
