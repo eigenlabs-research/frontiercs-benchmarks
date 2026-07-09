@@ -541,6 +541,9 @@ static PackResult knapsackShelfPlan(bool allowRot){
                 kitems.push_back({rh, (ll)rem * it.v, t, rot, 1, rem, true});
             }
         }
+        // Upper-bound prune: skip DP when combo cannot beat bestVal.
+        ll ub = 0; for(const auto& ki : kitems) ub += ki.val;
+        if(ub <= bestVal) continue;
         fill(dp.begin(), dp.end(), -1);
         dp[0] = 0;
         fill(par.begin(), par.end(), -1);
@@ -1250,10 +1253,14 @@ int main(){
     consider(polish(mixedShelfPlan(allowRot, 0, 0, false)));
     consider(polish(mixedShelfPlan(allowRot, 0, 0, true)));
     {
-        double alphas[1] = {0.94};
-        for(double a : alphas){
+        // Extra alphas for rotate cases historically lift c1/c6; keep 0.94 for no-rot.
+        double alphasR[] = {0.70, 0.85, 0.94, 1.0};
+        double alphasN[] = {0.94};
+        double* alphas = allowRot ? alphasR : alphasN;
+        int na = allowRot ? 4 : 1;
+        for(int ai = 0; ai < na; ++ai){
             if(elapsed() > TIME_LIMIT * 0.22) break;
-            g_msAlpha = a;
+            g_msAlpha = alphas[ai];
             consider(polish(mixedShelfPlan(allowRot, 0, 0, false)));
             if(elapsed() > TIME_LIMIT * 0.22) break;
             consider(polish(mixedShelfPlan(allowRot, 0, 0, true)));
@@ -1266,22 +1273,31 @@ int main(){
     g_densOrd = orderByDensity();
 #ifdef DIAG
     {
+        // Mid-style small beam first (helps residual hard rotate cases).
+        PackResult bs = beamMixedShelfPlan(allowRot, 4, 3, 5, TIME_LIMIT * 0.40);
+        fprintf(stderr, "[beamS] raw=%lld @%.3fs\n", bs.totalValue, elapsed());
+        consider(polish(std::move(bs)));
         int bw = allowRot ? 14 : 7, br = allowRot ? 5 : 4, bd = allowRot ? 9 : 7;
-        PackResult b1 = beamMixedShelfPlan(allowRot, bw, br, bd, allowRot ? TIME_LIMIT * 0.78 : TIME_LIMIT * 0.66);
+        PackResult b1 = beamMixedShelfPlan(allowRot, bw, br, bd, allowRot ? TIME_LIMIT * 0.72 : TIME_LIMIT * 0.66);
         fprintf(stderr, "[beamH] raw=%lld @%.3fs\n", b1.totalValue, elapsed());
         consider(polish(std::move(b1)));
         g_msAlpha = allowRot ? 0.935 : 1.0;
-        PackResult b2 = beamMixedShelfPlanT(allowRot, bw, br, bd, allowRot ? TIME_LIMIT * 0.9 : TIME_LIMIT * 0.82);
+        PackResult b2 = beamMixedShelfPlanT(allowRot, bw, br, bd, allowRot ? TIME_LIMIT * 0.85 : TIME_LIMIT * 0.82);
         fprintf(stderr, "[beamT] raw=%lld @%.3fs\n", b2.totalValue, elapsed());
         consider(polish(std::move(b2)));
         g_msAlpha = 1.0;
     }
 #else
+    // Small mid-style beam before heavy beam — recovers value on cases that prefer narrow beam.
+    if(elapsed() < TIME_LIMIT * 0.35)
+        consider(polish(beamMixedShelfPlan(allowRot, 4, 3, 5, TIME_LIMIT * 0.40)));
+    if(elapsed() < TIME_LIMIT * 0.50)
+        consider(polish(beamMixedShelfPlanT(allowRot, 4, 3, 5, TIME_LIMIT * 0.52)));
     if(elapsed() < TIME_LIMIT * 0.55)
-        consider(polish(beamMixedShelfPlan(allowRot, allowRot ? 14 : 7, allowRot ? 5 : 4, allowRot ? 9 : 7, allowRot ? TIME_LIMIT * 0.78 : TIME_LIMIT * 0.66)));
+        consider(polish(beamMixedShelfPlan(allowRot, allowRot ? 14 : 7, allowRot ? 5 : 4, allowRot ? 9 : 7, allowRot ? TIME_LIMIT * 0.72 : TIME_LIMIT * 0.66)));
     if(elapsed() < TIME_LIMIT * 0.7){
         g_msAlpha = allowRot ? 0.935 : 1.0;
-        consider(polish(beamMixedShelfPlanT(allowRot, allowRot ? 22 : 7, allowRot ? 5 : 4, allowRot ? 9 : 7, allowRot ? TIME_LIMIT * 0.9 : TIME_LIMIT * 0.82)));
+        consider(polish(beamMixedShelfPlanT(allowRot, allowRot ? 22 : 7, allowRot ? 5 : 4, allowRot ? 9 : 7, allowRot ? TIME_LIMIT * 0.85 : TIME_LIMIT * 0.82)));
         g_msAlpha = 1.0;
     }
 #endif
@@ -1464,7 +1480,7 @@ int main(){
     mt19937 rng(987654321u);
     int seed = 0;
     double iterCost = 0.0; // adaptive margin: last iteration's duration
-    while(elapsed() + 2.0 * iterCost < TIME_LIMIT - 0.04){
+    while(elapsed() + 1.5 * iterCost < TIME_LIMIT - 0.04){
         double t0 = elapsed();
         vector<int> ord = orderByDensity();
         int mode = seed % 8;
@@ -1521,6 +1537,31 @@ int main(){
     }
 
     if(elapsed() < TIME_LIMIT - 0.04) gapFill();
+    // Late density-drop + MaxRects refill residual polish.
+    if(elapsed() < TIME_LIMIT - 0.03){
+        mt19937 rng2(424242u);
+        for(int it = 0; it < 24 && elapsed() < TIME_LIMIT - 0.02; ++it){
+            int n = (int)best.placements.size();
+            if(n < 8) break;
+            int rm = max(1, n / (10 + (it % 4) * 3));
+            vector<pair<double,int>> pd;
+            pd.reserve(n);
+            for(int i = 0; i < n; ++i){
+                const ItemType& itm = g_items[best.placements[i].typeId];
+                pd.push_back({itm.density, i});
+            }
+            sort(pd.begin(), pd.end());
+            vector<char> drop(n, 0);
+            for(int k = 0; k < rm && k < n; ++k) drop[pd[k].second] = 1;
+            PackResult mod; mod.totalValue = 0; mod.used.assign(g_items.size(), 0);
+            for(int i = 0; i < n; ++i) if(!drop[i]){
+                const Placed& p = best.placements[i];
+                mod.placements.push_back(p); mod.totalValue += g_items[p.typeId].v; mod.used[p.typeId]++;
+            }
+            int oi = (int)(rng2() % gapOrders.size());
+            consider(fillGaps(mod, *gapOrders[oi], allowRot, allowRot));
+        }
+    }
     if(best.totalValue < 0){
         best.totalValue = 0;
         best.placements.clear();
