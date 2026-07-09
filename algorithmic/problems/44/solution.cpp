@@ -11,7 +11,7 @@
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 2250.0;
+static double TL_MS = 2000.0;
 static inline double el_ms(){ return chrono::duration<double,milli>(chrono::steady_clock::now()-T0).count(); }
 
 static int N;
@@ -179,8 +179,10 @@ int main(){
     // next to geometric neighbours). Keeps `order`/`pos` consistent.
     auto orOptPass=[&]()->bool{
         bool anyImp=false;
+        // Each accepted move costs O(N) (rebuild + reindex), so check the deadline every
+        // iteration — not on a masked counter — to guarantee we never overrun on any N.
         for(int qi=0; qi<N; qi++){
-            if(((++clock)&1023)==0 && el_ms()>TL_MS) return anyImp;
+            if(el_ms()>TL_MS) return anyImp;
             int s0=q[qi];
             if(dontlook[s0]) continue;
             bool moved=false;
@@ -265,7 +267,11 @@ int main(){
         double bestLen=tourLen();
         uint64_t rng=0x9e3779b97f4a7c15ULL ^ (uint64_t)N*2654435761ULL;
         auto rnd=[&](){ rng^=rng<<7; rng^=rng>>9; return rng; };
-        while(el_ms()<TL_MS){
+        // Leave headroom for the final tourLen + output on the largest N. Each ILS iteration
+        // does O(N) work (rebuild + re-opt + length), so stop starting new ones early enough
+        // that one in-flight iteration can't overrun the hard limit.
+        double ILS_STOP = TL_MS - max(5.0, N/40000.0*40.0);
+        while(el_ms()<ILS_STOP){
             // double bridge: pick 3 cut points 1<=a<b<c<N, reconnect A D C B
             int a=1+(int)(rnd()%(N-3)), b=1+(int)(rnd()%(N-3)), c=1+(int)(rnd()%(N-3));
             int lo=min({a,b,c}), hi=max({a,b,c}), mid=a+b+c-lo-hi;
@@ -277,10 +283,11 @@ int main(){
             for(int i=hi;i<N;i++) nt.push_back(order[i]);
             order.swap(nt);
             for(int i=0;i<N;i++) pos[order[i]]=i;
-            // re-optimize only the disturbed neighborhood cheaply: wake all, 2-opt to convergence
+            // re-optimize: wake all, 2-opt to convergence (Or-opt only for moderate N — its O(N)
+            // rebuild is too slow to be worth it at large N and risks overrun).
             fill(dontlook.begin(),dontlook.end(),0);
             while(el_ms()<TL_MS){ if(!twoOptPass()) break; }
-            if(N<=50000){ fill(dontlook.begin(),dontlook.end(),0); orOptPass(); while(el_ms()<TL_MS){ if(!twoOptPass()) break; } }
+            if(N<=20000){ fill(dontlook.begin(),dontlook.end(),0); orOptPass(); while(el_ms()<TL_MS){ if(!twoOptPass()) break; } }
             double L=tourLen();
             if(L<bestLen-1e-6){ bestLen=L; best=order; }
             else { order=best; for(int i=0;i<N;i++) pos[order[i]]=i; } // revert
@@ -288,46 +295,34 @@ int main(){
         order=best; for(int i=0;i<N;i++) pos[order[i]]=i;
     }
 
-    // ---- output rotated so city 0 leads, mathematically exact penalty optimization ----
+    // ---- build the route with city 0 leading, then pick the cheaper orientation ----
+    // The judge's true objective is the PENALIZED length (every 10th edge costs 1.1x when its
+    // source city is non-prime). Our local search minimized plain Euclidean length; as a final
+    // zero-risk polish, evaluate the exact penalized cost of the forward route and its
+    // interior-reversal (same edges, different per-position sources) and output the cheaper one.
     int z=pos[0];
-    
-    vector<char> isPrime(N, true);
-    if(N > 0) isPrime[0] = false;
-    if(N > 1) isPrime[1] = false;
-    for(int i = 2; i * i < N; i++) {
-        if(isPrime[i]) {
-            for(int j = i * i; j < N; j += i) isPrime[j] = false;
-        }
-    }
-    
-    double cost_fwd = 0, cost_rev = 0;
-    for(int i = 1; i <= N; i++) {
-        int a_fwd = order[(z + i - 1) % N];
-        int b_fwd = order[(z + i) % N];
-        double d_fwd = dist(a_fwd, b_fwd);
-        if(i % 10 == 0 && !isPrime[a_fwd]) d_fwd *= 1.1;
-        cost_fwd += d_fwd;
-        
-        int a_rev = order[(z - (i - 1) % N + N) % N];
-        int b_rev = order[(z - i % N + N) % N];
-        double d_rev = dist(a_rev, b_rev);
-        if(i % 10 == 0 && !isPrime[a_rev]) d_rev *= 1.1;
-        cost_rev += d_rev;
-    }
-    
-    if(cost_rev < cost_fwd) {
-        vector<int> rev_order(N);
-        for(int i=0; i<N; i++) rev_order[i] = order[(z - i % N + N) % N];
-        order = rev_order;
-        z = 0;
-    }
+    vector<int> route(N+1);
+    for(int i=0;i<N;i++) route[i]=order[(z+i)%N];
+    route[N]=0;
+
+    // prime sieve over city ids [0,N)
+    vector<char> isPrime(max(2,N), true);
+    isPrime[0]=false; if(N>1) isPrime[1]=false;
+    for(int i=2;(long long)i*i<N;i++) if(isPrime[i]) for(int j=i*i;j<N;j+=i) isPrime[j]=false;
+    auto penCost=[&](const vector<int>& r)->double{
+        double tot=0.0;
+        for(int t=1;t<=N;t++){ int a=r[t-1],b=r[t]; double m=(t%10==0 && !isPrime[a])?1.1:1.0; tot+=m*dist(a,b); }
+        return tot;
+    };
+    double cf=penCost(route);
+    vector<int> rev(N+1); rev[0]=0; for(int i=1;i<N;i++) rev[i]=route[N-i]; rev[N]=0;
+    double cr=penCost(rev);
+    const vector<int>& outR = (cr<cf)? rev : route;
 
     string out; out.reserve((size_t)N*7+16);
     out+=to_string(N+1); out+='\n';
-    for(int i=0;i<N;i++){ out+=to_string(order[(z+i)%N]); out+='\n'; }
-    out+="0\n";
+    for(int i=0;i<=N;i++){ out+=to_string(outR[i]); out+='\n'; }
     fwrite(out.data(),1,out.size(),stdout);
     fflush(stdout);
     _Exit(0);
 }
-// AVALHACAR
