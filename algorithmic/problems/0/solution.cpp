@@ -798,7 +798,7 @@ int main() {
     int BLF2ORD = envInt("PP_BLF2ORD", 1);   // 0: big-first order, 1: champion order
     int B3 = envInt("PP_B3", 1);             // 1: use cached blf3 instead of blf2
     int PHASE2 = envInt("PP_PHASE2", 1);     // 1: blf2 pass over best sweep Ws
-    double P2FRAC = envInt("PP_P2FRAC", 25) / 100.0;  // even more restarts
+    double P2FRAC = envInt("PP_P2FRAC", 20) / 100.0;  // more restarts, less sweep
     long long P2MAXS = envInt("PP_P2MAXS", 22000);   // phase2 only when S below this
     long long B2RESTS = envInt("PP_B2RESTS", 50000);  // blf2 restarts when S below this (was 1300)
     int CAPBIGN = envInt("PP_CAPBIGN", 6000);        // was 2500 — allow capped BLF for larger big cases
@@ -1118,7 +1118,7 @@ int main() {
                 int Hcap = (int)(capA / W);
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
-                obuf = fromBest ? ilsOrd : ordB2;
+                obuf = fromBest ? ilsOrd : ((cntBLF & 1) ? ordBLF : ordB2);
                 int swaps = 1 + rng.rint(6);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
