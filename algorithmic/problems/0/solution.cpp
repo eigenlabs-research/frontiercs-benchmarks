@@ -1092,8 +1092,8 @@ int main() {
             } else if (used + avgSky * 1.3 > SOFT_END) {
                 if (used + avgBLF * 1.3 <= SOFT_END) doBLF = true; else break;
             }
-            static int CAPSHARE = envInt("PP_CAPSHARE", 90);
-            bool capEligible = !big || (n <= envInt("PP_CAPBIGN", 2500));
+            static int CAPSHARE = envInt("PP_CAPSHARE", 95);
+            bool capEligible = !big || (n <= envInt("PP_CAPBIGN", 3000));
             if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
                 // area-driven capped attempt: pack into W' x Hcap' with W'*Hcap' < bestA
                 int W;
@@ -1151,7 +1151,7 @@ int main() {
                 }
                 int policy = (int)(rng.nxt() & 1);
                 double t1 = elapsed_ms();
-R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / (S > 30000 ? 5 : 3)), SEARCH_END, rng, cntBLF > 0)
+                R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / (S > 30000 ? 5 : 3)), SEARCH_END, rng, cntBLF > 0)
                                                    : pack_blf2(W, obuf, max(1, n / (S > 30000 ? 5 : 3)), SEARCH_END, rng, cntBLF > 0))
                            : pack_blf(W, obuf, policy, SEARCH_END);
                 double dt = elapsed_ms() - t1;
