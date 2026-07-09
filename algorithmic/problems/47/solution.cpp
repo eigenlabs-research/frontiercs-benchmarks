@@ -1572,8 +1572,6 @@ int main(){
         bool tryBoth = allowRot ? ((seed & 1) == 0) : false;
         if(mode == 6) tryBoth = true; // force both
         consider(greedyFill(ord, allowRot, tryBoth));
-        // Also try MaxRects with this ordering for additional diversity
-        if(seed % 4 == 0) consider(greedyFillMaxRects(ord, allowRot, tryBoth));
         iterCost = elapsed() - t0;
         ++seed;
         if(seed > 2000000) break;
