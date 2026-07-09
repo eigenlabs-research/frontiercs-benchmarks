@@ -1003,7 +1003,7 @@ int main() {
     };
     R bestR;
     int bfEnv = envInt("PP_BF", -1);
-    long long BF_N = envInt("PP_BFN", 550);
+    long long BF_N = envInt("PP_BFN", 440);
     bool useBF = (bfEnv < 0) ? (n >= BF_N && base <= 63 && minW <= 63) : (bfEnv > 0);
     if (useBF) { bestR = bfSolve(minW, min(base, 63), TL_MS - 120.0); }
     if (!bestR.ok) {
