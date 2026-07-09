@@ -759,7 +759,7 @@ int main(){
         memset(ADJ,0,sizeof(ADJ)); memset(adjmask,0,sizeof(adjmask)); EDGES.clear();
         for(int i=0;i<M;i++){int a,b;scanf("%d %d",&a,&b);ADJ[a][b]=ADJ[b][a]=1;EDGES.push_back({min(a,b),max(a,b)});}
         for(int v=1;v<=N;v++){ adjmask[v]=(1ULL<<v); for(int u=1;u<=N;u++) if(ADJ[v][u]) adjmask[v]|=(1ULL<<u); }
-        auto t0=chrono::steady_clock::now(); HARD_DL=t0+chrono::milliseconds(960);
+        auto t0=chrono::steady_clock::now(); HARD_DL=t0+chrono::milliseconds(975);
         if(N==1){ printf("1\n1\n1\n"); continue; }
         int lb=2; while(lb*lb<N)lb++; { int l2=2; while(2*l2*(l2-1)<M)l2++; lb=max(lb,l2); }
 
@@ -770,7 +770,7 @@ int main(){
         {
             // Always spend a short budget near LB with denseFill; pays off on
             // mid/high density and occasionally hits sparse floors too.
-            long long densMs = (8LL*M>=1LL*N*(N-1)) ? (N>=35?700:500) : (N>=30?120:180);
+            long long densMs = (8LL*M>=1LL*N*(N-1)) ? (N>=35?700:580) : (N>=30?120:180);
             auto dl=t0+chrono::milliseconds(densMs); if(dl>HARD_DL)dl=HARD_DL;
             int focus=max(lb,(int)(sqrt((double)M)*1.12)), hi=min(N,max(lb+12,focus+5));
             for(int k=lb;k<=hi&&!past(dl);k++){
