@@ -1,3 +1,4 @@
+// v19.9: v19.5 + PP_CAPDW default 3 (was 2); local small-band A/B winner
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -967,7 +968,7 @@ int main() {
         stable_sort(res.begin(), res.end(), [&](int a, int b) {
             int da = min(ps[a].minW, ps[a].minH);
             int db = min(ps[b].minW, ps[b].minH);
-            if (da != db) return (S==1741||S==1029||S==1625||S==1194||S==1012)?da>db:da<db;
+            if (da != db) return da < db;
             if (ps[a].k != ps[b].k) return ps[a].k < ps[b].k;
             return ps[a].id > ps[b].id;
         });
@@ -990,13 +991,11 @@ int main() {
         unordered_set<int> used; used.reserve(512);
         auto addW = [&](int w) { if (w < minW) w = minW; if (used.insert(w).second) Ws.push_back(w); };
         addW(base);
-        bool ws=(S==1741||S==1029||S==1625||S==1194||S==1012);
-        int span = ws?min(120,max(20,base)):min(96, max(20, base / 2));
+        int span = min(96, max(20, base / 2));
         for (int d = 1; d <= span; d++) { addW(base - d); addW(base + d); }
         addW(minW);
         addW((int)max<long long>(minW, (S + base - 1) / base));
         for (int m = 2; m <= 6; m++) { addW(base * m / 3); addW((int)max<long long>(minW, S / ((base * m / 3) ? (base * m / 3) : 1))); }
-        if(ws){int th=max(1,(int)ceil((double)S/base));for(int ch=max(1,th/2);ch<=th*2&&ch<=200;ch++){int cw=(int)ceil((double)S/ch);if(cw>=minW&&cw<=64)addW(cw);}}
         sort(Ws.begin(), Ws.end(), [&](int a, int b) { int da = abs(a - base), db = abs(b - base); if (da != db) return da < db; return a < b; });
     }
 
@@ -1187,9 +1186,9 @@ int main() {
             if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
                 int W;
                 {
-                    static int dwBase = envInt("PP_CAPDW", 3);
+                    static int dwBase = envInt("PP_CAPDW", 3); // v19.9: was 2; local A/B +holdout
                     static int dwWide = envInt("PP_CAPDWW", 6);
-                    static int wideP=envInt("PP_CAPWIDEP",(S==1734||S==1689||S==1455||S==1011)?15:25);
+                    static int wideP = envInt("PP_CAPWIDEP", 25);
                     int dw = ((int)(rng.nxt() % 100) < wideP) ? dwWide : dwBase;
                     W = bestR.packW + (dw > 0 ? (rng.rint(2 * dw + 1) - dw) : 0);
                     if (W < minW) W = minW;
@@ -1266,7 +1265,7 @@ int main() {
         }
     }
     // late restart: try shuffled orderings at best width for fresh diversification
-    static int LATE = envInt("PP_LATE", 4); // v19.x local A/B knob; default keeps tip behavior
+    static int LATE = envInt("PP_LATE", 4);
     if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30 && LATE > 0) {
         int lateW = bestR.packW;
         int lateHcap = max(1, (int)(bestR.A / lateW) - 1);
