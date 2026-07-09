@@ -345,7 +345,7 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(940); // use more of the 1s TL
+    const auto budget = chrono::milliseconds(860);
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
@@ -587,6 +587,38 @@ int main(){
         extern long long g_pops, g_calls;
         fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d)\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N);
 #endif
+
+        // ---- Intensification: exact hill climbing on best ----
+        cur = best;
+        long long cc = evalSeq(cur, true);
+        if(cc >= 0) curC = cc;
+        // Keep climbing until timeout or no improving move
+        while(!timeUp && chrono::steady_clock::now() < T_end){
+            genMoves(cur);
+            int nmv = (int)gmoves.size();
+            if(nmv == 0) break;
+            int bestIdx = -1; long long bestNC = -1;
+            for(int t=0; t<nmv && !timeUp; ++t){
+                if((t & 15)==15 && chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
+                const Mv& mv = gmoves[t];
+                if(isTabu(cur, mv, iter) && estMove(cur, mv) >= bestC) continue;
+                applyMove(cur, mv);
+                long long nc = evalSeq(cur, true);
+                undoMove(cur, mv);
+                if(nc >= 0 && (bestIdx < 0 || nc < bestNC)){ bestNC = nc; bestIdx = t; }
+            }
+            if(bestIdx < 0 || bestNC >= bestC) break;  // no improving move
+            const Mv& mv = gmoves[bestIdx];
+            collectTabu(cur, mv);
+            applyMove(cur, mv);
+            long long nc = evalSeq(cur, true);
+            if(nc >= 0 && nc < bestC){ best = cur; bestC = nc; curC = nc; }
+            else { undoMove(cur, mv); evalSeq(cur, true); break; }
+            genMoves(cur);
+            // Simple tabu update for applied move
+            for(size_t id : gpend) tabuTB[id] = iter + 100;
+            iter++;
+        }
     }
 
     // Fast buffered output (single fwrite) then _exit to skip static-vector
