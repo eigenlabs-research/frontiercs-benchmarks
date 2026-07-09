@@ -1389,6 +1389,8 @@ int main(){
             if((int)v.size() > (ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 18 : 14)) v.resize(ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 18 : 14);
             return v;
         };
+        double oldAlphaSplit2 = g_msAlpha;
+        if(!allowRot && g_bin.H * 5 > g_bin.W * 6) g_msAlpha = 0.94;
         vector<int> splits2 = cuts(g_bin.W, false);
         for(uint32_t seed = 1; seed <= 3 && elapsed() < TIME_LIMIT * 0.78; ++seed){
 #ifdef DIAG
@@ -1409,6 +1411,7 @@ int main(){
                 if(elapsed() > TIME_LIMIT * 0.78) break;
             }
         }
+        g_msAlpha = oldAlphaSplit2;
     }
 #ifdef DIAG
     g_label="choicemr";
