@@ -466,6 +466,11 @@ static PackResult choiceMaxRects(bool allowRot, int mode, double tlim){
                                       (mr.fx[i] + rw == mr.W ? rh : 0) + (mr.fy[i] + rh == mr.H ? rw : 0);
                         sc = it.density * 1000000000.0 + contact * 1000000.0 - sh * 25000.0 - lo;
                     }
+                    else if(mode == 8){
+                        int contact = (mr.fx[i] == 0 ? rh : 0) + (mr.fy[i] == 0 ? rw : 0) +
+                                      (mr.fx[i] + rw == mr.W ? rh : 0) + (mr.fy[i] + rh == mr.H ? rw : 0);
+                        sc = it.density * 1000000000.0 + contact * 1000000.0 - sh * 10000.0 - lo * 100.0;
+                    }
                     int px = mr.fx[i], py = mr.fy[i];
                     if(mode == 1) px += lw;
                     else if(mode == 2 && lw > lh) px += lw;
@@ -1473,7 +1478,7 @@ int main(){
 #ifdef DIAG
     g_label="choicemr";
 #endif
-    { int ms[8]={3,6,7,0,4,5,1,2}; for(int ii=0;ii<8&&elapsed()<TIME_LIMIT*0.86;++ii) consider(polish(choiceMaxRects(allowRot,ms[ii],TIME_LIMIT*0.88))); }
+    { int ms[9]={3,6,7,0,8,4,5,1,2}; for(int ii=0;ii<9&&elapsed()<TIME_LIMIT*0.86;++ii) consider(polish(choiceMaxRects(allowRot,ms[ii],TIME_LIMIT*0.88))); }
 #ifdef DIAG
     g_label="prune";
 #endif
