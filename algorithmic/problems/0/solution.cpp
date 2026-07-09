@@ -302,7 +302,6 @@ static bool crownRepack(R& r, double deadlineMs) {
         for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] |= ((uint64_t)t.rmask[dy]) << p.x;
     }
     bool improvedAny = false;
-    // Save original placement so we can revert if the new packing has a larger area.
     long long origA = r.A;
     int origW = r.W, origH = r.H;
     vector<Pl> origPl = r.pl;
@@ -312,30 +311,24 @@ static bool crownRepack(R& r, double deadlineMs) {
         int H = (int)grid.size();
         while (H > 0 && grid[H - 1] == 0) H--;
         if (H <= 1) break;
-        // Try increasing crown depths: first try just the top row (fast), then 2 rows, then 3.
-        // Deeper crowns remove more pieces, creating more empty space and increasing the chance
-        // that all removed pieces can be reinserted at a lower y-position.
         bool anyDepthOk = false;
         for (int crownDepth = 1; crownDepth <= 3; crownDepth++) {
             if (H - crownDepth < 1) break;
-            // crown: placements with any cell in the top `crownDepth` rows
             vector<int> crown;
             for (int i = 0; i < (int)r.pl.size(); i++) {
                 auto& p = r.pl[i];
                 auto& t = ps[p.idx].t[p.ti];
                 if (p.y + t.h > H - crownDepth) crown.push_back(i);
             }
-            if (crown.empty()) { anyDepthOk = true; break; } // nothing to relocate, H is fine
-            // remove crown from grid
+            if (crown.empty()) { anyDepthOk = true; break; }
             for (int ci : crown) {
                 auto& p = r.pl[ci];
                 auto& t = ps[p.idx].t[p.ti];
                 for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] &= ~(((uint64_t)t.rmask[dy]) << p.x);
             }
-            // biggest first
             sort(crown.begin(), crown.end(), [&](int a, int b) { return ps[r.pl[a].idx].k > ps[r.pl[b].idx].k; });
             int targetH = H - crownDepth;
-            vector<array<int,3>> newPos(crown.size()); // ti, x, y
+            vector<array<int,3>> newPos(crown.size());
             bool ok = true;
             for (size_t c = 0; c < crown.size() && ok; c++) {
                 auto& p = r.pl[crown[c]];
@@ -369,15 +362,12 @@ static bool crownRepack(R& r, double deadlineMs) {
                 newPos[c] = {bTi, bX, bY};
             }
             if (ok) {
-                // Check that the new packing actually has a smaller area before committing.
-                // Recompute area from the current grid state.
                 uint64_t colU = 0; int rows = 0;
                 for (auto& g : grid) if (g) { colU |= g; rows++; }
                 int newW = max(1, __builtin_popcountll(colU));
                 int newH = max(1, rows);
                 long long newA = (long long)newW * newH;
                 if (newA < r.A) {
-                    // commit
                     for (size_t c = 0; c < crown.size(); c++) {
                         auto& p = r.pl[crown[c]];
                         p.ti = newPos[c][0]; p.x = newPos[c][1]; p.y = newPos[c][2];
@@ -385,15 +375,12 @@ static bool crownRepack(R& r, double deadlineMs) {
                     r.W = newW; r.H = newH; r.A = newA;
                     improvedAny = true;
                     anyDepthOk = true;
-                    if (getenv("PP_DEBUG")) fprintf(stderr, "crown: shaved %d row(s) (crown size %zu) A=%lld->%lld\n", crownDepth, crown.size(), origA, newA);
-                    break; // success at this depth, move to next round
+                    break;
                 } else {
-                    // New area is not better — restore grid and try next depth.
                     ok = false;
                 }
             }
             if (!ok) {
-                // restore grid for next depth attempt
                 fill(grid.begin(), grid.end(), 0ULL);
                 for (auto& p : r.pl) {
                     auto& t = ps[p.idx].t[p.ti];
@@ -401,14 +388,105 @@ static bool crownRepack(R& r, double deadlineMs) {
                 }
             }
         }
-        if (!anyDepthOk) break; // all depths failed, can't improve further
+        if (!anyDepthOk) break;
     }
     if (!improvedAny) {
-        // Restore original placement if no improvement was made.
         r.pl = move(origPl);
         r.W = origW; r.H = origH; r.A = origA;
     }
     return improvedAny;
+}
+
+// ---------- compact pack: gravity-squeeze every piece downward to tighten the packing ----------
+// Iterates all pieces bottom-to-top, removing each and finding the lowest y where it fits.
+// This creates more holes for crownRepack to use and can directly reduce height.
+static vector<uint64_t> s_grid;
+static bool compactPack(R& r, double deadlineMs) {
+    if (!r.ok || r.packW <= 0 || r.packW > 64) return false;
+    int W = r.packW;
+    int H0 = 0;
+    for (auto& p : r.pl) {
+        auto& t = ps[p.idx].t[p.ti];
+        if (p.y + t.h > H0) H0 = p.y + t.h;
+    }
+    if (H0 <= 1) return false;
+    auto& grid = s_grid;
+    grid.assign(H0, 0ULL);
+    for (auto& p : r.pl) {
+        auto& t = ps[p.idx].t[p.ti];
+        for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] |= ((uint64_t)t.rmask[dy]) << p.x;
+    }
+    long long origA = r.A;
+    int origW = r.W, origH = r.H;
+    vector<Pl> origPl = r.pl;
+    // Build order: pieces sorted by their bottom y (ascending), then by size descending
+    vector<int> order(r.pl.size());
+    iota(order.begin(), order.end(), 0);
+    sort(order.begin(), order.end(), [&](int a, int b) {
+        auto& pa = r.pl[a]; auto& pb = r.pl[b];
+        if (pa.y != pb.y) return pa.y < pb.y;
+        return ps[pa.idx].k > ps[pb.idx].k;
+    });
+    bool anyMoved = false;
+    for (int oi : order) {
+        if (deadlineMs > 0 && elapsed_ms() > deadlineMs) break;
+        auto& p = r.pl[oi];
+        auto& piece = ps[p.idx];
+        auto& oldT = piece.t[p.ti];
+        // Remove from grid
+        for (int dy = 0; dy < oldT.h; dy++) grid[p.y + dy] &= ~(((uint64_t)oldT.rmask[dy]) << p.x);
+        // Find lowest y where any orientation fits
+        int bTi = -1, bX = 0, bY = INT_MAX;
+        for (int ti = 0; ti < (int)piece.t.size(); ti++) {
+            auto& t = piece.t[ti];
+            if (t.w > W) continue;
+            uint64_t limMask = (W - t.w + 1 >= 64) ? ~0ULL : ((1ULL << (W - t.w + 1)) - 1);
+            int ymax = H0 - t.h;
+            for (int y = 0; y <= ymax; y++) {
+                if (bY <= y) break;
+                uint64_t conflict = 0;
+                for (int dy = 0; dy < t.h; dy++) {
+                    uint64_t g = grid[y + dy];
+                    if (!g) continue;
+                    unsigned m = t.rmask[dy];
+                    while (m) { int b = __builtin_ctz(m); conflict |= (g >> b); m &= m - 1; }
+                }
+                uint64_t allowed = ~conflict & limMask;
+                if (allowed) {
+                    int x = (int)__builtin_ctzll(allowed);
+                    if (y < bY || (y == bY && x < bX)) { bY = y; bX = x; bTi = ti; }
+                    break;
+                }
+            }
+        }
+        if (bTi < 0) {
+            // Restore original position
+            for (int dy = 0; dy < oldT.h; dy++) grid[p.y + dy] |= ((uint64_t)oldT.rmask[dy]) << p.x;
+            continue;
+        }
+        auto& newT = piece.t[bTi];
+        // Place at new position
+        for (int dy = 0; dy < newT.h; dy++) grid[bY + dy] |= ((uint64_t)newT.rmask[dy]) << bX;
+        if (bY < p.y || bTi != p.ti || bX != p.x) {
+            p.ti = bTi; p.x = bX; p.y = bY;
+            anyMoved = true;
+        }
+    }
+    if (!anyMoved) return false;
+    // Recompute compressed W/H/A
+    uint64_t colU = 0; int rows = 0;
+    for (auto& g : grid) if (g) { colU |= g; rows++; }
+    int newW = max(1, __builtin_popcountll(colU));
+    int newH = max(1, rows);
+    long long newA = (long long)newW * newH;
+    if (newA < origA) {
+        r.W = newW; r.H = newH; r.A = newA;
+        return true;
+    }
+    // Revert if no improvement
+    r.pl = move(origPl);
+    r.W = origW; r.H = origH; r.A = origA;
+    return false;
 }
 
 // ---------- blf2: hole-aware windowed best-fit (W<=64) ----------
@@ -1025,7 +1103,7 @@ int main() {
                 double panic1 = t1 + half;
                 double adapt1 = max(50.0, half - 15.0);
                 r = pack(W, baseOrder, rng, false, expLIM, true, adapt1, SEARCH_END, panic1);
-                if (r.ok) { crownRepack(r, SEARCH_END); if (better(r, bestR)) bestR = move(r); }
+                if (r.ok) { compactPack(r, SEARCH_END); crownRepack(r, SEARCH_END); if (better(r, bestR)) bestR = move(r); }
                 double t2 = elapsed_ms();
                 double panic2 = SEARCH_END - reserve;
                 double adapt2 = max(50.0, panic2 - t2 - 15.0);
@@ -1049,6 +1127,7 @@ int main() {
         double dt = elapsed_ms() - t1;
         cnt++; avg = (avg * (cnt - 1) + dt) / cnt;
         if (!r.ok) break; // deadline hit mid-pack
+        compactPack(r, SEARCH_END);
         crownRepack(r, SEARCH_END);
         if (r.ok) sweepRes.push_back({r.A, W});
         if (better(r, bestR)) bestR = move(r);
@@ -1085,6 +1164,7 @@ int main() {
             double dt = elapsed_ms() - t1;
             cnt2++; avg2 = (avg2 * (cnt2 - 1) + dt) / cnt2;
             if (!r.ok) break;
+            compactPack(r, SEARCH_END);
             crownRepack(r, SEARCH_END);
             if (better(r, bestR)) bestR = move(r);
         }
@@ -1144,6 +1224,7 @@ int main() {
                 cntBLF++; avgBLF = (avgBLF * (cntBLF - 1) + dt) / cntBLF;
                 if (elapsed_ms() > SEARCH_END) break;
                 if (r.ok) {
+                    compactPack(r, SEARCH_END);
                     crownRepack(r, SEARCH_END);
                     if (better(r, bestR)) { ilsOrd = obuf; bestR = move(r); }
                 }
@@ -1176,6 +1257,7 @@ int main() {
                 cntBLF++; avgBLF = (avgBLF * (cntBLF - 1) + dt) / cntBLF;
                 if (getenv("PP_DEBUG")) fprintf(stderr, "BLF W=%d dt=%.1f ok=%d A=%lld best=%lld\n", W, dt, (int)r.ok, r.ok ? r.A : -1, bestR.A);
                 if (!r.ok) break;
+                compactPack(r, SEARCH_END);
                 crownRepack(r, SEARCH_END);
                 if (better(r, bestR)) { ilsOrd = obuf; ilsW = W; bestR = move(r); }
             } else {
@@ -1192,6 +1274,7 @@ int main() {
                 double dt = elapsed_ms() - t1;
                 cnt++; avgSky = (avgSky * 0.7 + dt * 0.3);
                 if (!r.ok) break;
+                compactPack(r, SEARCH_END);
                 crownRepack(r, SEARCH_END);
                 if (better(r, bestR)) bestR = move(r);
             }
@@ -1199,6 +1282,7 @@ int main() {
     }
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_search_done=%.1f\n", elapsed_ms());
     // final polish on the global best
+    compactPack(bestR, TL_MS + 10.0);
     crownRepack(bestR, TL_MS + 10.0);
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_crown_done=%.1f\n", elapsed_ms());
 
