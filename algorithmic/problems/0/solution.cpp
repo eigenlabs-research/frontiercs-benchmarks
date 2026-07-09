@@ -1,4 +1,4 @@
-// v19.5: v19.3 + bf W-search d<=30 only (v19.4 overfit/regressed)
+// v19.7: v19.5 + GRASP W jitter ±5 only (no wider d; d=35 regressed)
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -861,7 +861,7 @@ static R bfSolve(int minW, int base, double deadline) {
     if (bestW > 0 && envInt("PP_G", 1)) {
         RNG g(0x9e3779b97f4a7c15ULL ^ ((unsigned long long)S<<1) ^ (unsigned long long)n);
         while (elapsed_ms() + lastPass * 1.25 < deadline) {
-            int W = bestW + g.rint(7) - 3; if (W < minW || W > 63) continue;
+            int W = bestW + g.rint(11) - 5; if (W < minW || W > 63) continue; // v19.7: ±5 (was ±3)
             int tie = g.rint(2); vector<int> avail = kcnt; double t0 = elapsed_ms();
             int H = bf_pass(W, repr, idx, avail, n, tK, tO, tX, tY, tie, &g);
             lastPass = elapsed_ms() - t0;
