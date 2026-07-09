@@ -890,7 +890,7 @@ static long long signatureEarliestStartParsed(){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(994); // 994ms with 7 GT seeds and adaptive tenure
+    const auto budget = chrono::milliseconds(995); // 994ms with 7 GT seeds and adaptive tenure
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
