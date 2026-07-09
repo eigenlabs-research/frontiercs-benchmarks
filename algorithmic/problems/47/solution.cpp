@@ -1390,7 +1390,7 @@ int main(){
             return v;
         };
         double oldAlphaSplit2 = g_msAlpha;
-        if(!allowRot && g_bin.H * 5 > g_bin.W * 6) g_msAlpha = 0.94;
+        if(!allowRot && g_bin.H * 5 > g_bin.W * 6) g_msAlpha = 0.90;
         vector<int> splits2 = cuts(g_bin.W, false);
         for(uint32_t seed = 1; seed <= 3 && elapsed() < TIME_LIMIT * 0.78; ++seed){
 #ifdef DIAG
