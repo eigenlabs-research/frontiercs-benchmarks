@@ -592,7 +592,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
     vector<Pl> pl; pl.reserve(nm);
     if ((int)b3cache.size() < nm * 8) b3cache.resize(nm * 8);
     for (int i = 0; i < nm * 8; i++) b3cache[i].valid = false;
-    static int REPAIR = envInt("PP_REPAIR", 25); // ejection-chain depth (0 = off)
+    static int REPAIR = envInt("PP_REPAIR", 40); // ejection-chain depth (0 = off)
     auto& own = g_own;
     auto& plSlot = g_plSlot;
     if (REPAIR > 0) {
@@ -1060,7 +1060,7 @@ int main() {
             if (used + avg2 * 1.2 > p2Stop) break;
             int W = p2W[i];
             double t1 = elapsed_ms();
-            static int B3WINDIV = envInt("PP_B3WINDIV", 5);  // larger divisor for faster phase2
+            static int B3WINDIV = envInt("PP_B3WINDIV", 4);  // larger divisor for faster phase2
             int b3win = max(1, B3WINDIV > 0 ? n / B3WINDIV : n);
             R r = B3 ? pack_blf3(W, ordB2, b3win, SEARCH_END, rng, false)
                      : pack_blf2(W, ordB2, b3win, SEARCH_END, rng, false);
@@ -1092,7 +1092,7 @@ int main() {
             } else if (used + avgSky * 1.3 > SOFT_END) {
                 if (used + avgBLF * 1.3 <= SOFT_END) doBLF = true; else break;
             }
-            static int CAPSHARE = envInt("PP_CAPSHARE", 90);
+            static int CAPSHARE = envInt("PP_CAPSHARE", 95);
             bool capEligible = !big || (n <= envInt("PP_CAPBIGN", 2500));
             if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
                 // area-driven capped attempt: pack into W' x Hcap' with W'*Hcap' < bestA
@@ -1151,7 +1151,7 @@ int main() {
                 }
                 int policy = (int)(rng.nxt() & 1);
                 double t1 = elapsed_ms();
-R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / (S > 30000 ? 5 : 3)), SEARCH_END, rng, cntBLF > 0)
+                R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / (S > 30000 ? 5 : 3)), SEARCH_END, rng, cntBLF > 0)
                                                    : pack_blf2(W, obuf, max(1, n / (S > 30000 ? 5 : 3)), SEARCH_END, rng, cntBLF > 0))
                            : pack_blf(W, obuf, policy, SEARCH_END);
                 double dt = elapsed_ms() - t1;
