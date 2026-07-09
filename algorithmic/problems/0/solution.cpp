@@ -846,7 +846,7 @@ static R bfSolve(int minW, int base, double deadline) {
     }
     long long bestA = LLONG_MAX; int bestW = 0, bestH = 0; vector<int> bK, bO, bX, bY, tK, tO, tX, tY;
     double lastPass = 0;
-    for (int d = 0; d <= 30; d++) { // v19.5: wider W only
+    for (int d = 0; d <= 30; d++) { // upstream v19.9
         for (int sgn = (d ? -1 : 1); sgn <= 1; sgn += 2) {
             int W = base + sgn * d; if (W < minW || W > 63) continue;
             for (int tie = 1; tie >= 0; tie--) {   // try both tie-break directions, keep best area
@@ -1272,7 +1272,7 @@ int main() {
         if (lateHcap >= minW) {
             for (int attempt = 0; attempt < LATE && elapsed_ms() < SOFT_END - 10; attempt++) {
                 vector<int> randOrd = idx;
-                int ns = max(1, n / 2);
+                int ns = max(1, n / 2); // enhanced perturbation (was n/3)
                 for (int s = 0; s < ns; s++) { int a = rng.rint(n), b = rng.rint(n); swap(randOrd[a], randOrd[b]); }
                 R r = pack_capped(lateW, lateHcap, randOrd, max(1, n / 4), SEARCH_END, rng);
                 if (r.ok) { crownRepack(r, SEARCH_END); if (better(r, bestR)) bestR = move(r); }
