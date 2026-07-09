@@ -89,7 +89,7 @@ static long long evalSeq(const vector<vector<int>>& seq, bool fillCrit = false){
 }
 
 // Giffler-Thompson dispatch with a priority rule (active schedule generation).
-// mode: 0=MWR (most work remaining), 1=LPT (current op), 2=SPT, 3=random.
+// mode: 0=MWR, 1=LPT, 2=SPT, 3=random, 4=PMWR (wrem/(nextP+1)), 5=LWR, 6=ERD.
 static vector<vector<int>> seedGT(int mode, mt19937& rng){
     vector<int> jp(J, 0);
     vector<long long> jr(J, 0), mf(M, 0), wrem(J, 0);
@@ -123,6 +123,9 @@ static vector<vector<int>> seedGT(int mode, mt19937& rng){
                 if(mode==0) pr = wrem[j];
                 else if(mode==1) pr = p_of[j][k];
                 else if(mode==2) pr = -p_of[j][k];
+                else if(mode==4) pr = wrem[j] * 1000LL / (p_of[j][k] + 1); // PMWR
+                else if(mode==5) pr = -wrem[j];                            // LWR
+                else if(mode==6) pr = -s;                                  // ERD
                 else pr = (long long)rng();
                 if(cj==-1 || pr > cp){ cp = pr; cj = j; }
             }
@@ -345,7 +348,7 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(995); // increased budget for more iterations with longer tenure
+    const auto budget = chrono::milliseconds(860);
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
@@ -399,9 +402,15 @@ int main(){
 
     mt19937 rng(777u);
     trySeed(seedGT(0, rng)); // MWR
-    trySeed(seedGT(1, rng)); // LPT
+    trySeed(seedGT(4, rng)); // PMWR
+    if(chrono::steady_clock::now() - T0 < budget)
+        trySeed(seedGT(1, rng)); // LPT
     if(chrono::steady_clock::now() - T0 < budget)
         trySeed(seedGT(2, rng)); // SPT
+    if(chrono::steady_clock::now() - T0 < budget)
+        trySeed(seedGT(5, rng)); // LWR
+    if(chrono::steady_clock::now() - T0 < budget)
+        trySeed(seedGT(6, rng)); // ERD
 
     // Trivial lower bound: max(machine load, job length). If reached, we are
     // provably optimal and can stop immediately.
@@ -582,6 +591,71 @@ int main(){
                 fill(tabuTB.begin(), tabuTB.end(), 0);
                 sinceImp = 0;
             }
+        }
+
+        // Post-tabu diversification: if time remains and we've stagnated, try
+        // starting fresh from another seed and running whatever iterations we can.
+        // Only actually enters if the primary loop didn't run out of time.
+        while(!timeUp && chrono::steady_clock::now() < T_end && bestC > LB){
+            // Reset with best+random-machine-swap perturbation
+            cur = best;
+            evalSeq(cur, true); curC = bestC;
+            int machShuffles = max(1, M/8);
+            for(int r=0; r<machShuffles; ++r){
+                int m = rng() % M;
+                // pick two random positions to swap
+                int a = rng() % J, b = rng() % J;
+                if(a != b) swap(cur[m][a], cur[m][b]);
+            }
+            long long nc = evalSeq(cur, true);
+            if(nc < 0){ cur = best; evalSeq(cur, true); curC = bestC; break; }
+            curC = nc;
+            fill(tabuTB.begin(), tabuTB.end(), 0);
+
+            // Continue tabu for a bit
+            int localIter = 0;
+            const int LOCAL_MAX = 5000;
+            while(localIter++ < LOCAL_MAX && chrono::steady_clock::now() < T_end){
+                iter++;
+                genMoves(cur);
+                if(gmoves.empty()) break;
+                int nmv = (int)gmoves.size();
+                gcand.clear();
+                for(int idx=0; idx<nmv; ++idx)
+                    gcand.push_back({estMove(cur, gmoves[idx]), idx});
+                int K = nmv < 24 ? nmv : 24;
+                partial_sort(gcand.begin(), gcand.begin()+K, gcand.end());
+                bool sorted_all = (K == nmv);
+                bool applied = false;
+                for(int pass=0; pass<2 && !applied; ++pass){
+                    for(int t=0; t<nmv; ++t){
+                        if(t >= K && !sorted_all){ sort(gcand.begin(), gcand.end()); sorted_all = true; }
+                        const Mv& mv = gmoves[gcand[t].second];
+                        if(pass==0){
+                            bool tb = isTabu(cur, mv, iter);
+                            bool asp = gcand[t].first < bestC;
+                            if(tb && !asp) continue;
+                        }
+                        collectTabu(cur, mv);
+                        applyMove(cur, mv);
+                        long long nc2 = incAfterMove(cur, mv);
+                        if(nc2 == -2) nc2 = evalSeq(cur, true);
+                        if(nc2 < 0){ undoMove(cur, mv); evalSeq(cur, true); continue; }
+                        int tenure = TENURE_MIN + (int)(rng() % TENURE_SPAN);
+                        for(size_t id : gpend) tabuTB[id] = iter + tenure;
+                        curC = nc2;
+                        if(nc2 < bestC){
+                            long long exact = evalSeq(cur, true);
+                            curC = exact;
+                            if(exact >= 0 && exact < bestC){ best = cur; bestC = exact; }
+                        }
+                        applied = true;
+                        break;
+                    }
+                }
+                if(!applied) break;
+            }
+            if(bestC <= LB) break;
         }
 #ifdef DIAG
         extern long long g_pops, g_calls;
