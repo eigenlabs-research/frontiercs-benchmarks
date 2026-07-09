@@ -1316,6 +1316,12 @@ int main(){
     if(allowRot && elapsed() < TIME_LIMIT * 0.85){
         consider(polish(beamMixedShelfPlan(allowRot, 22, 8, 3, TIME_LIMIT * 0.85)));
     }
+    // Transposed beam with alpha=0.94 for different shelf height preferences
+    if(allowRot && elapsed() < TIME_LIMIT * 0.88){
+        g_msAlpha = 0.94;
+        consider(polish(beamMixedShelfPlanT(allowRot, 18, 5, 4, TIME_LIMIT * 0.88)));
+        g_msAlpha = 1.0;
+    }
 #endif
 #ifdef DIAG
     g_label="hybrid";
@@ -1467,9 +1473,12 @@ int main(){
             if(elapsed() > TIME_LIMIT * 0.93) break;
             consider(pruneLow(best, c, ordAreaAsc, allowRot));
         }
-        int ds[3]={4,8,12};
-        for(int c:ds)for(int side=0;side<4&&elapsed()<TIME_LIMIT*0.955;++side)consider(pruneSide(best,c,ordDens,allowRot,side));
-        if(!allowRot&&g_bin.H*5>g_bin.W*6)for(int ln=1;ln<=2;++ln)for(int side=0;side<2&&elapsed()<TIME_LIMIT*0.965;++side){
+        int ds[5]={4,8,12,16,20};
+        for(int c:ds)for(int side=0;side<4&&elapsed()<TIME_LIMIT*0.955;++side){
+            consider(pruneSide(best,c,ordDens,allowRot,side));
+            if(elapsed()<TIME_LIMIT*0.955) consider(pruneSide(best,c,ordAreaAsc,allowRot,side));
+        }
+        if(g_bin.H*5>g_bin.W*6)for(int ln=1;ln<=2;++ln)for(int side=0;side<2&&elapsed()<TIME_LIMIT*0.965;++side){
             consider(pruneLine(best,ln,ordDens,allowRot,side));
             if(elapsed()<TIME_LIMIT*0.965) consider(pruneLine(best,ln,ordMinDim,allowRot,side));
             if(elapsed()<TIME_LIMIT*0.965) consider(pruneLine(best,ln,ordVal,allowRot,side));
@@ -1557,6 +1566,16 @@ int main(){
         if(seed > 2000000) break;
     }
 
+    // Final polish with additional orderings not in gapOrders
+    if(elapsed() < TIME_LIMIT - 0.06){
+        vector<int> ordHd = orderByHeightDesc();
+        vector<int> ordWd = orderByWidthDesc();
+        vector<int> ordAreaDesc = orderByAreaDesc();
+        for(auto* op : {&ordHd, &ordWd, &ordAreaDesc}){
+            if(elapsed() > TIME_LIMIT) break;
+            consider(fillGaps(best, *op, allowRot, allowRot));
+        }
+    }
     if(elapsed() < TIME_LIMIT - 0.04) gapFill();
     if(best.totalValue < 0){
         best.totalValue = 0;
