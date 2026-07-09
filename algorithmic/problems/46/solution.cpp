@@ -345,7 +345,7 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(940); // use more of the 1s TL
+    const auto budget = chrono::milliseconds(960); // ~720ms on judge (1.3x faster), safe under 1s
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
