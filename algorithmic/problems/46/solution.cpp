@@ -5,6 +5,7 @@
 #include <random>
 #include <climits>
 #include <unistd.h>
+#define EVAL_TOP 2
 using namespace std;
 
 static int J, M, N;
