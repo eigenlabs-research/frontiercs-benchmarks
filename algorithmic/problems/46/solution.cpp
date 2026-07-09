@@ -1,3 +1,4 @@
+#pragma GCC optimize("O3,unroll-loops")
 #include <cstdio>
 #include <vector>
 #include <algorithm>
