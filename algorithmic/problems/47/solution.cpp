@@ -1250,8 +1250,10 @@ int main(){
     consider(polish(mixedShelfPlan(allowRot, 0, 0, false)));
     consider(polish(mixedShelfPlan(allowRot, 0, 0, true)));
     {
-        double alphas[1] = {0.94};
-        for(double a : alphas){
+        double alphas[2] = {0.94,0.92};
+        int nAlpha = allowRot ? 1 : 2;
+        for(int ai = 0; ai < nAlpha; ++ai){
+            double a = alphas[ai];
             if(elapsed() > TIME_LIMIT * 0.22) break;
             g_msAlpha = a;
             consider(polish(mixedShelfPlan(allowRot, 0, 0, false)));
