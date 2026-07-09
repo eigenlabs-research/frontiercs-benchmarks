@@ -541,6 +541,7 @@ static PackResult knapsackShelfPlan(bool allowRot){
                 kitems.push_back({rh, (ll)rem * it.v, t, rot, 1, rem, true});
             }
         }
+        ll ub=0; for(const auto& ki:kitems) ub+=ki.val; if(ub<=bestVal) continue;
         fill(dp.begin(), dp.end(), -1);
         dp[0] = 0;
         fill(par.begin(), par.end(), -1);
@@ -1260,6 +1261,25 @@ int main(){
         }
         g_msAlpha = 1.0;
     }
+    // Early cheap constructors for rotate cases (historically strong on residual cases).
+    if(allowRot && elapsed() < TIME_LIMIT * 0.18){
+#ifdef DIAG
+        g_label="earlymr";
+#endif
+        for(auto& ord : orders){
+            if(elapsed() > TIME_LIMIT * 0.18) break;
+            consider(greedyFillMaxRects(ord, true, false));
+            if(elapsed() > TIME_LIMIT * 0.18) break;
+            consider(greedyFillMaxRects(ord, true, true));
+            if(elapsed() > TIME_LIMIT * 0.18) break;
+            consider(greedyFill(ord, true, false));
+            if(elapsed() > TIME_LIMIT * 0.18) break;
+            consider(greedyFill(ord, true, true));
+        }
+        // Mid-style narrow beam, short budget only.
+        if(elapsed() < TIME_LIMIT * 0.22)
+            consider(polish(beamMixedShelfPlan(true, 4, 3, 5, TIME_LIMIT * 0.28)));
+    }
 #ifdef DIAG
     g_label="beam";
 #endif
@@ -1521,6 +1541,20 @@ int main(){
     }
 
     if(elapsed() < TIME_LIMIT - 0.04) gapFill();
+    if(elapsed() < TIME_LIMIT - 0.03){
+        mt19937 rng2(424242u);
+        for(int it=0; it<16 && elapsed()<TIME_LIMIT-0.015; ++it){
+            int n=(int)best.placements.size(); if(n<8) break;
+            int rm=max(1, n/(10+(it%4)*3));
+            vector<pair<double,int>> pd; pd.reserve(n);
+            for(int i=0;i<n;++i) pd.push_back({g_items[best.placements[i].typeId].density,i});
+            sort(pd.begin(),pd.end());
+            vector<char> drop(n,0); for(int k=0;k<rm&&k<n;++k) drop[pd[k].second]=1;
+            PackResult mod; mod.totalValue=0; mod.used.assign(g_items.size(),0);
+            for(int i=0;i<n;++i) if(!drop[i]){ const Placed&p=best.placements[i]; mod.placements.push_back(p); mod.totalValue+=g_items[p.typeId].v; mod.used[p.typeId]++; }
+            consider(fillGaps(mod,*gapOrders[(int)(rng2()%gapOrders.size())],allowRot,allowRot));
+        }
+    }
     if(best.totalValue < 0){
         best.totalValue = 0;
         best.placements.clear();
