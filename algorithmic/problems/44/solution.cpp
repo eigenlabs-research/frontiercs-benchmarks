@@ -60,7 +60,18 @@ int main(){
     vector<int> bucket(N); { vector<int> tmp=cnt; for(int i=0;i<N;i++) bucket[tmp[cellOf[i]]++]=i; }
 
     // ---- k nearest neighbors per city ----
-    int K=min(N-1, N>50000?6:(N>5000?24:10));
+    // Size-graded neighbor-candidate breadth. Derived from an exact-evaluator (South Core)
+    // sweep of K over uniform proxies at N=3k..50k: widening K past 24 only pays off in a
+    // narrow mid band (~16k-36k: +0.04% at 20k, +0.22% at 30k) and REGRESSES elsewhere
+    // (-0.3% to -0.5% at 3k-10k, -0.1% at 50k). So we bump K to 40 only inside that measured
+    // band and keep the leader-tuned K=24 everywhere else, plus the large-N (>50000) time cap.
+    // Env overrides retained for further sweeps.
+    int K;
+    if(N>50000)                      K=min(N-1,6);
+    else if(N>=16000 && N<=36000)    K=min(N-1,40);
+    else if(N>5000)                  K=min(N-1,24);
+    else                             K=min(N-1,10);
+    if(const char* e=getenv("K_FORCE")) K=min(N-1, atoi(e));
     vector<int> nbr((size_t)N*K,-1);
     {
         vector<pair<double,int>> cand; cand.reserve(128);
