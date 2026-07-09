@@ -11,7 +11,7 @@
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 2400.0;
+static double TL_MS = 2460.0;
 static inline double el_ms(){ return chrono::duration<double,milli>(chrono::steady_clock::now()-T0).count(); }
 
 static int N;
@@ -115,6 +115,21 @@ int main(){
             used[best]=1; order[step]=best; cur=best;
         }
         for(int i=0;i<N;i++) pos[order[i]]=i;
+    }
+
+    // Morton curve construction as alternative to NN
+    {   static const uint32_t HM=(1u<<21)-1u;
+        double minx=X[0],maxx=X[0],miny=Y[0],maxy=Y[0];
+        for(int i=1;i<N;i++){ minx=min(minx,X[i]);maxx=max(maxx,X[i]);miny=min(miny,Y[i]);maxy=max(maxy,Y[i]); }
+        auto sc=[&](double v,double lo,double hi)->uint32_t{ return hi==lo?HM/2:(uint32_t)((__int128)(v-lo)*HM/(hi-lo)); };
+        vector<uint64_t> mval(N);
+        for(int i=0;i<N;i++){ uint32_t x=sc(X[i],minx,maxx),y=sc(Y[i],miny,maxy);
+            uint64_t d=0; for(int b=0;b<21;b++){ d|=uint64_t((x>>b)&1)<<(2*b); d|=uint64_t((y>>b)&1)<<(2*b+1); }
+            mval[i]=d; }
+        vector<int> moth(N); for(int i=0;i<N;i++) moth[i]=i;
+        sort(moth.begin(),moth.end(),[&](int a,int b){ return mval[a]<mval[b]||(mval[a]==mval[b]&&a<b); });
+        double nnCost=0, mc=0; for(int i=0;i<N;i++){ nnCost+=dist(order[i],order[(i+1)%N]); mc+=dist(moth[i],moth[(i+1)%N]); }
+        if(mc<nnCost){ for(int i=0;i<N;i++) order[i]=moth[i], pos[moth[i]]=i; }
     }
 
     auto nextIdx=[&](int i){ return i+1<N?i+1:0; };
