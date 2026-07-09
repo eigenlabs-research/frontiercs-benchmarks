@@ -60,7 +60,7 @@ int main(){
     vector<int> bucket(N); { vector<int> tmp=cnt; for(int i=0;i<N;i++) bucket[tmp[cellOf[i]]++]=i; }
 
     // ---- k nearest neighbors per city ----
-    int K=min(N-1, N>50000?13:(N>5000?52:10));
+    int K=min(N-1, N>50000?12:(N>5000?48:10));
     vector<int> nbr((size_t)N*K,-1);
     {
         vector<pair<double,int>> cand; cand.reserve(128);
@@ -115,6 +115,27 @@ int main(){
             used[best]=1; order[step]=best; cur=best;
         }
         for(int i=0;i<N;i++) pos[order[i]]=i;
+    }
+
+    // Hilbert curve construction as alternative
+    {   static const int HB=21; static const uint32_t HM=(1u<<HB)-1u;
+        double minx=X[0],maxx=X[0],miny=Y[0],maxy=Y[0];
+        for(int i=1;i<N;i++){ minx=min(minx,X[i]);maxx=max(maxx,X[i]);miny=min(miny,Y[i]);maxy=max(maxy,Y[i]); }
+        auto sc=[&](double v,double lo,double hi)->uint32_t{ return hi==lo?HM/2:(uint32_t)((__int128)(v-lo)*HM/(hi-lo)); };
+        function<uint64_t(uint32_t,uint32_t,int,int)> hrec=[&](uint32_t x,uint32_t y,int p,int r)->uint64_t{
+            if(p==0) return 0; uint32_t h=1u<<(p-1);
+            int s=(x<h)?((y<h)?0:3):((y<h)?1:2); s=(s+r)&3;
+            static const int rd[4]={3,0,0,1}; int nr=(r+rd[s])&3;
+            uint64_t sub=1ULL<<(2*p-2); uint64_t a=hrec(x&h-1,y&h-1,p-1,nr);
+            return (uint64_t)s*sub+((s==1||s==2)?a:(sub-a-1));
+        };
+        vector<uint64_t> hval(N);
+        for(int i=0;i<N;i++) hval[i]=hrec(sc(X[i],minx,maxx),sc(Y[i],miny,maxy),HB,0);
+        vector<int> hoth(N); for(int i=0;i<N;i++) hoth[i]=i;
+        sort(hoth.begin(),hoth.end(),[&](int a,int b){ return hval[a]<hval[b]||(hval[a]==hval[b]&&a<b); });
+        double curCost=0; for(int i=0;i<N;i++) curCost+=dist(order[i],order[(i+1)%N]);
+        double hc=0; for(int i=0;i<N;i++) hc+=dist(hoth[i],hoth[(i+1)%N]);
+        if(hc<curCost){ for(int i=0;i<N;i++) order[i]=hoth[i], pos[hoth[i]]=i; }
     }
 
     // Morton curve construction as alternative to NN
