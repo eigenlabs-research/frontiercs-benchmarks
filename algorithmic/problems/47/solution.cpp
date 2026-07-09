@@ -510,11 +510,9 @@ static PackResult knapsackShelfPlan(bool allowRot){
     vector<int> par(H + 1, -1);
     ll bestVal = -1;
     vector<int> bestCombo(M, 0);
-    // Instead of 2^M combos (up to 4096 DPs), use greedy hill-climb: start from
-    // best-density rotation per item, then try flipping one item at a time until
-    // no single flip improves. On the judge this reclaims ~50% of the time budget
-    // for downstream phases where actual quality wins live.
-    auto evalCombo = [&](const vector<int>& combo, ll* outBest) -> ll {
+    // Greedy hill-climb over rotations (not 2^M enum): free ~half budget for
+    // downstream packers that win quality on rotate-heavy cases.
+    auto evalCombo = [&](const vector<int>& combo) -> ll {
         vector<KItem> kitems;
         kitems.reserve(M * 12);
         for(int t = 0; t < M; ++t){
@@ -546,24 +544,20 @@ static PackResult knapsackShelfPlan(bool allowRot){
         }
         ll bestV = 0;
         for(int x = 0; x <= H; ++x){ if(dp[x] > bestV) bestV = dp[x]; }
-        if(outBest) *outBest = bestV;
         return bestV;
     };
-    // Seed 0: best density orientation per item.
     vector<int> combo(M, 0);
     if(allowRot){
         for(int t = 0; t < M; ++t){
             const ItemType& it = g_items[t];
-            // choose rot maximizing per-shelf density (perShelf / height)
             double d0 = sd[t][0].valid ? (double)sd[t][0].perShelf * it.v / (double)sd[t][0].rh : -1;
             double d1 = sd[t][1].valid ? (double)sd[t][1].perShelf * it.v / (double)sd[t][1].rh : -1;
             combo[t] = (d1 > d0) ? 1 : 0;
         }
     }
-    bestVal = evalCombo(combo, nullptr);
+    bestVal = evalCombo(combo);
     bestCombo = combo;
     if(allowRot){
-        // Hill-climb: repeatedly try flipping one item; accept improvements.
         bool improved = true;
         int passes = 0;
         while(improved && passes < 3 && elapsed() < TIME_LIMIT * 0.30){
@@ -571,11 +565,11 @@ static PackResult knapsackShelfPlan(bool allowRot){
             for(int t = 0; t < M && elapsed() < TIME_LIMIT * 0.30; ++t){
                 if(!sd[t][0].valid || !sd[t][1].valid) continue;
                 combo[t] ^= 1;
-                ll v = evalCombo(combo, nullptr);
+                ll v = evalCombo(combo);
                 if(v > bestVal){
                     bestVal = v; bestCombo = combo; improved = true;
                 } else {
-                    combo[t] ^= 1; // revert
+                    combo[t] ^= 1;
                 }
             }
         }
@@ -1280,6 +1274,33 @@ int main(){
         }
         g_msAlpha = 1.0;
     }
+    // Priority path: tall no-rotation split2 with alpha 0.94 early (protects c11).
+    // Otherwise: brief mid-style narrow beam for residual rotate/wide cases.
+    if(!allowRot && g_bin.H * 5 > g_bin.W * 6 && elapsed() < TIME_LIMIT * 0.30){
+        double oldA = g_msAlpha; g_msAlpha = 0.94;
+        auto cutsE = [&](int L){
+            vector<int> v; auto add=[&](int x){ if(x>20&&x<L-20&&find(v.begin(),v.end(),x)==v.end()) v.push_back(x); };
+            add(L/3); add(L/2); add((2*L)/3); add(L/4); add((3*L)/4);
+            for(int z=0; z<M && z<3; ++z){ const ItemType& it=g_items[ordDens[z]]; int d[2]={it.w,it.h};
+                for(int q=0;q<2;++q) for(int k=1;k<=3;++k){ add(d[q]*k); add(L-d[q]*k);} }
+            if((int)v.size()>10) v.resize(10); return v;
+        };
+        for(int sh: cutsE(g_bin.H)){
+            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.35; ++mask)
+                consider(polish(splitMixedPlanY(allowRot, sh, mask, 0)));
+            if(elapsed()>TIME_LIMIT*0.35) break;
+        }
+        for(int sw: cutsE(g_bin.W)){
+            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.40; ++mask)
+                consider(polish(splitMixedPlan(allowRot, sw, mask, 0)));
+            if(elapsed()>TIME_LIMIT*0.40) break;
+        }
+        g_msAlpha = oldA;
+    } else if(allowRot && elapsed() < TIME_LIMIT * 0.12){
+        double tcap = elapsed() + 0.06;
+        if(tcap > TIME_LIMIT * 0.22) tcap = TIME_LIMIT * 0.22;
+        consider(polish(beamMixedShelfPlan(allowRot, 4, 3, 5, tcap)));
+    }
 #ifdef DIAG
     g_label="beam";
 #endif
@@ -1409,6 +1430,8 @@ int main(){
             if((int)v.size() > (ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 18 : 14)) v.resize(ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 18 : 14);
             return v;
         };
+        double oldAlphaSplit2 = g_msAlpha;
+        if(!allowRot && g_bin.H * 5 > g_bin.W * 6) g_msAlpha = 0.94;
         vector<int> splits2 = cuts(g_bin.W, false);
         for(uint32_t seed = 1; seed <= 3 && elapsed() < TIME_LIMIT * 0.78; ++seed){
 #ifdef DIAG
@@ -1429,6 +1452,7 @@ int main(){
                 if(elapsed() > TIME_LIMIT * 0.78) break;
             }
         }
+        g_msAlpha = oldAlphaSplit2;
     }
 #ifdef DIAG
     g_label="choicemr";
