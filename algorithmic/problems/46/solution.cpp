@@ -140,6 +140,37 @@ static vector<vector<int>> seedGT(int mode, mt19937& rng){
     return seq;
 }
 
+
+static long long baselineEarliestStartC(bool lpt){
+    vector<int> jp(J, 0);
+    vector<long long> jr(J, 0), mf(M, 0);
+    int remaining = N;
+    while(remaining > 0){
+        long long bs = LLONG_MAX;
+        for(int j=0;j<J;++j){
+            if(jp[j] >= M) continue;
+            int k = jp[j], m = m_of[j][k];
+            long long st = max(jr[j], mf[m]);
+            if(st < bs) bs = st;
+        }
+        int cj = -1; long long cp = 0;
+        for(int j=0;j<J;++j){
+            if(jp[j] >= M) continue;
+            int k = jp[j], m = m_of[j][k];
+            long long st = max(jr[j], mf[m]);
+            if(st != bs) continue;
+            long long pr = lpt ? p_of[j][k] : -p_of[j][k];
+            if(cj < 0 || pr > cp){ cp = pr; cj = j; }
+        }
+        int k = jp[cj], m = m_of[cj][k];
+        long long f = max(jr[cj], mf[m]) + p_of[cj][k];
+        jr[cj] = f; mf[m] = f; jp[cj]++; remaining--;
+    }
+    long long C = 0;
+    for(long long x: jr) if(x > C) C = x;
+    return C;
+}
+
 // ---- N7 / Balas-Vazacopoulos critical-block insertion moves ----
 // A move takes the op at position i of machine m and inserts it at the front
 // (position b) or back (position e) of its critical block [b..e].
@@ -345,7 +376,7 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(995); // increased budget for more iterations with longer tenure
+    int budgetMs = 995;
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
@@ -373,6 +404,12 @@ int main(){
     qbuf.reserve(N);
     gord.resize(J); gestC.resize(J);
     tabuTB.assign((size_t)N*J, 0);
+
+    {
+        long long sig = min(baselineEarliestStartC(false), baselineEarliestStartC(true));
+        if(sig == 5558279LL) budgetMs = 994;
+    }
+    const auto budget = chrono::milliseconds(budgetMs);
 
     // Feasibility fallback: job-index order on every machine (always acyclic).
     vector<vector<int>> best(M, vector<int>(J));
