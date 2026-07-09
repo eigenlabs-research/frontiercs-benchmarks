@@ -123,10 +123,12 @@ static vector<vector<int>> seedGT(int mode, mt19937& rng){
                 if(mode==0) pr = wrem[j];
                 else if(mode==1) pr = p_of[j][k];
                 else if(mode==2) pr = -p_of[j][k];
+                else if(mode==4) pr = (wrem[j] << 20) / (p_of[j][k] + 1); // remaining work per current op
                 else pr = (long long)rng();
                 if(cj==-1 || pr > cp){ cp = pr; cj = j; }
             }
         }
+
         if(cj == -1){
             for(int j=0;j<J;++j) if(jp[j]<M && m_of[j][jp[j]]==cm){ cj=j; break; }
         }
@@ -399,6 +401,7 @@ int main(){
 
     mt19937 rng(777u);
     trySeed(seedGT(0, rng)); // MWR
+    trySeed(seedGT(4, rng)); // PMWR
     trySeed(seedGT(1, rng)); // LPT
     if(chrono::steady_clock::now() - T0 < budget)
         trySeed(seedGT(2, rng)); // SPT
