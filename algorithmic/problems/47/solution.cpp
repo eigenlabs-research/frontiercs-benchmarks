@@ -439,6 +439,7 @@ static PackResult pruneLine(const PackResult& base,int lines,const vector<int>& 
 }
 
 
+
 static PackResult choiceMaxRects(bool allowRot, int mode, double tlim){
     PackResult res; res.totalValue = 0; res.used.assign(g_items.size(), 0);
     MaxRects mr; mr.init(g_bin.W, g_bin.H);
@@ -564,24 +565,19 @@ static PackResult knapsackShelfPlan(bool allowRot){
     bestCombo = combo;
     if(allowRot){
         // Hill-climb: repeatedly try flipping one item; accept improvements.
-        // Use steepest-ascent: try all single flips per pass, pick the best.
         bool improved = true;
         int passes = 0;
-        while(improved && passes < 5 && elapsed() < TIME_LIMIT * 0.30){
+        while(improved && passes < 3 && elapsed() < TIME_LIMIT * 0.15){
             improved = false; ++passes;
-            int bestFlip = -1; ll bestFlipVal = bestVal;
-            for(int t = 0; t < M && elapsed() < TIME_LIMIT * 0.30; ++t){
+            for(int t = 0; t < M && elapsed() < TIME_LIMIT * 0.15; ++t){
                 if(!sd[t][0].valid || !sd[t][1].valid) continue;
                 combo[t] ^= 1;
                 ll v = evalCombo(combo, nullptr);
-                if(v > bestFlipVal){
-                    bestFlipVal = v; bestFlip = t;
+                if(v > bestVal){
+                    bestVal = v; bestCombo = combo; improved = true;
+                } else {
+                    combo[t] ^= 1; // revert
                 }
-                combo[t] ^= 1; // revert for next trial
-            }
-            if(bestFlip >= 0){
-                combo[bestFlip] ^= 1;
-                bestVal = bestFlipVal; bestCombo = combo; improved = true;
             }
         }
     }
@@ -1261,10 +1257,11 @@ int main(){
         }
     };
     gapFill();
-    if(!allowRot){
-        consider(polish(knapsackColumnPlan(allowRot)));
-        gapFill();
-    }
+#ifdef DIAG
+    g_label="column";
+#endif
+    consider(polish(knapsackColumnPlan(allowRot)));
+    gapFill();
 
 #ifdef DIAG
     g_label="mixed";
@@ -1306,16 +1303,6 @@ int main(){
         consider(polish(beamMixedShelfPlanT(allowRot, allowRot ? 22 : 7, allowRot ? 5 : 4, allowRot ? 9 : 7, allowRot ? TIME_LIMIT * 0.9 : TIME_LIMIT * 0.82)));
         g_msAlpha = 1.0;
     }
-    // Focused beam with alpha=0.94 and reduced depth for shorter shelves
-    if(allowRot && elapsed() < TIME_LIMIT * 0.80){
-        g_msAlpha = 0.94;
-        consider(polish(beamMixedShelfPlan(allowRot, 14, 5, 5, TIME_LIMIT * 0.80)));
-        g_msAlpha = 1.0;
-    }
-    // Wide-and-shallow beam for broad exploration
-    if(allowRot && elapsed() < TIME_LIMIT * 0.85){
-        consider(polish(beamMixedShelfPlan(allowRot, 22, 8, 3, TIME_LIMIT * 0.85)));
-    }
 #endif
 #ifdef DIAG
     g_label="hybrid";
@@ -1328,12 +1315,6 @@ int main(){
         }
         sort(stripCands.begin(), stripCands.end());
         stripCands.erase(unique(stripCands.begin(), stripCands.end()), stripCands.end());
-        // Add standard fraction strips for more diverse split points
-        stripCands.push_back(g_bin.W / 3);
-        stripCands.push_back(g_bin.W / 2);
-        stripCands.push_back((2 * g_bin.W) / 3);
-        sort(stripCands.begin(), stripCands.end());
-        stripCands.erase(unique(stripCands.begin(), stripCands.end()), stripCands.end());
         {
             int n = min((int)stripCands.size(), 3);
             vector<int> sums;
@@ -1343,7 +1324,7 @@ int main(){
             sort(stripCands.begin(), stripCands.end());
             stripCands.erase(unique(stripCands.begin(), stripCands.end()), stripCands.end());
         }
-        if((int)stripCands.size() > (allowRot ? 8 : 10)) stripCands.resize(allowRot ? 8 : 10);
+        if((int)stripCands.size() > (allowRot ? 6 : 8)) stripCands.resize(allowRot ? 6 : 8);
         for(int d : stripCands){
             if(elapsed() > TIME_LIMIT * 0.45) break;
             consider(polish(mixedShelfPlan(allowRot, 0, d, false)));
@@ -1550,8 +1531,6 @@ int main(){
         bool tryBoth = allowRot ? ((seed & 1) == 0) : false;
         if(mode == 6) tryBoth = true; // force both
         consider(greedyFill(ord, allowRot, tryBoth));
-        // Also try MaxRects with this ordering for additional diversity
-        if(seed % 4 == 0) consider(greedyFillMaxRects(ord, allowRot, tryBoth));
         iterCost = elapsed() - t0;
         ++seed;
         if(seed > 2000000) break;
