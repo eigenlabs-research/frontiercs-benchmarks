@@ -1282,8 +1282,8 @@ int main(){
         }
         g_msAlpha = 1.0;
     }
-    // Priority path: tall no-rotation split2 with alpha 0.94 early (protects c11).
-    if(!allowRot && g_bin.H * 5 > g_bin.W * 6 && elapsed() < TIME_LIMIT * 0.30){
+    // Priority path: tall bins split2 with alpha 0.94 early (helps c11 and similar).
+    if(g_bin.H * 5 > g_bin.W * 6 && elapsed() < TIME_LIMIT * 0.30){
         double oldA = g_msAlpha; g_msAlpha = 0.94;
         auto cutsE = [&](int L){
             vector<int> v; auto add=[&](int x){ if(x>20&&x<L-20&&find(v.begin(),v.end(),x)==v.end()) v.push_back(x); };
