@@ -1265,7 +1265,7 @@ int main() {
         }
     }
     // late restart: try shuffled orderings at best width, using BLF3 for speed
-    static int LATE = envInt("PP_LATE", 4);
+    static int LATE = envInt("PP_LATE", 6);
     if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30 && LATE > 0) {
         int lateW = bestR.packW;
         if (lateW < minW || lateW > 63) lateW = max(minW, min(63, lateW));
