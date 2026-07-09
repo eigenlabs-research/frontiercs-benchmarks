@@ -234,6 +234,7 @@ static int constructDiagGen(const vector<int>& walk, vector<vector<int>>& grid){
 
     vector<char> tripled(N+1,0); int pad=0;
     for(int round=0; round<12; round++){
+        if(past(HARD_DL)) return 1<<29;
         // build band sequence with front pad and any tripled vertices
         vector<int> s((size_t)pad, seq.empty()?1:seq[0]); vector<char> done(N+1,0);
         for(int v:seq){ if(tripled[v]&&!done[v]){ done[v]=1; s.push_back(v); s.push_back(v); s.push_back(v);} else s.push_back(v); }
@@ -442,11 +443,11 @@ static bool saRepair(vector<vector<int>> seed, int K, double budgetSec,
     double Tmp=3.0; long long it=0;
     while(true){
         it++;
-        if((it&1023)==0){
+        if((it&255)==0){
             if(past(dl)) break;
             double el=chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now()-t0).count()/1000.0;
             if(el>budgetSec) break;
-            Tmp=3.0*exp(-3.0*el/budgetSec); if(((it>>10)&63)==0) Tmp=max(Tmp,1.5); // periodic reheat
+            Tmp=3.0*exp(-3.0*el/budgetSec); if(((it>>8)&63)==0) Tmp=max(Tmp,1.5); // periodic reheat
         }
         int p=rng()%(K*K), r=p/K,c=p%K, o=g[p];
         int x=1+rng()%N; if(x==o) continue;
@@ -478,6 +479,7 @@ static bool saRepair(vector<vector<int>> seed, int K, double budgetSec,
 static bool constrainedSA(vector<vector<int>> seed, int K, double budgetSec,
                           chrono::steady_clock::time_point dl, vector<vector<int>>& res){
     if((int)seed.size()<K||(int)seed[0].size()<K) return false;
+    if(past(dl) || past(HARD_DL)) return false;
     auto t0=chrono::steady_clock::now();
     vector<int> g(K*K); for(int r=0;r<K;r++)for(int c=0;c<K;c++)g[r*K+c]=seed[r][c];
     static int cnt[45][45]; for(int a=0;a<45;a++)for(int b=0;b<45;b++)cnt[a][b]=0;
@@ -501,14 +503,18 @@ static bool constrainedSA(vector<vector<int>> seed, int K, double budgetSec,
     long long bestSc=1000000LL*missC+miss; vector<int> bestG=g;
     while(true){
         it++;
-        if((it&1023)==0){
+        if((it&255)==0){
             if(past(dl)) break;
             double el=chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now()-t0).count()/1000.0;
             if(el>budgetSec) break;
-            Tmp=8.0*exp(-3.5*el/budgetSec); if(((it>>10)&15)==0) Tmp=max(Tmp,2.0);
+            Tmp=8.0*exp(-3.5*el/budgetSec); if(((it>>8)&31)==0) Tmp=max(Tmp,2.5);
+        }
+        // early endgame kick when almost done
+        if(miss+missC<=3 && (it&2047)==0){
+            long long sc=1000000LL*missC+miss; if(sc<bestSc){bestSc=sc; bestG=g;}
         }
         int mode=(int)(rng()%100), p=-1, forced=-1;
-        if(mode<50 && miss>0){
+        if(mode<(miss<=4?75:58) && miss>0){
             int e=-1; for(int t=0;t<40;t++){ int ee=(int)(rng()%EDGES.size()); if(cnt[EDGES[ee].first][EDGES[ee].second]==0){e=ee;break;} }
             if(e>=0){ int a=EDGES[e].first,b=EDGES[e].second; if(rng()&1) swap(a,b);
                 if(!cellsOf[a].empty()){ int bp=cellsOf[a][rng()%cellsOf[a].size()];
@@ -561,10 +567,9 @@ static bool constrainedSA(vector<vector<int>> seed, int K, double budgetSec,
         long long sc=1000000LL*missC+miss;
         if(sc<bestSc){ bestSc=sc; bestG=g; }
     }
-    // Endgame: from best partial, greedily place remaining missing edges
-    if(bestSc<(1LL<<60) && bestSc>0){
+    // Endgame: from best partial, greedily place remaining missing edges (deadline-aware)
+    if(bestSc<(1LL<<60) && bestSc>0 && !past(dl)){
         g=bestG;
-        // rebuild counts
         for(int a=0;a<45;a++)for(int b=0;b<45;b++)cnt[a][b]=0;
         fill(cc.begin(),cc.end(),0); miss=0; missC=0;
         for(int r=0;r<K;r++)for(int c=0;c<K;c++){int v=g[r*K+c]; cc[v]++;
@@ -572,24 +577,64 @@ static bool constrainedSA(vector<vector<int>> seed, int K, double budgetSec,
             if(r+1<K){int u=g[(r+1)*K+c]; if(v!=u) cnt[min(v,u)][max(v,u)]++;}}
         for(auto&e:EDGES) if(cnt[e.first][e.second]==0) miss++;
         for(int v=1;v<=N;v++) if(cc[v]==0) missC++;
-        // rebuild cellsOf
         for(int v=0;v<=N;v++) cellsOf[v].clear();
         for(int p=0;p<K*K;p++){ posIn[p]=(int)cellsOf[g[p]].size(); cellsOf[g[p]].push_back(p); }
-        // greedy force missing edges
-        for(int round=0;round<80 && (miss>0||missC>0);round++){
+        auto applyRecolor=[&](int p,int col){
+            int o=g[p]; if(o==col) return;
+            int r=p/K,c=p%K;
+            for(int d=0;d<4;d++){int nr=r+DR[d],nc=c+DC[d]; if(nr<0||nr>=K||nc<0||nc>=K)continue; int u=g[nr*K+nc];
+                if(o!=u){int a=min(o,u),b=max(o,u);int oc=cnt[a][b];cnt[a][b]=oc-1;if(oc==1)miss++;}
+                if(col!=u){int a=min(col,u),b=max(col,u);int oc=cnt[a][b];cnt[a][b]=oc+1;if(oc==0)miss--;}}
+            cc[o]--; if(cc[o]==0)missC++; cc[col]++; if(cc[col]==1)missC--;
+            moveCell(p,o,col); g[p]=col;
+        };
+        auto legalAt=[&](int p,int col)->bool{
+            int r=p/K,c=p%K;
+            for(int d=0;d<4;d++){int nr=r+DR[d],nc=c+DC[d]; if(nr<0||nr>=K||nc<0||nc>=K)continue;
+                int u=g[nr*K+nc]; if(u!=col&&!ADJ[u][col]) return false;}
+            return true;
+        };
+        // Exhaustive neighbor placement when few edges missing
+        if(miss>0 && miss<=6 && missC==0){
+            for(int guard=0; guard<12 && miss>0 && !past(dl); guard++){
+                bool placed=false;
+                for(auto&e:EDGES){ if(cnt[e.first][e.second]>0) continue;
+                    int A=e.first,B=e.second;
+                    for(int pass=0;pass<2&&!placed;pass++){
+                        int a=pass?B:A, b=pass?A:B;
+                        for(int bi=0;bi<(int)cellsOf[a].size()&&!placed;bi++){
+                            int bp=cellsOf[a][bi]; int r=bp/K,c=bp%K;
+                            for(int d=0;d<4&&!placed;d++){
+                                int nr=r+DR[d],nc=c+DC[d]; if(nr<0||nr>=K||nc<0||nc>=K)continue;
+                                int p=nr*K+nc,o=g[p]; if(o==b){placed=true;break;}
+                                if(cc[o]==1 && o!=b) continue;
+                                if(!legalAt(p,b)) continue;
+                                int before=miss; applyRecolor(p,b);
+                                if(miss<before) placed=true;
+                                else {
+                                    // manual revert
+                                    for(int d2=0;d2<4;d2++){int rr=nr+DR[d2],cc2=nc+DC[d2]; if(rr<0||rr>=K||cc2<0||cc2>=K)continue; int u=g[rr*K+cc2];
+                                        if(b!=u){int aa=min(b,u),bb=max(b,u);int oc=cnt[aa][bb];cnt[aa][bb]=oc-1;if(oc==1)miss++;}
+                                        if(o!=u){int aa=min(o,u),bb=max(o,u);int oc=cnt[aa][bb];cnt[aa][bb]=oc+1;if(oc==0)miss--;}}
+                                    cc[b]--; if(cc[b]==0)missC++; cc[o]++; if(cc[o]==1)missC--;
+                                    moveCell(p,b,o); g[p]=o;
+                                }
+                            }
+                        }
+                    }
+                    if(placed) break;
+                }
+                if(!placed) break;
+            }
+            if(miss==0&&missC==0){ res.assign(K,vector<int>(K)); for(int r=0;r<K;r++)for(int c=0;c<K;c++)res[r][c]=g[r*K+c]; return true; }
+        }
+        for(int round=0;round<60 && (miss>0||missC>0) && !past(dl);round++){
             bool prog=false;
             if(missC>0){
                 for(int col=1;col<=N;col++) if(cc[col]==0){
-                    for(int p=0;p<K*K;p++){ int r=p/K,c=p%K,o=g[p]; if(cc[o]==1) continue;
-                        bool ok=true; for(int d=0;d<4;d++){int nr=r+DR[d],nc=c+DC[d]; if(nr<0||nr>=K||nc<0||nc>=K)continue;
-                            int u=g[nr*K+nc]; if(u!=col&&!ADJ[u][col]){ok=false;break;}}
-                        if(!ok) continue;
-                        // apply
-                        for(int d=0;d<4;d++){int nr=r+DR[d],nc=c+DC[d]; if(nr<0||nr>=K||nc<0||nc>=K)continue; int u=g[nr*K+nc];
-                            if(o!=u){int a=min(o,u),b=max(o,u);int oc=cnt[a][b];cnt[a][b]=oc-1;if(oc==1)miss++;}
-                            if(col!=u){int a=min(col,u),b=max(col,u);int oc=cnt[a][b];cnt[a][b]=oc+1;if(oc==0)miss--;}}
-                        cc[o]--; if(cc[o]==0)missC++; cc[col]++; if(cc[col]==1)missC--;
-                        moveCell(p,o,col); g[p]=col; prog=true; break;
+                    for(int p=0;p<K*K;p++){ int o=g[p]; if(cc[o]==1) continue;
+                        if(!legalAt(p,col)) continue;
+                        applyRecolor(p,col); prog=true; break;
                     }
                     if(prog) break;
                 }
@@ -605,15 +650,36 @@ static bool constrainedSA(vector<vector<int>> seed, int K, double budgetSec,
                             for(int d=0;d<4&&!prog;d++){
                                 int nr=r+DR[d],nc=c+DC[d]; if(nr<0||nr>=K||nc<0||nc>=K)continue;
                                 int p=nr*K+nc,o=g[p]; if(o==b) continue; if(cc[o]==1 && o!=b) continue;
-                                // check legal for b
-                                bool ok=true; for(int d2=0;d2<4;d2++){int rr=nr+DR[d2],cc2=nc+DC[d2]; if(rr<0||rr>=K||cc2<0||cc2>=K)continue;
-                                    int u=g[rr*K+cc2]; if(u!=b&&!ADJ[u][b]){ok=false;break;}}
+                                if(!legalAt(p,b)) continue;
+                                applyRecolor(p,b); prog=true;
+                            }
+                        }
+                    }
+                    if(prog) break;
+                }
+            }
+            // pair force: limited scans (deadline-aware)
+            if(!prog && miss>0 && miss<=8 && !past(dl)){
+                for(auto&e:EDGES){ if(cnt[e.first][e.second]>0) continue; if(past(dl)) break;
+                    int a=e.first,b=e.second;
+                    // only scan a random subset of cells when K large
+                    int lim = (K*K<=400)? K*K : 400;
+                    for(int t=0;t<lim&&!prog;t++){
+                        int p=(K*K<=400)? t : (int)(rng()%(K*K));
+                        int r=p/K,c=p%K;
+                        for(int d=0;d<2&&!prog;d++){
+                            int nr=r+DR[d],nc=c+DC[d]; if(nr<0||nr>=K||nc<0||nc>=K)continue;
+                            int p2=nr*K+nc; int o1=g[p],o2=g[p2];
+                            if(cc[o1]==1||cc[o2]==1) continue;
+                            for(int sw=0;sw<2&&!prog;sw++){
+                                int x=sw?b:a,y=sw?a:b;
+                                g[p]=x; g[p2]=y;
+                                bool ok=true;
+                                for(int d2=0;d2<4;d2++){int rr=r+DR[d2],cc2=c+DC[d2]; if(rr<0||rr>=K||cc2<0||cc2>=K)continue; int u=(rr*K+cc2==p2)?y:g[rr*K+cc2]; if(u!=x&&!ADJ[u][x]){ok=false;break;}}
+                                if(ok) for(int d2=0;d2<4;d2++){int rr=nr+DR[d2],cc2=nc+DC[d2]; if(rr<0||rr>=K||cc2<0||cc2>=K)continue; int u=(rr*K+cc2==p)?x:g[rr*K+cc2]; if(u!=y&&!ADJ[u][y]){ok=false;break;}}
+                                g[p]=o1; g[p2]=o2;
                                 if(!ok) continue;
-                                for(int d2=0;d2<4;d2++){int rr=nr+DR[d2],cc2=nc+DC[d2]; if(rr<0||rr>=K||cc2<0||cc2>=K)continue; int u=g[rr*K+cc2];
-                                    if(o!=u){int aa=min(o,u),bb=max(o,u);int oc=cnt[aa][bb];cnt[aa][bb]=oc-1;if(oc==1)miss++;}
-                                    if(b!=u){int aa=min(b,u),bb=max(b,u);int oc=cnt[aa][bb];cnt[aa][bb]=oc+1;if(oc==0)miss--;}}
-                                cc[o]--; if(cc[o]==0)missC++; cc[b]++; if(cc[b]==1)missC--;
-                                moveCell(p,o,b); g[p]=b; prog=true;
+                                applyRecolor(p,x); applyRecolor(p2,y); prog=true;
                             }
                         }
                     }
@@ -631,8 +697,11 @@ static bool constrainedSA(vector<vector<int>> seed, int K, double budgetSec,
 // Project a seed onto the contact-legal set by recoloring illegal cells.
 static bool makeContactLegal(vector<vector<int>>& g){
     int K=(int)g.size(); if(K==0) return false;
+    if(past(HARD_DL)) return false;
     const int DR[4]={1,-1,0,0},DC[4]={0,0,1,-1};
-    for(int pass=0;pass<K*K*4;pass++){
+    int maxPass=min(K*K*4, max(40, K*8));
+    for(int pass=0;pass<maxPass;pass++){
+        if((pass&7)==0 && past(HARD_DL)) return false;
         bool any=false;
         for(int r=0;r<K;r++)for(int c=0;c<K;c++){
             int o=g[r][c]; bool bad=false;
@@ -745,8 +814,18 @@ static vector<vector<int>> shrinkByOne(const vector<vector<int>>& G){
         if(c>0)for(int r=0;r<K;r++) if(G[r][c-1]!=G[r][c])l++;
         if(c+1<K)for(int r=0;r<K;r++) if(G[r][c]!=G[r][c+1])l++;
         for(int v=1;v<=N;v++) if(cC[c][v]==tot[v]&&tot[v]>0)l+=100000; return l; };
-    int bR=0; long long lr=rowLoss(0); for(int r=1;r<K;r++){long long x=rowLoss(r); if(x<lr){lr=x;bR=r;}}
-    int bC=0; long long lc=colLoss(0); for(int c=1;c<K;c++){long long x=colLoss(c); if(x<lc){lc=x;bC=c;}}
+    vector<pair<long long,int>> rows,cols;
+    for(int r=0;r<K;r++) rows.push_back({rowLoss(r),r});
+    for(int c=0;c<K;c++) cols.push_back({colLoss(c),c});
+    sort(rows.begin(),rows.end()); sort(cols.begin(),cols.end());
+    int bR=rows[0].second, bC=cols[0].second;
+    // try a few combos of top row/col candidates; pick min contact-break among non-critical
+    long long bestL=rows[0].first+cols[0].first; int topR=min(3,(int)rows.size()), topC=min(3,(int)cols.size());
+    for(int i=0;i<topR;i++) for(int j=0;j<topC;j++){
+        long long L=rows[i].first+cols[j].first; if(L<bestL){bestL=L; bR=rows[i].second; bC=cols[j].second;}
+    }
+    // occasional random among top for diversity
+    if((rng()%5)==0){ bR=rows[rng()%topR].second; bC=cols[rng()%topC].second; }
     vector<vector<int>> o(K-1,vector<int>(K-1)); int rr=0;
     for(int r=0;r<K;r++){ if(r==bR)continue; int cc=0; for(int c=0;c<K;c++){ if(c==bC)continue; o[rr][cc]=G[r][c]; cc++; } rr++; }
     return o;
@@ -766,15 +845,20 @@ int main(){
         int bestK=1<<29; vector<vector<int>> best;
         auto consider=[&](vector<vector<int>>& g){ if(g.empty())return; int K=(int)g.size(); if(K<bestK&&verifyGrid(g)){bestK=K;best=g;} };
 
-        // dense path: random fill for edge-dense graphs
+        // dense path: random fill. Dense graphs: large budget. Sparse: tiny probe only.
+        double dens = (N>1)? (2.0*M/(N*(N-1))) : 0.0;
+        bool sparse = dens < 0.22;
         {
-            // Always spend a short budget near LB with denseFill; pays off on
-            // mid/high density and occasionally hits sparse floors too.
-            long long densMs = (8LL*M>=1LL*N*(N-1)) ? (N>=35?700:580) : (N>=30?120:180);
+            long long densMs;
+            if(8LL*M>=1LL*N*(N-1)) densMs = (N>=35?700:580);
+            else if(dens>=0.45) densMs = (N>=30?400:320);
+            else if(sparse) densMs = (N>=32?35:70);
+            else densMs = (N>=30?130:180);
             auto dl=t0+chrono::milliseconds(densMs); if(dl>HARD_DL)dl=HARD_DL;
             int focus=max(lb,(int)(sqrt((double)M)*1.12)), hi=min(N,max(lb+12,focus+5));
             for(int k=lb;k<=hi&&!past(dl);k++){
                 int at=(k<=lb+1)? (N>=35?80:200) : (k<focus)?60:(N>=35?500:1200);
+                if(sparse) at=min(at,80);
                 vector<vector<int>> g; if(denseFill(k,at,dl,g)&&verifyGrid(g)){ consider(g); break; }
             }
         }
@@ -783,21 +867,60 @@ int main(){
         vector<vector<int>> walks;
         bool big=(N>=30);
         // Cap HP budget — shrink is the high-ROI phase under the 1s wall.
-        if(findHP(big?0.03:0.06)) walks.push_back(hpBest);
-        auto hpEnd=t0+chrono::milliseconds(big?50:90);
-        for(int a=0;a<(big?1:2)&&!past(hpEnd);a++) if(findHP(big?0.015:0.025)) walks.push_back(hpBest);
+        double hpSec = sparse ? (big?0.02:0.04) : (big?0.03:0.06);
+        if(findHP(hpSec)) walks.push_back(hpBest);
+        auto hpEnd=t0+chrono::milliseconds(sparse?(big?35:60):(big?50:90));
+        for(int a=0;a<(big?1:2)&&!past(hpEnd);a++) if(findHP(big?0.012:0.02)) walks.push_back(hpBest);
+        // longest-path style degree-greedy paths (cheap, good for sparse)
+        {
+            for(int trial=0; trial<(sparse?8:3) && !past(HARD_DL); trial++){
+                vector<char> used(N+1,0); vector<int> path;
+                int s=1+(int)(rng()%N);
+                // prefer low degree start on sparse
+                if(trial<3){ int md=1<<29; for(int v=1;v<=N;v++){int d=0;for(int u=1;u<=N;u++)d+=ADJ[v][u]; if(d<md){md=d;s=v;}} }
+                path.push_back(s); used[s]=1;
+                while((int)path.size()<N){
+                    int v=path.back(); int bestu=-1,bd=1<<29,ties=0;
+                    for(int u=1;u<=N;u++) if(ADJ[v][u]&&!used[u]){
+                        int d=0; for(int w=1;w<=N;w++) if(ADJ[u][w]&&!used[w]) d++;
+                        if(d<bd){bd=d;bestu=u;ties=1;} else if(d==bd){ties++; if((int)(rng()%ties)==0)bestu=u;}
+                    }
+                    if(bestu<0) break;
+                    path.push_back(bestu); used[bestu]=1;
+                }
+                // if incomplete, splice coverWalk remainder
+                if((int)path.size()<N){
+                    auto w=coverWalk(path.back());
+                    if(!w.empty()){
+                        for(int i=1;i<(int)w.size();i++) if(!used[w[i]]){ path.push_back(w[i]); used[w[i]]=1; }
+                    }
+                }
+                if((int)path.size()>=max(3,N*2/3)) walks.push_back(path);
+            }
+        }
         {   vector<vector<int>> gws; vector<int> starts;
             int md=1<<29,mv=1; for(int v=1;v<=N;v++){int d=0;for(int u=1;u<=N;u++)d+=ADJ[v][u]; if(d<md){md=d;mv=v;}}
-            starts.push_back(mv); for(int i=0;i<5;i++) starts.push_back(1+(int)(rng()%N));
-            for(int s:starts){ auto w=coverWalk(s); if(!w.empty()) gws.push_back(w); }
+            starts.push_back(mv); for(int i=0;i<(sparse?7:5);i++) starts.push_back(1+(int)(rng()%N));
+            for(int s:starts){ if(past(HARD_DL))break; auto w=coverWalk(s); if(!w.empty()) gws.push_back(w); }
             sort(gws.begin(),gws.end(),[](const vector<int>&a,const vector<int>&b){return a.size()<b.size();});
-            for(int i=0;i<(int)gws.size()&&i<3;i++) walks.push_back(gws[i]);
+            for(int i=0;i<(int)gws.size()&&i<(sparse?4:3);i++) walks.push_back(gws[i]);
         }
         walks.push_back(dfsTour());
-        { for(int t=0;t<4;t++){ vector<int> pw=postmanWalk(); if(!pw.empty()) walks.push_back(pw);} }
-        for(auto& w:walks){
+        { for(int t=0;t<(sparse?3:4);t++){ if(past(HARD_DL))break; vector<int> pw=postmanWalk(); if(!pw.empty()) walks.push_back(pw);} }
+        // Prefer shorter walks first (better anti-diagonal K)
+        sort(walks.begin(),walks.end(),[](const vector<int>&a,const vector<int>&b){return a.size()<b.size();});
+        int wlim = sparse ? min((int)walks.size(), 14) : min((int)walks.size(), 18);
+        for(int wi=0; wi<wlim; wi++){
+            if(past(HARD_DL)) break;
+            auto& w=walks[wi];
+            // leave at least 55% time for shrink on sparse large N
+            if(sparse && N>=30){
+                long long used=chrono::duration_cast<chrono::milliseconds>(chrono::steady_clock::now()-t0).count();
+                if(used>(N>=36?280:380)) break;
+            }
             vector<int> rw(w.rbegin(),w.rend());
             { vector<vector<int>> g; if(constructDiagGen(w,g)<=240) consider(g); }
+            if(past(HARD_DL)) break;
             { vector<vector<int>> g; if(constructDiagGen(rw,g)<=240) consider(g); }
             { vector<vector<int>> g; if(constructDiag(w,g)<=240) consider(g); }
             { vector<vector<int>> g; if(constructDiag(rw,g)<=240) consider(g); }
@@ -810,12 +933,13 @@ int main(){
             for(int r=0;r<K;r++) for(int c=0;c<K;c++) best[r][c]=w[min(r, (int)w.size()-1)]; bestK=K;
         }
 
-                                // shrink: sequential -1 constrained SA + occasional multi-step jumps.
-        // Final polish phase burns remaining time on bestK-1 restarts.
+        // shrink: geometric jumps then sequential -1; polish remaining time.
         int failsAt=0;
         auto tryAim=[&](int aim, long long slice)->bool{
-            if(aim<lb||aim>=bestK||slice<10) return false;
+            if(aim<lb||aim>=bestK||slice<8) return false;
+            if(past(HARD_DL)) return false;
             auto sl=chrono::steady_clock::now()+chrono::milliseconds(slice); if(sl>HARD_DL)sl=HARD_DL;
+            if(past(sl)) return false;
             auto mkSeed=[&](int which)->vector<vector<int>>{
                 vector<vector<int>> seed;
                 if(which==0){ seed=best; while((int)seed.size()>aim) seed=shrinkByOne(seed); if((int)seed.size()!=aim) seed=rescale(best,aim); }
@@ -823,72 +947,123 @@ int main(){
                     seed.assign(aim,vector<int>(aim));
                     for(int r=0;r<aim;r++)for(int c=0;c<aim;c++) seed[r][c]=best[min(bestK-1,r+dr)][min(bestK-1,c+dc)]; }
                 else if(which==2) seed=rescale(best,aim);
-                else seed=greedySeed(aim);
-                if(which>=1){ int KK=aim; for(int i=0;i<KK*KK/14+3;i++) seed[rng()%KK][rng()%KK]=1+(int)(rng()%N); }
+                else if(which==3){ seed=greedySeed(aim); }
+                else { // multi shrinkByOne with random jitter after each step
+                    seed=best; int guard=0;
+                    while((int)seed.size()>aim && guard++<80){ seed=shrinkByOne(seed);
+                        if((int)seed.size()>aim && (rng()&3)==0){ int KK=(int)seed.size(); seed[rng()%KK][rng()%KK]=1+(int)(rng()%N);} }
+                    if((int)seed.size()!=aim) seed=rescale(best,aim);
+                }
+                if(which>=1 && which<=3){ int KK=aim; for(int i=0;i<KK*KK/12+4;i++) seed[rng()%KK][rng()%KK]=1+(int)(rng()%N); }
                 return seed;
             };
             vector<vector<int>> res;
-            // more seeds when slice is large
-            int nSeed = slice>150 ? 4 : 3;
+            int nSeed = slice>120 ? 5 : 4;
+            if(N>=36) nSeed = slice>100 ? 6 : 5;
             for(int which=0; which<nSeed && !past(sl); which++){
                 auto seed=mkSeed(which);
                 if(!makeContactLegal(seed)) continue;
                 long long rem2=chrono::duration_cast<chrono::milliseconds>(sl-chrono::steady_clock::now()).count();
-                if(rem2<8) break;
-                double sb=max(0.02, rem2/1000.0*0.95);
+                if(rem2<6) break;
+                double sb=max(0.015, rem2/1000.0*0.96);
                 if(constrainedSA(seed,aim,sb,sl,res)&&verifyGrid(res)){ best=res; bestK=aim; return true; }
             }
-            if(!past(sl)){
-                vector<vector<int>> dg; auto dsl=chrono::steady_clock::now()+chrono::milliseconds(max<long long>(10,slice/5)); if(dsl>sl)dsl=sl;
+            // denseFill / denseFillBest seeds for mid+ density or large N last-mile
+            if(!past(sl) && (dens>=0.18 || (N>=34 && aim<=bestK-1))){
+                vector<vector<int>> dg; auto dsl=chrono::steady_clock::now()+chrono::milliseconds(max<long long>(8,slice/4)); if(dsl>sl)dsl=sl;
                 if(denseFill(aim,40000,dsl,dg)&&verifyGrid(dg)){ best=dg; bestK=aim; return true; }
+                if(!past(sl)){
+                    vector<vector<int>> partial;
+                    auto dsl2=chrono::steady_clock::now()+chrono::milliseconds(max<long long>(8,slice/5)); if(dsl2>sl)dsl2=sl;
+                    // use best partial fill as SA seed even if missE>0
+                    denseFillBest(aim, 8000, dsl2, partial);
+                    if(!partial.empty()){
+                        if(!makeContactLegal(partial)) {}
+                        else {
+                            long long rem2=chrono::duration_cast<chrono::milliseconds>(sl-chrono::steady_clock::now()).count();
+                            if(rem2>10){ double sb=rem2/1000.0*0.95;
+                                if(constrainedSA(partial,aim,sb,sl,res)&&verifyGrid(res)){ best=res; bestK=aim; return true; }
+                            }
+                        }
+                    }
+                }
             }
             if(!past(sl)){
                 auto seed=mkSeed(0);
                 long long rem2=chrono::duration_cast<chrono::milliseconds>(sl-chrono::steady_clock::now()).count();
-                if(rem2>15){ vector<vector<int>> res2;
+                if(rem2>12){ vector<vector<int>> res2;
                     if(saRepair(seed,aim,rem2/1000.0,sl,res2)&&verifyGrid(res2)){ best=res2; bestK=aim; return true; }
                 }
             }
             return false;
         };
 
+        // Warm-start: one ambitious mid-jump if construct is far from LB
+        if(bestK-lb>=8 && !past(HARD_DL)){
+            long long rem=chrono::duration_cast<chrono::milliseconds>(HARD_DL-chrono::steady_clock::now()).count();
+            int aim=max(lb, (bestK*2+lb*1)/3);
+            if(rem>80) tryAim(aim, min(220LL, rem/3));
+        }
+        // Phase A: while gap large, prefer geometric mid-jump then -1
         while(bestK>max(2,lb) && !past(HARD_DL)){
             long long rem=chrono::duration_cast<chrono::milliseconds>(HARD_DL-chrono::steady_clock::now()).count();
             if(rem<12) break;
             int gap=bestK-lb;
             bool improved=false;
-            // Always hammer bestK-1 first with a solid slice
-            long long slice=min(320LL, max(50LL, rem*3/5));
-            if(tryAim(bestK-1, slice)){ failsAt=0; improved=true; }
-            // If stuck, try a jump with remaining time this round
-            if(!improved && gap>=4){
-                rem=chrono::duration_cast<chrono::milliseconds>(HARD_DL-chrono::steady_clock::now()).count();
-                vector<int> jumps;
-                if(failsAt>=0) jumps.push_back(max(lb,bestK-2));
-                if(failsAt>=1 && gap>=6) jumps.push_back(max(lb,(bestK*2+lb)/3));
-                if(failsAt>=2 && gap>=8) jumps.push_back(max(lb,(bestK+lb)/2));
-                for(int aim:jumps){
-                    if(past(HARD_DL)||improved) break;
-                    rem=chrono::duration_cast<chrono::milliseconds>(HARD_DL-chrono::steady_clock::now()).count();
-                    if(tryAim(aim, min(220LL, max(40LL, rem/2)))){ failsAt=0; improved=true; break; }
+            // build aim list
+            vector<int> aims;
+            if(sparse && gap>=6){
+                // once in the hard zone (K near 0.5N), only sequential -1/-2
+                if(bestK*2 <= N+6){
+                    aims.push_back(bestK-1);
+                    if(gap>=2) aims.push_back(max(lb,bestK-2));
+                } else {
+                    aims.push_back(max(lb, bestK - max(2, gap/5)));
+                    aims.push_back(max(lb, (bestK*3+lb)/4));
+                    aims.push_back(bestK-1);
+                    if(gap>=10) aims.push_back(max(lb,(bestK+lb)/2));
                 }
+            } else {
+                aims.push_back(bestK-1);
+                if(gap>=4) aims.push_back(max(lb,bestK-2));
+                if(failsAt>=1 && gap>=6) aims.push_back(max(lb,(bestK*2+lb)/3));
+                if(failsAt>=2 && gap>=8) aims.push_back(max(lb,(bestK+lb)/2));
+            }
+            // unique preserve order
+            { vector<int> u; for(int a:aims){ if(a<lb||a>=bestK) continue; bool seen=false; for(int x:u) if(x==a)seen=true; if(!seen)u.push_back(a);} aims.swap(u); }
+            for(int ai=0; ai<(int)aims.size() && !improved && !past(HARD_DL); ai++){
+                rem=chrono::duration_cast<chrono::milliseconds>(HARD_DL-chrono::steady_clock::now()).count();
+                if(rem<12) break;
+                int aim=aims[ai];
+                long long slice;
+                if(aim==bestK-1) slice=min(N>=36?360LL:300LL, max(45LL, rem*3/4));
+                else if(aim<=bestK-3) slice=min(240LL, max(45LL, rem/2));
+                else slice=min(220LL, max(40LL, rem/2));
+                if(tryAim(aim, slice)){ failsAt=0; improved=true; }
             }
             if(!improved){
                 failsAt++;
-                if(failsAt>=6) break; // fall through to polish
+                if(failsAt>=5) break;
             }
         }
-        // Polish: burn almost all remaining time on repeated bestK-1 attempts
+        // Phase B polish: many short restarts on bestK-1 (last-mile K shaving)
         while(bestK>max(2,lb) && !past(HARD_DL)){
             long long rem=chrono::duration_cast<chrono::milliseconds>(HARD_DL-chrono::steady_clock::now()).count();
-            if(rem<20) break;
-            long long slice=min(rem-5, max(40LL, rem*4/5));
-            if(!tryAim(bestK-1, slice)){
-                // try bestK-2 once if plenty of time
-                if(rem>120 && bestK-2>=lb){
-                    if(!tryAim(bestK-2, rem/2)) break;
-                } else break;
-            }
+            if(rem<12) break;
+            // short slices near the end so one bad seed doesn't burn all time
+            long long slice = (rem>200) ? min(160LL, rem/2) : max(25LL, rem-5);
+            if(tryAim(bestK-1, slice)) continue;
+            rem=chrono::duration_cast<chrono::milliseconds>(HARD_DL-chrono::steady_clock::now()).count();
+            if(rem>60 && bestK-2>=lb){
+                if(tryAim(bestK-2, min(rem-5, max(40LL, rem/2)))) continue;
+                // if still stuck and sparse, try one denser fill at bestK-1
+                if(rem>40 && dens>=0.18){
+                    vector<vector<int>> dg; auto dsl=chrono::steady_clock::now()+chrono::milliseconds(min(rem/3,80LL));
+                    if(dsl>HARD_DL)dsl=HARD_DL;
+                    if(denseFill(bestK-1,20000,dsl,dg)&&verifyGrid(dg)){ best=dg; bestK=bestK-1; continue; }
+                }
+                break;
+            } else break;
         }
 
         int K=(int)best.size();
