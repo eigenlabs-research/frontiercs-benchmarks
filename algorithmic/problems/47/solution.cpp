@@ -1272,7 +1272,7 @@ int main(){
     consider(polish(mixedShelfPlan(allowRot, 0, 0, false)));
     consider(polish(mixedShelfPlan(allowRot, 0, 0, true)));
     {
-        double alphas[1] = {0.94};
+        double alphas[2] = {0.94, 0.92};
         for(double a : alphas){
             if(elapsed() > TIME_LIMIT * 0.22) break;
             g_msAlpha = a;
