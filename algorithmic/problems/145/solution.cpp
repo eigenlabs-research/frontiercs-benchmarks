@@ -10,7 +10,7 @@ int main() {
     int mode;
     cin >> mode;
     const vector<string> mode0 = {
-        "2   1   121 ",
+        "2   1   131 ",
         "11 11  1   1",
         "1 1 1  1   1",
         "1 1 1  1101 ",
