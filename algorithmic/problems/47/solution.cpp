@@ -19,7 +19,7 @@ static chrono::steady_clock::time_point T_START;
 static inline double elapsed(){
     return chrono::duration<double>(chrono::steady_clock::now() - T_START).count();
 }
-static double TIME_LIMIT = 0.96;
+static double TIME_LIMIT = 0.92;
 
 struct JsonParser {
     const string& s;
@@ -796,7 +796,7 @@ static void mixedShelfFillRegion(int x0, int y0, int RW, int RH, vector<int>& re
                 if(w_or > RW || h_or > Hrem) continue;
                 int kmax = Hrem / h_or;
                 if(kmax > rem[t]) kmax = rem[t];
-                if(kmax > 6) kmax = 6;
+                if(kmax > 8) kmax = 8;
                 for(int k = 1; k <= kmax; ++k) cands.push_back(k * h_or);
             }
         }
@@ -947,7 +947,7 @@ static void msCollectCands(int RW, int Hrem, const vector<int>& rem, bool allowR
             if(w_or > RW || h_or > Hrem) continue;
             int kmax = Hrem / h_or;
             if(kmax > rem[t]) kmax = rem[t];
-            int cap = allowRot ? 5 : 7;
+            int cap = allowRot ? 7 : 8;
             if(kmax > cap) kmax = cap;
             for(int k = 1; k <= kmax; ++k) cands.push_back(k * h_or);
         }
@@ -1282,28 +1282,6 @@ int main(){
         }
         g_msAlpha = 1.0;
     }
-    // Priority path: tall no-rotation split2 with alpha 0.94 early (protects c11).
-    if(!allowRot && g_bin.H * 5 > g_bin.W * 6 && elapsed() < TIME_LIMIT * 0.30){
-        double oldA = g_msAlpha; g_msAlpha = 0.94;
-        auto cutsE = [&](int L){
-            vector<int> v; auto add=[&](int x){ if(x>20&&x<L-20&&find(v.begin(),v.end(),x)==v.end()) v.push_back(x); };
-            add(L/3); add(L/2); add((2*L)/3); add(L/4); add((3*L)/4);
-            for(int z=0; z<M && z<3; ++z){ const ItemType& it=g_items[ordDens[z]]; int d[2]={it.w,it.h};
-                for(int q=0;q<2;++q) for(int k=1;k<=3;++k){ add(d[q]*k); add(L-d[q]*k);} }
-            if((int)v.size()>10) v.resize(10); return v;
-        };
-        for(int sh: cutsE(g_bin.H)){
-            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.35; ++mask)
-                consider(polish(splitMixedPlanY(allowRot, sh, mask, 0)));
-            if(elapsed()>TIME_LIMIT*0.35) break;
-        }
-        for(int sw: cutsE(g_bin.W)){
-            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.40; ++mask)
-                consider(polish(splitMixedPlan(allowRot, sw, mask, 0)));
-            if(elapsed()>TIME_LIMIT*0.40) break;
-        }
-        g_msAlpha = oldA;
-    }
 #ifdef DIAG
     g_label="beam";
 #endif
@@ -1337,6 +1315,16 @@ int main(){
     // Wide-and-shallow beam for broad exploration
     if(allowRot && elapsed() < TIME_LIMIT * 0.85){
         consider(polish(beamMixedShelfPlan(allowRot, 22, 8, 3, TIME_LIMIT * 0.85)));
+    }
+    // Wide beam with alpha=0.90 for even more aggressive short-shelf preference
+    if(allowRot && elapsed() < TIME_LIMIT * 0.88){
+        g_msAlpha = 0.90;
+        consider(polish(beamMixedShelfPlan(allowRot, 20, 6, 4, TIME_LIMIT * 0.88)));
+        g_msAlpha = 1.0;
+    }
+    // Deep beam for thorough exploration of shelf height combinations
+    if(allowRot && elapsed() < TIME_LIMIT * 0.86){
+        consider(polish(beamMixedShelfPlan(allowRot, 10, 3, 12, TIME_LIMIT * 0.86)));
     }
 #endif
 #ifdef DIAG
@@ -1381,12 +1369,13 @@ int main(){
             vector<int> v;
             auto add = [&](int x){ if(x > 20 && x < L - 20 && find(v.begin(), v.end(), x) == v.end()) v.push_back(x); };
             add(L/3); add(L/2); add((2*L)/3); add(L/4); add((3*L)/4); add((2*L)/5); add((3*L)/5);
+            add(L/6); add((5*L)/6); add(L/8); add((3*L)/8); add((5*L)/8); add((7*L)/8);
             for(int z = 0; z < M && z < 4; ++z){
                 const ItemType& it = g_items[ordDens[z]];
                 int d[2] = {it.w, it.h};
                 for(int q = 0; q < 2; ++q) for(int k = 1; k <= 3; ++k){ add(d[q] * k); add(L - d[q] * k); }
             }
-            if((int)v.size() > 12) v.resize(12);
+            if((int)v.size() > 16) v.resize(16);
             return v;
         };
         vector<int> splits = cuts(g_bin.W);
@@ -1441,12 +1430,13 @@ int main(){
                 }
             }
             add(L/3); add(L/2); add((2*L)/3); add(L/4); add((3*L)/4); add((2*L)/5); add((3*L)/5);
+            add(L/6); add((5*L)/6); add(L/8); add((3*L)/8); add((5*L)/8); add((7*L)/8);
             for(int z = 0; !allowRot && z < M && z < 5; ++z){
                 const ItemType& it = g_items[ordDens[z]];
                 int d[2] = {it.w, it.h};
                 for(int q = 0; q < 2; ++q) for(int k = 1; k <= 3; ++k){ add(d[q] * k); add(L - d[q] * k); }
             }
-            if((int)v.size() > (ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 18 : 14)) v.resize(ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 18 : 14);
+            if((int)v.size() > (ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 20 : 16)) v.resize(ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 20 : 16);
             return v;
         };
         vector<int> splits2 = cuts(g_bin.W, false);
@@ -1489,9 +1479,12 @@ int main(){
             if(elapsed() > TIME_LIMIT * 0.93) break;
             consider(pruneLow(best, c, ordAreaAsc, allowRot));
         }
-        int ds[3]={4,8,12};
-        for(int c:ds)for(int side=0;side<4&&elapsed()<TIME_LIMIT*0.955;++side)consider(pruneSide(best,c,ordDens,allowRot,side));
-        if(!allowRot&&g_bin.H*5>g_bin.W*6)for(int ln=1;ln<=2;++ln)for(int side=0;side<2&&elapsed()<TIME_LIMIT*0.965;++side){
+        int ds[5]={4,8,12,16,20};
+        for(int c:ds)for(int side=0;side<4&&elapsed()<TIME_LIMIT*0.955;++side){
+            consider(pruneSide(best,c,ordDens,allowRot,side));
+            if(elapsed()<TIME_LIMIT*0.955) consider(pruneSide(best,c,ordAreaAsc,allowRot,side));
+        }
+        if(g_bin.H*5>g_bin.W*6)for(int ln=1;ln<=2;++ln)for(int side=0;side<2&&elapsed()<TIME_LIMIT*0.965;++side){
             consider(pruneLine(best,ln,ordDens,allowRot,side));
             if(elapsed()<TIME_LIMIT*0.965) consider(pruneLine(best,ln,ordMinDim,allowRot,side));
             if(elapsed()<TIME_LIMIT*0.965) consider(pruneLine(best,ln,ordVal,allowRot,side));
@@ -1579,6 +1572,16 @@ int main(){
         if(seed > 2000000) break;
     }
 
+    // Final polish with additional orderings not in gapOrders
+    if(elapsed() < TIME_LIMIT - 0.06){
+        vector<int> ordHd = orderByHeightDesc();
+        vector<int> ordWd = orderByWidthDesc();
+        vector<int> ordAreaDesc = orderByAreaDesc();
+        for(auto* op : {&ordHd, &ordWd, &ordAreaDesc}){
+            if(elapsed() > TIME_LIMIT) break;
+            consider(fillGaps(best, *op, allowRot, allowRot));
+        }
+    }
     if(elapsed() < TIME_LIMIT - 0.04) gapFill();
     if(best.totalValue < 0){
         best.totalValue = 0;
