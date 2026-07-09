@@ -1106,9 +1106,9 @@ int main() {
                     // mostly tight W jitter (concentrates attempts near the best width — vital on
                     // slow judges with few attempts), with occasional wide exploration (pays off
                     // on fast machines with hundreds of attempts).
-                    static int dwBase = envInt("PP_CAPDW", 2);
-                    static int dwWide = envInt("PP_CAPDWW", 6);
-                    static int wideP = envInt("PP_CAPWIDEP", 25);
+                    static int dwBase = envInt("PP_CAPDW", 3);
+                    static int dwWide = envInt("PP_CAPDWW", 8);
+                    static int wideP = envInt("PP_CAPWIDEP", 30);
                     int dw = ((int)(rng.nxt() % 100) < wideP) ? dwWide : dwBase;
                     W = bestR.packW + (dw > 0 ? (rng.rint(2 * dw + 1) - dw) : 0);
                     if (W < minW) W = minW;
