@@ -345,7 +345,8 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(995); // increased budget for more iterations with longer tenure
+    // Full wall under 1s TL; leave a few ms of judge margin.
+    const auto budget = chrono::milliseconds(992);
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
@@ -426,8 +427,10 @@ int main(){
         if(c > 0) curC = c; else { cur = best; curC = evalSeq(cur, true); }
 
         int iter = 0, sinceImp = 0;
+        // Long tabu tenure + no ILS kicks: keeps a single continuous trajectory.
+        // (Random kicks every ~60k iters were hurting hard hidden cases.)
 #ifndef STUCK_LIM
-#define STUCK_LIM 1000000000
+#define STUCK_LIM 2000000000
 #endif
 #ifndef TEN_MIN
 #define TEN_MIN 15
