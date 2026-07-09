@@ -53,6 +53,7 @@ static inline int readInt() {
 int n;
 long long S = 0;
 vector<P> ps;
+static int gFASTFIT = 1; // skyline x0-scan: skip dsum/dr for positions that can't win primary key
 
 // pack: champion core with hard deadline. deadlineMs<=0 means no deadline (fallback pack).
 // adaptTL: for big cases, ms budget for dynLIM adaptation (relative to packStart).
@@ -95,13 +96,19 @@ static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0,
                         if (tsh.lo[j] != INT_MAX) { int v = h[x0 + j] - tsh.lo[j] + 1; if (v > y0) y0 = v; }
                     }
                     int nhbuf[32];
-                    int l = -1; long long dsum = 0;
+                    int l = -1;
                     for (int j = 0; j < tsh.w; j++) {
                         int nh = h[x0 + j];
                         if (tsh.hi[j] != INT_MIN) { int cand = y0 + tsh.hi[j]; if (nh < cand) nh = cand; }
                         nhbuf[j] = nh;
                         if (nh > l) l = nh;
                     }
+                    long long gg = g; if (gg < l) gg = l;
+                    // Primary tie-break key is gg; a position with gg > bestg2 can never be chosen,
+                    // so skip the O(w) dsum/dr computation for it. Output is identical to computing
+                    // them unconditionally (they only matter when gg == bestg2). ~2x fewer ops.
+                    if (gFASTFIT && bti2 != -1 && gg > bestg2) continue;
+                    long long dsum = 0;
                     for (int j = 0; j < tsh.w; j++) { int inc = nhbuf[j] - h[x0 + j]; if (inc > 0) dsum += inc; }
                     long long dr = 0;
                     if (x0 > 0) {
@@ -119,7 +126,6 @@ static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0,
                         long long nw = llabs((long long)h[x0 + tsh.w] - nhbuf[tsh.w - 1]);
                         dr += nw - old;
                     }
-                    long long gg = g; if (gg < l) gg = l;
                     bool take = false;
                     if (gg < bestg2) take = true;
                     else if (gg == bestg2) {
@@ -798,6 +804,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
 int main() {
     T0 = chrono::steady_clock::now();
     if (const char* e = getenv("POLYPACK_TL")) { double v = atof(e); if (v > 50 && v < 10000) TL_MS = v; }
+    int ffEnv = envInt("PP_FASTFIT", -1);    // -1 => auto-gate by S below; 0/1 => explicit override
     int BIGBLF = envInt("PP_BIGBLF", 0);     // 1: big cases skip champion pack, BLF-only
     int SMALLBLF = envInt("PP_SMALLBLF", 0); // 1: small cases skip champion sweep
     int JUMP = envInt("PP_JUMP", 15);        // % chance of W jump in restarts
@@ -831,6 +838,12 @@ int main() {
         for (int j = 0; j < k; j++) { int x = readInt(), y = readInt(); ps[i].b[j] = {x, y}; }
         S += k;
     }
+    // Skyline x0-scan primary-key pruning. Output is identical at a fixed window, but it makes each
+    // sweep pass cheaper, so the adaptive window grows larger in the same wall-time. Measured net
+    // gain for S>=22000 (the non-phase2 band: g4000/g8000 +0.004..+0.007), but it perturbs the
+    // finely-tuned phase2 pacing and REGRESSED S~10k (g1000 -0.013). So auto-enable only for the
+    // non-phase2 band; explicit PP_FASTFIT=0/1 overrides.
+    gFASTFIT = (ffEnv < 0) ? (S >= 22000 ? 1 : 0) : ffEnv;
     // Phase-2 budget split, auto by size: for S < 6000 the capped-restart ILS loop is worth far
     // more than a long sweep+phase2 (measured +0.005..+0.015), so end the sweep early; at
     // S ~ 10-20k the deep blf3 phase2 dominates instead, keep the champion split.
