@@ -1,4 +1,4 @@
-// v18: v17 + wider small-path routing, mid-band width factor, small-case budget shift.
+// v19: wider W sweep (96→128), adaptive REPAIR depth, perimeter-aware ordering, adaptive BLF window
 // - S < 6000: sweep+phase2 end early (25%/35% of TL) so the capped-restart ILS loop gets
 //   the bulk of the budget — measured +0.005..+0.015 on n=200..500 cases.
 // - Small path (multi-width sweep + capped restarts) now covers S up to ~70000 (was 22000);
@@ -19,7 +19,7 @@ static inline double elapsed_ms() {
 }
 
 struct T { int w, h; vector<pair<int,int>> c; vector<int> lo, hi; int r, f, minx, miny;
-           unsigned short rmask[10]; vector<pair<signed char, signed char>> nbr; };
+           unsigned short rmask[10]; vector<pair<signed char, signed char>> nbr; int perim = 0; };
 struct P { int id, k; vector<pair<int,int>> b; vector<T> t; int minW = 1e9, minH = 1e9, minA = 1e9; };
 struct Pl { int idx, ti, x, y; };
 struct R { long long A; int W, H; vector<Pl> pl; bool ok = false; int packW = 0; };
@@ -591,7 +591,11 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
     vector<Pl> pl; pl.reserve(nm);
     if ((int)b3cache.size() < nm * 8) b3cache.resize(nm * 8);
     for (int i = 0; i < nm * 8; i++) b3cache[i].valid = false;
-    static int REPAIR = envInt("PP_REPAIR", 25); // ejection-chain depth (0 = off)
+    // Adaptive ejection depth: more for larger instances
+    static int REPAIR_BASE = envInt("PP_REPAIR", 25);
+    int REPAIR = REPAIR_BASE > 0 ? REPAIR_BASE : 25;
+    if (S < 3000) REPAIR = min(REPAIR, 35);
+    else if (S > 50000) REPAIR = max(REPAIR, 45);
     auto& own = g_own;
     auto& plSlot = g_plSlot;
     if (REPAIR > 0) {
@@ -863,12 +867,40 @@ int main() {
     vector<int> idx(n); iota(idx.begin(), idx.end(), 0);
     unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL);
     RNG rng(seed);
+
+    // Compute shape metrics for better ordering
+    for (auto& p : ps) {
+        for (auto& t : p.t) {
+            int perim = 0;
+            for (auto& c : t.c) {
+                int cnt = 0;
+                for (int d = 0; d < 4; d++) {
+                    int dx = (d == 0) ? 1 : (d == 1) ? -1 : 0;
+                    int dy = (d == 2) ? 1 : (d == 3) ? -1 : 0;
+                    bool hasNb = false;
+                    for (auto& other : t.c) if (other.first == c.first + dx && other.second == c.second + dy) { hasNb = true; break; }
+                    if (!hasNb) perim++;
+                }
+            }
+            t.perim = perim;
+        }
+    }
+
     auto ord4 = [&]() {
         vector<int> res = idx;
         stable_sort(res.begin(), res.end(), [&](int a, int b) {
-            int da = min(ps[a].minW, ps[a].minH);
-            int db = min(ps[b].minW, ps[b].minH);
-            if (da != db) return da < db;
+            // Aspect-aware: place "spiky" pieces (high perimeter/rel) earlier in BLF where holes are abundant
+            int ar_a = (ps[a].minW > ps[a].minH) ? ps[a].minW : ps[a].minH;
+            int ar_b = (ps[b].minW > ps[b].minH) ? ps[b].minW : ps[b].minH;
+            int min_a = min(ps[a].minW, ps[a].minH), min_b = min(ps[b].minW, ps[b].minH);
+            int max_a = max(ps[a].minW, ps[a].minH), max_b = max(ps[b].minW, ps[b].minH);
+            int perim_a = 0, perim_b = 0;
+            for (auto& t : ps[a].t) perim_a = max(perim_a, t.perim);
+            for (auto& t : ps[b].t) perim_b = max(perim_b, t.perim);
+            // Score: higher perimeter/area ratio = worse packer, place earlier
+            int score_a = perim_a - ps[a].k, score_b = perim_b - ps[b].k;
+            if (score_a != score_b) return score_a > score_b;
+            if (min_a != min_b) return min_a < min_b;
             if (ps[a].k != ps[b].k) return ps[a].k < ps[b].k;
             return ps[a].id > ps[b].id;
         });
@@ -876,14 +908,9 @@ int main() {
     };
 
     int minW = 0; for (auto& p : ps) minW = max(minW, p.minW);
-    double factor;
-    if (S < 1000) factor = 0.4;
-    else if (S < 3000) factor = 0.5;
-    else if (S < 10000) factor = 0.27;
-    else if (S < 30000) factor = 0.08;
-    else if (S < 50000) factor = 0.028;  // measured optimum W~33 at S~38k (was 0.01 -> W~19)
-    else factor = 0.009;                 // measured optimum W~24-28 at S~58-96k
-    int base = max(minW, (int)floor(sqrt((double)S * factor)));
+    int W1 = (int)ceil(sqrt((double)S));
+    int W2 = (int)ceil(sqrt((double)S * 1.25)); // circle-packing optimal
+    int base = max(minW, W1);
     if (const char* e = getenv("PP_BASEW")) { int v = atoi(e); if (v >= minW && v <= 4000) base = v; }
 
     vector<int> Ws;
@@ -891,11 +918,12 @@ int main() {
         unordered_set<int> used; used.reserve(512);
         auto addW = [&](int w) { if (w < minW) w = minW; if (used.insert(w).second) Ws.push_back(w); };
         addW(base);
-        int span = min(96, max(20, base / 2));
+        addW(W1); addW(W2);
+        int span = max(32, min(128, base / 2));
         for (int d = 1; d <= span; d++) { addW(base - d); addW(base + d); }
         addW(minW);
         addW((int)max<long long>(minW, (S + base - 1) / base));
-        for (int m = 2; m <= 6; m++) { addW(base * m / 3); addW((int)max<long long>(minW, S / ((base * m / 3) ? (base * m / 3) : 1))); }
+        for (int m = 2; m <= 8; m++) { int wm = base * m / 4; if (wm >= minW) addW(wm); addW((int)max<long long>(minW, S / max(1, wm))); }
         sort(Ws.begin(), Ws.end(), [&](int a, int b) { int da = abs(a - base), db = abs(b - base); if (da != db) return da < db; return a < b; });
     }
 
@@ -953,10 +981,13 @@ int main() {
     const double SOFT_END = TL_MS - 15.0;      // don't start new work after this
 
 
-    // BLF/blf2 base order: big pieces first
+    // BLF/blf2 base order: big pieces first, with shape awareness
     vector<int> ordBLF = idx;
     stable_sort(ordBLF.begin(), ordBLF.end(), [&](int a, int b) {
         if (ps[a].k != ps[b].k) return ps[a].k > ps[b].k;
+        // For equal k, prefer pieces with more orientations (more flexible)
+        int ta = (int)ps[a].t.size(), tb = (int)ps[b].t.size();
+        if (ta != tb) return ta > tb;
         int ma = max(ps[a].minW, ps[a].minH), mb = max(ps[b].minW, ps[b].minH);
         if (ma != mb) return ma > mb;
         return ps[a].id < ps[b].id;
@@ -1124,17 +1155,19 @@ int main() {
                 double dt = elapsed_ms() - t1;
                 cntBLF++; avgBLF = (avgBLF * (cntBLF - 1) + dt) / cntBLF;
                 if (elapsed_ms() > SEARCH_END) break;
-                if (r.ok) {
+if (r.ok) {
                     crownRepack(r, SEARCH_END);
                     if (better(r, bestR)) { ilsOrd = obuf; bestR = move(r); }
                 }
             } else if (doBLF) {
                 int W;
+                // Wider exploration range for better escape from local optima
                 if ((int)(rng.nxt() % 100) < JUMP) {
-                    double mult = 0.6 + 0.8 * rng.uni();
+                    double mult = 0.5 + 1.0 * rng.uni();  // wider range 0.5-1.5
                     W = (int)llround(bw * mult);
                 } else {
-                    W = bw + (rng.rint(9) - 4);
+                    // Extended jitter range from 9 → 15
+                    W = bw + (rng.rint(15) - 7);
                 }
                 if (W < minW) W = minW;
                 if (W > 64) W = 64;
@@ -1142,7 +1175,8 @@ int main() {
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
                 obuf = fromBest ? ilsOrd : (BLF2 ? ordB2 : ordBLF);
                 if (cntBLF > 0) {
-                    int swaps = fromBest ? (2 + rng.rint(5)) : max(1, n / 6);
+                    // More aggressive order perturbation for larger instances
+                    int swaps = fromBest ? (2 + rng.rint(5)) : max(1, min(20, n / (S > 20000 ? 12 : 6)));
                     for (int sswap = 0; sswap < swaps; sswap++) {
                         int a = rng.rint(n), b = rng.rint(n);
                         swap(obuf[a], obuf[b]);
@@ -1150,9 +1184,11 @@ int main() {
                 }
                 int policy = (int)(rng.nxt() & 1);
                 double t1 = elapsed_ms();
-                R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / 4), SEARCH_END, rng, cntBLF > 0)
-                                                  : pack_blf2(W, obuf, max(1, n / 4), SEARCH_END, rng, cntBLF > 0))
-                           : pack_blf(W, obuf, policy, SEARCH_END);
+                // Adaptive window: larger for smaller S
+                int winDiv = S > 50000 ? 3 : (S > 15000 ? 2 : 1);
+                R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / winDiv), SEARCH_END, rng, cntBLF > 0)
+                                                   : pack_blf2(W, obuf, max(1, n / winDiv), SEARCH_END, rng, cntBLF > 0))
+                            : pack_blf(W, obuf, policy, SEARCH_END);
                 double dt = elapsed_ms() - t1;
                 cntBLF++; avgBLF = (avgBLF * (cntBLF - 1) + dt) / cntBLF;
                 if (getenv("PP_DEBUG")) fprintf(stderr, "BLF W=%d dt=%.1f ok=%d A=%lld best=%lld\n", W, dt, (int)r.ok, r.ok ? r.A : -1, bestR.A);
