@@ -1293,16 +1293,23 @@ int main(){
             if((int)v.size()>10) v.resize(10); return v;
         };
         for(int sh: cutsE(g_bin.H)){
-            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.35; ++mask)
+            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.37; ++mask)
                 consider(polish(splitMixedPlanY(allowRot, sh, mask, 0)));
-            if(elapsed()>TIME_LIMIT*0.35) break;
+            if(elapsed()>TIME_LIMIT*0.37) break;
         }
         for(int sw: cutsE(g_bin.W)){
-            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.40; ++mask)
+            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.43; ++mask)
                 consider(polish(splitMixedPlan(allowRot, sw, mask, 0)));
-            if(elapsed()>TIME_LIMIT*0.40) break;
+            if(elapsed()>TIME_LIMIT*0.43) break;
         }
         g_msAlpha = oldA;
+    }
+    if((allowRot||g_bin.H*5<=g_bin.W*6)&&elapsed()<TIME_LIMIT*0.26){
+        g_msAlpha=0.92;
+        consider(polish(mixedShelfPlan(allowRot,0,0,false)));
+        if(elapsed()<TIME_LIMIT*0.26)
+            consider(polish(mixedShelfPlan(allowRot,0,0,true)));
+        g_msAlpha=1.0;
     }
 #ifdef DIAG
     g_label="beam";
@@ -1449,6 +1456,8 @@ int main(){
             if((int)v.size() > (ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 18 : 14)) v.resize(ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 18 : 14);
             return v;
         };
+        double oldAlphaSplit2=g_msAlpha;
+        if(!allowRot&&g_bin.H*5>g_bin.W*6)g_msAlpha=0.94;
         vector<int> splits2 = cuts(g_bin.W, false);
         for(uint32_t seed = 1; seed <= 3 && elapsed() < TIME_LIMIT * 0.78; ++seed){
 #ifdef DIAG
@@ -1469,6 +1478,7 @@ int main(){
                 if(elapsed() > TIME_LIMIT * 0.78) break;
             }
         }
+        g_msAlpha=oldAlphaSplit2;
     }
 #ifdef DIAG
     g_label="choicemr";
