@@ -466,6 +466,8 @@ static PackResult choiceMaxRects(bool allowRot, int mode, double tlim){
                                       (mr.fx[i] + rw == mr.W ? rh : 0) + (mr.fy[i] + rh == mr.H ? rw : 0);
                         sc = it.density * 1000000000.0 + contact * 1000000.0 - sh * 25000.0 - lo;
                     }
+                    else if(mode == 9)
+                        sc=(double)it.v/max<double>(1.0,(double)it.area+0.5*min((double)lw*rh,(double)lh*rw));
                     int px = mr.fx[i], py = mr.fy[i];
                     if(mode == 1) px += lw;
                     else if(mode == 2 && lw > lh) px += lw;
@@ -913,6 +915,8 @@ static PackResult splitMixedPlanY(bool allowRot, int sh, int mask, uint32_t seed
     return res;
 }
 
+static PackResult lMixedPlan(bool,int,int,int,uint32_t);
+
 static vector<int> g_densOrd; // density-descending type order (filled in main)
 
 static double msFracBound(const vector<int>& rem, double area){
@@ -1261,6 +1265,7 @@ int main(){
         }
     };
     gapFill();
+    if(elapsed()<TIME_LIMIT*0.18) consider(polish(choiceMaxRects(allowRot,9,TIME_LIMIT*0.18)));
     if(!allowRot){
         consider(polish(knapsackColumnPlan(allowRot)));
         gapFill();
@@ -1281,6 +1286,28 @@ int main(){
             consider(polish(mixedShelfPlan(allowRot, 0, 0, true)));
         }
         g_msAlpha = 1.0;
+    }
+    if(allowRot&&g_bin.W>=g_bin.H&&g_bin.W*5<g_bin.H*8&&elapsed()<TIME_LIMIT*0.32){
+        vector<int> xs,ys;
+        auto add=[&](vector<int>&v,int x,int lim){if(x>5&&x<lim&&find(v.begin(),v.end(),x)==v.end())v.push_back(x);};
+        for(const ItemType&it:g_items){
+            if(it.h>=2*it.w) for(int k:{1,2,4,8}) add(xs,it.w*k,g_bin.W/4);
+            if(it.w>=2*it.h) for(int k:{1,2,4,8}) add(ys,it.h*k,g_bin.H/4);
+            if(allowRot&&it.w>=2*it.h) for(int k:{1,2,4,8}) add(xs,it.h*k,g_bin.W/4);
+            if(allowRot&&it.h>=2*it.w) for(int k:{1,2,4,8}) add(ys,it.w*k,g_bin.H/4);
+        }
+        add(xs,g_bin.W/12,g_bin.W/4); add(ys,g_bin.H/12,g_bin.H/4);
+        sort(xs.begin(),xs.end()); sort(ys.begin(),ys.end());
+        auto sample3=[](const vector<int>&v){
+            vector<int> r;if(v.empty())return r;
+            for(int i:{0,(int)v.size()/2,(int)v.size()-1})if(find(r.begin(),r.end(),v[i])==r.end())r.push_back(v[i]);
+            return r;
+        };
+        vector<int> sx=sample3(xs),sy=sample3(ys);
+        for(int sw:sx)for(int sh:sy)for(int o=0;o<6&&elapsed()<TIME_LIMIT*0.32;++o){
+            PackResult r=polish(lMixedPlan(allowRot,sw,sh,o,0));
+            consider(std::move(r));
+        }
     }
     // Priority path: tall no-rotation split2 with alpha 0.94 early (protects c11).
     if(!allowRot && g_bin.H * 5 > g_bin.W * 6 && elapsed() < TIME_LIMIT * 0.30){
@@ -1586,4 +1613,21 @@ int main(){
     }
     outputResult(best);
     return 0;
+}
+
+static PackResult lMixedPlan(bool allowRot,int sw,int sh,int order,uint32_t seed){
+    PackResult res; res.totalValue=0; res.used.assign(g_items.size(),0);
+    int W=g_bin.W,H=g_bin.H,M=(int)g_items.size();
+    if(sw<=0||sh<=0||sw>=W||sh>=H) return res;
+    vector<int> rem(M);
+    for(int t=0;t<M;++t) rem[t]=g_items[t].limit;
+    mt19937 rng(seed*3266489917u+(uint32_t)sw*668265263u+(uint32_t)sh);
+    bool cornerRight=order>=3; order%=3;
+    auto center=[&](){mixedShelfFillRegion(0,0,W-sw,H-sh,rem,allowRot,seed,res,rng);};
+    auto right=[&](){mixedShelfFillRegionT(W-sw,0,sw,cornerRight?H:H-sh,rem,allowRot,seed,res,rng);};
+    auto top=[&](){mixedShelfFillRegion(0,H-sh,cornerRight?W-sw:W,sh,rem,allowRot,seed,res,rng);};
+    if(order==0){center();right();top();}
+    else if(order==1){right();top();center();}
+    else {top();right();center();}
+    return res;
 }
