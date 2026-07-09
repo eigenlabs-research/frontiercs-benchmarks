@@ -1,8 +1,21 @@
-#include <bits/stdc++.h>
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <climits>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <numeric>
+#include <set>
+#include <string>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 1850.0;
+static double TL_MS = 1890.0; // Hard global deadline (env POLYPACK_TL override)
 static inline double elapsed_ms() {
     return chrono::duration<double, milli>(chrono::steady_clock::now() - T0).count();
 }
@@ -190,6 +203,7 @@ static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0,
         adapt();
         if (!panic && deadlineMs > 0 && elapsed_ms() > deadlineMs) return R{};
     }
+    if ((int)pl.size() != nm) return R{};  // validate all pieces placed
     int H = (int)g + 1;
     int maxX = -1;
     for (auto& pp : pl) {
@@ -872,7 +886,7 @@ int main() {
     double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;  // 0 => auto by size
     double P2ENDF = envInt("PP_P2END", 0) / 100.0;   // 0 => auto by size
     long long P2MAXS = envInt("PP_P2MAXS", 22000);   // phase2 only when S below this
-    long long B2RESTS = envInt("PP_B2RESTS", 1300);  // blf2 restarts when S below this
+    long long B2RESTS = envInt("PP_B2RESTS", 50000);  // blf2 restarts when S below this (was 1300)
 
     {
         size_t cap = 1 << 20; inbuf.resize(cap); size_t len = 0;
@@ -989,7 +1003,7 @@ int main() {
     };
     R bestR;
     int bfEnv = envInt("PP_BF", -1);
-    long long BF_N = envInt("PP_BFN", 550);
+    long long BF_N = envInt("PP_BFN", 500);
     bool useBF = (bfEnv < 0) ? (n >= BF_N && base <= 63 && minW <= 63) : (bfEnv > 0);
     if (useBF) { bestR = bfSolve(minW, min(base, 63), TL_MS - 120.0); }
     if (!bestR.ok) {
@@ -1155,8 +1169,9 @@ int main() {
             } else if (used + avgSky * 1.3 > SOFT_END) {
                 if (used + avgBLF * 1.3 <= SOFT_END) doBLF = true; else break;
             }
-            static int CAPSHARE = envInt("PP_CAPSHARE", 95);
-            bool capEligible = !big || (n <= envInt("PP_CAPBIGN", 2500));
+            static int CAPSHARE = envInt("PP_CAPSHARE", 100);
+            static int CAPBIGN = envInt("PP_CAPBIGN", 6000);
+            bool capEligible = !big || (n <= CAPBIGN);
             if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
                 int W;
                 {
@@ -1172,7 +1187,7 @@ int main() {
                 int Hcap = (int)(capA / W);
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
-                obuf = fromBest ? ilsOrd : ordB2;
+                obuf = fromBest ? ilsOrd : ((cntBLF & 1) ? ordBLF : ordB2);
                 int swaps = 1 + rng.rint(12);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
@@ -1239,6 +1254,20 @@ int main() {
         }
     }
     } // end champion search block (skipped when best-fit produced the result)
+    // late restart: try shuffled orderings at best width for fresh diversification
+    if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30) {
+        int lateW = bestR.packW;
+        int lateHcap = max(1, (int)(bestR.A / lateW) - 1);
+        if (lateHcap >= minW) {
+            for (int attempt = 0; attempt < 4 && elapsed_ms() < SOFT_END - 10; attempt++) {
+                vector<int> randOrd = idx;
+                int ns = max(1, n / 3);
+                for (int s = 0; s < ns; s++) { int a = rng.rint(n), b = rng.rint(n); swap(randOrd[a], randOrd[b]); }
+                R r = pack_capped(lateW, lateHcap, randOrd, max(1, n / 4), SEARCH_END, rng);
+                if (r.ok) { crownRepack(r, SEARCH_END); if (better(r, bestR)) bestR = move(r); }
+            }
+        }
+    }
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_search_done=%.1f\n", elapsed_ms());
     if (!useBF) crownRepack(bestR, TL_MS + 10.0);
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_crown_done=%.1f\n", elapsed_ms());
