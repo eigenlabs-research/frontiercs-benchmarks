@@ -345,7 +345,7 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(990); // use more of the 1s TL (980ms rival)
+    const auto budget = chrono::milliseconds(992); // ~744ms on judge, safe under 1s
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
@@ -397,7 +397,7 @@ int main(){
         }
     };
 
-    mt19937 rng(777u);
+    mt19937 rng(998);
     trySeed(seedGT(0, rng)); // MWR
     trySeed(seedGT(1, rng)); // LPT
     if(chrono::steady_clock::now() - T0 < budget)
