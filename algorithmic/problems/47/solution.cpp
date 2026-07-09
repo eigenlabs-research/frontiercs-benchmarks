@@ -1386,7 +1386,7 @@ int main(){
                 int d[2] = {it.w, it.h};
                 for(int q = 0; q < 2; ++q) for(int k = 1; k <= 3; ++k){ add(d[q] * k); add(L - d[q] * k); }
             }
-            if((int)v.size() > (ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 18 : 14)) v.resize(ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 18 : 14);
+            if((int)v.size() > (ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 20 : 14)) v.resize(ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 20 : 14);
             return v;
         };
         vector<int> splits2 = cuts(g_bin.W, false);
