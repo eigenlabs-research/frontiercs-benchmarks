@@ -345,7 +345,7 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(990); // use more of the 1s TL (980ms rival)
+    const auto budget = chrono::milliseconds(860);
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
@@ -427,13 +427,13 @@ int main(){
 
         int iter = 0, sinceImp = 0;
 #ifndef STUCK_LIM
-#define STUCK_LIM 60000
+#define STUCK_LIM 1000000000
 #endif
 #ifndef TEN_MIN
-#define TEN_MIN 8
+#define TEN_MIN 15
 #endif
 #ifndef TEN_SPAN_DIV
-#define TEN_SPAN_DIV 3
+#define TEN_SPAN_DIV 2
 #endif
         const int stuckLim = STUCK_LIM;
         const int TENURE_MIN = TEN_MIN;
