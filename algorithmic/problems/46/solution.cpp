@@ -890,7 +890,7 @@ static long long signatureEarliestStartParsed(){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(995); // increased budget for more iterations with longer tenure
+    const auto budget = chrono::milliseconds(994); // 994ms with 7 GT seeds and adaptive tenure
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
@@ -954,10 +954,19 @@ int main(){
     };
 
     mt19937 rng(777u);
-    trySeed(seedGT(0, rng)); // MWR
-    trySeed(seedGT(1, rng)); // LPT
-    if(chrono::steady_clock::now() - T0 < budget)
-        trySeed(seedGT(2, rng)); // SPT
+    // Try 7 GT seeds (MWR, LPT, SPT, + 4 random) - pick best as starting point
+    vector<pair<long long, vector<vector<int>>>> seedResults;
+    for(int mode=0; mode<7; ++mode){
+        if(chrono::steady_clock::now() - T0 >= budget) break;
+        auto s = seedGT(mode, rng);
+        long long c = evalSeq(s);
+        if(c > 0) seedResults.push_back({c, s});
+    }
+    if(!seedResults.empty()){
+        sort(seedResults.begin(), seedResults.end());
+        best = seedResults[0].second; bestC = seedResults[0].first;
+        cur = best; curC = bestC;
+    }
 
     // Trivial lower bound: max(machine load, job length). If reached, we are
     // provably optimal and can stop immediately.
