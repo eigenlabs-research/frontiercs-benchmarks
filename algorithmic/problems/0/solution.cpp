@@ -1,4 +1,6 @@
+// v19: eiso 0.93014 champ + GRASP random-niche restarts + BF_N 430
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <climits>
@@ -786,7 +788,7 @@ static inline void bf_put(const T& o, int x, int y) {
 }
 static inline uint64_t bf_key(int w, const int* v) { uint64_t k = (uint64_t)w << 52; for (int j = 0; j < w; j++) { int s = v[j] + 16; if (s < 0) s = 0; if (s > 31) s = 31; k |= (uint64_t)s << (5 * j); } return k; }
 static int bf_pass(int W, const vector<int>& repr, const unordered_map<uint64_t, vector<pair<int,int>>>& idx,
-                   vector<int>& avail, int total, vector<int>& outKind, vector<int>& outOri, vector<int>& outX, vector<int>& outY, int tie) {
+                   vector<int>& avail, int total, vector<int>& outKind, vector<int>& outOri, vector<int>& outX, vector<int>& outY, int tie, RNG* rng = nullptr) {
     bf_W = W; bf_occ.assign(8, 0ULL); bf_colH.assign(W, 0);
     outKind.clear(); outOri.clear(); outX.clear(); outY.clear();
     int rem = total; int p[12];
@@ -802,7 +804,10 @@ static int bf_pass(int W, const vector<int>& repr, const unordered_map<uint64_t,
     };
     while (rem > 0) {
         int mh = INT_MAX; curH0 = 0; for (int c = 0; c < W; c++) { if (bf_colH[c] < mh) mh = bf_colH[c]; if (bf_colH[c] > curH0) curH0 = bf_colH[c]; }
-        int nc = 0; while (nc < W && bf_colH[nc] != mh) nc++;
+        int nc;
+        // GRASP: random lowest-height niche breaks leftmost bias (never hurts when rng==null)
+        if (rng) { int lows[64], nl = 0; for (int c = 0; c < W; c++) if (bf_colH[c] == mh) lows[nl++] = c; nc = lows[rng->rint(nl)]; }
+        else { nc = 0; while (nc < W && bf_colH[nc] != mh) nc++; }
         bH = LLONG_MAX; bW = LLONG_MAX; bC = -1; bk = -1; bo = -1; bx = -1; by = -1;
         for (int w = 1; w <= 10; w++) {
             int xlo = nc - w + 1; if (xlo < 0) xlo = 0; int xhi = nc; if (xhi > W - w) xhi = W - w;
@@ -859,6 +864,24 @@ static R bfSolve(int minW, int base, double deadline) {
                 int H = bf_pass(W, repr, idx, avail, n, tK, tO, tX, tY, tie);
                 lastPass = elapsed_ms() - t0;
                 if (H > 0) { long long A = (long long)W * H; if (A < bestA) { bestA = A; bestW = W; bestH = H; swap(bK, tK); swap(bO, tO); swap(bX, tX); swap(bY, tY); } }
+            }
+        }
+    }
+    // phase 2: random-niche GRASP restarts (never regresses phase-1 best)
+    // Uses leftover bf deadline; deterministic W×tie sweep above is unchanged.
+    if (bestW > 0 && envInt("PP_G", 1)) {
+        RNG grng(0x9e3779b97f4a7c15ULL ^ ((unsigned long long)S << 1) ^ (unsigned long long)n);
+        int gspan = envInt("PP_GSPAN", 3); // W jitter ±span
+        while (elapsed_ms() + lastPass * 1.25 < deadline) {
+            int W = bestW + (gspan > 0 ? (grng.rint(2 * gspan + 1) - gspan) : 0);
+            if (W < minW || W > 63) continue;
+            int tie = grng.rint(2);
+            vector<int> avail = kcnt; double t0 = elapsed_ms();
+            int H = bf_pass(W, repr, idx, avail, n, tK, tO, tX, tY, tie, &grng);
+            lastPass = elapsed_ms() - t0;
+            if (H > 0) {
+                long long A = (long long)W * H;
+                if (A < bestA) { bestA = A; bestW = W; bestH = H; swap(bK, tK); swap(bO, tO); swap(bX, tX); swap(bY, tY); }
             }
         }
     }
@@ -1004,7 +1027,7 @@ int main() {
     };
     R bestR;
     int bfEnv = envInt("PP_BF", -1);
-    long long BF_N = envInt("PP_BFN", 450);
+    long long BF_N = envInt("PP_BFN", 430); // v19: 450->430 with GRASP mid-n gains
     bool useBF = (bfEnv < 0) ? (n >= BF_N && base <= 63 && minW <= 63) : (bfEnv > 0);
     if (useBF) { bestR = bfSolve(minW, min(base, 63), TL_MS - 120.0); }
     if (!bestR.ok) {
