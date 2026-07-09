@@ -591,7 +591,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
     vector<Pl> pl; pl.reserve(nm);
     if ((int)b3cache.size() < nm * 8) b3cache.resize(nm * 8);
     for (int i = 0; i < nm * 8; i++) b3cache[i].valid = false;
-    static int REPAIR = envInt("PP_REPAIR", 25); // ejection-chain depth (0 = off)
+    static int REPAIR = envInt("PP_REPAIR", 40); // ejection-chain depth (0 = off)
     auto& own = g_own;
     auto& plSlot = g_plSlot;
     if (REPAIR > 0) {
@@ -789,8 +789,8 @@ int main() {
     int PHASE2 = envInt("PP_PHASE2", 1);     // 1: blf2 pass over best sweep Ws
     double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;  // 0 => auto by size
     double P2ENDF = envInt("PP_P2END", 0) / 100.0;   // 0 => auto by size
-    long long P2MAXS = envInt("PP_P2MAXS", 22000);   // phase2 only when S below this
-    long long B2RESTS = envInt("PP_B2RESTS", 1300);  // blf2 restarts when S below this
+    long long P2MAXS = envInt("PP_P2MAXS", 30000);   // phase2 only when S below this
+    long long B2RESTS = envInt("PP_B2RESTS", 2000);  // blf2 restarts when S below this
 
     // read all of stdin
     {
@@ -1046,7 +1046,7 @@ int main() {
         {
             unordered_set<int> seenW; seenW.reserve(64);
             for (auto& sr : sweepRes) if (seenW.insert(sr.second).second) p2W.push_back(sr.second);
-            static int P2SPAN = envInt("PP_P2SPAN", 0);
+            static int P2SPAN = envInt("PP_P2SPAN", 20);  // v18.13: wider width exploration (15→20)
             int c0 = sweepRes.empty() ? base : sweepRes[0].second;
             for (int d = 1; d <= P2SPAN; d++)
                 for (int sgn = -1; sgn <= 1; sgn += 2) {
@@ -1059,7 +1059,7 @@ int main() {
             if (used + avg2 * 1.2 > p2Stop) break;
             int W = p2W[i];
             double t1 = elapsed_ms();
-            static int B3WINDIV = envInt("PP_B3WINDIV", 4);
+            static int B3WINDIV = envInt("PP_B3WINDIV", 3);
             int b3win = max(1, B3WINDIV > 0 ? n / B3WINDIV : n);
             R r = B3 ? pack_blf3(W, ordB2, b3win, SEARCH_END, rng, false)
                      : pack_blf2(W, ordB2, b3win, SEARCH_END, rng, false);
@@ -1101,7 +1101,7 @@ int main() {
                     // slow judges with few attempts), with occasional wide exploration (pays off
                     // on fast machines with hundreds of attempts).
                     static int dwBase = envInt("PP_CAPDW", 2);
-                    static int dwWide = envInt("PP_CAPDWW", 6);
+                    static int dwWide = envInt("PP_CAPDWW", 8);
                     static int wideP = envInt("PP_CAPWIDEP", 25);
                     int dw = ((int)(rng.nxt() % 100) < wideP) ? dwWide : dwBase;
                     W = bestR.packW + (dw > 0 ? (rng.rint(2 * dw + 1) - dw) : 0);
