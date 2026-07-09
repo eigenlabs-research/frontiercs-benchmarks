@@ -1,3 +1,7 @@
+// v18.13: size-adaptive ILS swaps on top of 0.92628 champ
+// Champ increased swaps globally (+small cases, -large cases net +0.00043).
+// Here: aggressive swaps only for S<12k; mild v18.6-style swaps for S>=25k;
+// medium in between. Also restore BLF2 restart window n/3 for S<30k.
 // v18: v17 + wider small-path routing, mid-band width factor, small-case budget shift.
 // - S < 6000: sweep+phase2 end early (25%/35% of TL) so the capped-restart ILS loop gets
 //   the bulk of the budget — measured +0.005..+0.015 on n=200..500 cases.
@@ -1113,7 +1117,11 @@ int main() {
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
                 obuf = fromBest ? ilsOrd : ordB2;
-                int swaps = 1 + rng.rint(12);
+                // size-adaptive: heavy mutation helps S<12k, hurts S>=25k (measured)
+                int swaps;
+                if (S < 12000) swaps = 1 + rng.rint(14);       // a bit past champ 1-13
+                else if (S < 25000) swaps = 1 + rng.rint(8);   // medium
+                else swaps = 1 + rng.rint(6);                 // mild (pre-champ)
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
                     swap(obuf[a], obuf[b]);
@@ -1142,7 +1150,10 @@ int main() {
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
                 obuf = fromBest ? ilsOrd : (BLF2 ? ordB2 : ordBLF);
                 if (cntBLF > 0) {
-                    int swaps = fromBest ? (2 + rng.rint(10)) : max(1, n / 4);
+                    int swaps;
+                    if (S < 12000) swaps = fromBest ? (2 + rng.rint(12)) : max(1, n / 4);
+                    else if (S < 25000) swaps = fromBest ? (2 + rng.rint(7)) : max(1, n / 5);
+                    else swaps = fromBest ? (2 + rng.rint(5)) : max(1, n / 6);
                     for (int sswap = 0; sswap < swaps; sswap++) {
                         int a = rng.rint(n), b = rng.rint(n);
                         swap(obuf[a], obuf[b]);
@@ -1150,8 +1161,10 @@ int main() {
                 }
                 int policy = (int)(rng.nxt() & 1);
                 double t1 = elapsed_ms();
-                R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / 4), SEARCH_END, rng, cntBLF > 0)
-                                                  : pack_blf2(W, obuf, max(1, n / 4), SEARCH_END, rng, cntBLF > 0))
+                // v18.6-style window: n/3 when S<30k (quality), n/5 when larger
+                int b2win = max(1, n / (S > 30000 ? 5 : 3));
+                R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, b2win, SEARCH_END, rng, cntBLF > 0)
+                                                  : pack_blf2(W, obuf, b2win, SEARCH_END, rng, cntBLF > 0))
                            : pack_blf(W, obuf, policy, SEARCH_END);
                 double dt = elapsed_ms() - t1;
                 cntBLF++; avgBLF = (avgBLF * (cntBLF - 1) + dt) / cntBLF;
@@ -1163,7 +1176,7 @@ int main() {
                 int W = bw + (rng.rint(7) - 3);
                 if (W < minW) W = minW;
                 obuf = baseOrder;
-                int swaps = max(1, n / 4);
+                int swaps = max(1, S < 12000 ? n / 4 : (S < 25000 ? n / 6 : n / 8));
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
                     swap(obuf[a], obuf[b]);
