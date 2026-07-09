@@ -370,7 +370,6 @@ static bool crownRepack(R& r, double deadlineMs) {
             }
             if (ok) {
                 // Check that the new packing actually has a smaller area before committing.
-                // Recompute area from the current grid state.
                 uint64_t colU = 0; int rows = 0;
                 for (auto& g : grid) if (g) { colU |= g; rows++; }
                 int newW = max(1, __builtin_popcountll(colU));
@@ -1096,6 +1095,54 @@ int main() {
         double avgBLF = 10.0; int cntBLF = 0;
         double avgSky = avg;
         vector<int> obuf;
+        // Bottleneck-targeted perturbation: after each improvement, identify pieces in the
+        // top 20% of the packing height. On subsequent restarts, preferentially swap those
+        // bottleneck pieces earlier in the order so they get placed when more space is available.
+        vector<int> bottleneckPieces;
+        auto updateBottleneck = [&]() {
+            bottleneckPieces.clear();
+            if (!bestR.ok || bestR.pl.empty()) return;
+            int H = bestR.H;
+            int threshold = max(1, H - max(1, H / 5)); // top 20%
+            for (auto& p : bestR.pl) {
+                auto& t = ps[p.idx].t[p.ti];
+                if (p.y + t.h > threshold) bottleneckPieces.push_back(p.idx);
+            }
+        };
+        updateBottleneck();
+        auto perturbOrder = [&](vector<int>& ord, int swaps, bool biasBottleneck) {
+            if (!biasBottleneck || bottleneckPieces.empty()) {
+                for (int s = 0; s < swaps; s++) {
+                    int a = rng.rint((int)ord.size()), b = rng.rint((int)ord.size());
+                    swap(ord[a], ord[b]);
+                }
+                return;
+            }
+            // With bottleneck bias: pick a bottleneck piece and swap it earlier in the order.
+            for (int s = 0; s < swaps; s++) {
+                if ((int)(rng.nxt() % 100) < 70 && !bottleneckPieces.empty()) {
+                    // Pick a random bottleneck piece
+                    int bp = bottleneckPieces[rng.rint((int)bottleneckPieces.size())];
+                    // Find its position in the order
+                    int pos = -1;
+                    for (int i = 0; i < (int)ord.size(); i++) {
+                        if (ord[i] == bp) { pos = i; break; }
+                    }
+                    if (pos > 0) {
+                        // Swap with a random earlier position (so it gets placed sooner)
+                        int a = rng.rint(pos);
+                        swap(ord[a], ord[pos]);
+                    } else {
+                        // Bottleneck piece already early; swap random instead
+                        int a = rng.rint((int)ord.size()), b = rng.rint((int)ord.size());
+                        swap(ord[a], ord[b]);
+                    }
+                } else {
+                    int a = rng.rint((int)ord.size()), b = rng.rint((int)ord.size());
+                    swap(ord[a], ord[b]);
+                }
+            }
+        };
         while (true) {
             double used = elapsed_ms();
             if (used + 5.0 > SOFT_END) break;
@@ -1133,10 +1180,7 @@ int main() {
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
                 obuf = fromBest ? ilsOrd : ordB2;
                 int swaps = 1 + rng.rint(12);
-                for (int sswap = 0; sswap < swaps; sswap++) {
-                    int a = rng.rint(n), b = rng.rint(n);
-                    swap(obuf[a], obuf[b]);
-                }
+                perturbOrder(obuf, swaps, fromBest);
                 double t1 = elapsed_ms();
                 static int CAPWINDIV = envInt("PP_CAPWINDIV", 1);
                 R r = pack_capped(W, Hcap, obuf, max(1, CAPWINDIV > 0 ? n / CAPWINDIV : n), SEARCH_END, rng);
@@ -1145,7 +1189,7 @@ int main() {
                 if (elapsed_ms() > SEARCH_END) break;
                 if (r.ok) {
                     crownRepack(r, SEARCH_END);
-                    if (better(r, bestR)) { ilsOrd = obuf; bestR = move(r); }
+                    if (better(r, bestR)) { ilsOrd = obuf; bestR = move(r); updateBottleneck(); }
                 }
             } else if (doBLF) {
                 int W;
@@ -1162,10 +1206,7 @@ int main() {
                 obuf = fromBest ? ilsOrd : (BLF2 ? ordB2 : ordBLF);
                 if (cntBLF > 0) {
                     int swaps = fromBest ? (2 + rng.rint(10)) : max(1, n / 4);
-                    for (int sswap = 0; sswap < swaps; sswap++) {
-                        int a = rng.rint(n), b = rng.rint(n);
-                        swap(obuf[a], obuf[b]);
-                    }
+                    perturbOrder(obuf, swaps, fromBest);
                 }
                 int policy = (int)(rng.nxt() & 1);
                 double t1 = elapsed_ms();
@@ -1177,23 +1218,20 @@ int main() {
                 if (getenv("PP_DEBUG")) fprintf(stderr, "BLF W=%d dt=%.1f ok=%d A=%lld best=%lld\n", W, dt, (int)r.ok, r.ok ? r.A : -1, bestR.A);
                 if (!r.ok) break;
                 crownRepack(r, SEARCH_END);
-                if (better(r, bestR)) { ilsOrd = obuf; ilsW = W; bestR = move(r); }
+                if (better(r, bestR)) { ilsOrd = obuf; ilsW = W; bestR = move(r); updateBottleneck(); }
             } else {
                 int W = bw + (rng.rint(7) - 3);
                 if (W < minW) W = minW;
                 obuf = baseOrder;
                 int swaps = max(1, n / 4);
-                for (int sswap = 0; sswap < swaps; sswap++) {
-                    int a = rng.rint(n), b = rng.rint(n);
-                    swap(obuf[a], obuf[b]);
-                }
+                perturbOrder(obuf, swaps, false);
                 double t1 = elapsed_ms();
                 R r = pack(W, obuf, rng, true, max(1, n / 4), false, 0.0, SEARCH_END);
                 double dt = elapsed_ms() - t1;
                 cnt++; avgSky = (avgSky * 0.7 + dt * 0.3);
                 if (!r.ok) break;
                 crownRepack(r, SEARCH_END);
-                if (better(r, bestR)) bestR = move(r);
+                if (better(r, bestR)) { bestR = move(r); updateBottleneck(); }
             }
         }
     }
