@@ -438,6 +438,90 @@ static PackResult pruneLine(const PackResult& base,int lines,const vector<int>& 
     return fillGaps(r,order,allowRotate,allowRotate);
 }
 
+// Random destroy-repair: pick `cnt` items to remove; weight probability by 1/density
+// (lower density = more likely). Then refill using MaxRects with the given order.
+static PackResult destroyRepair(const PackResult& base, int cnt, const vector<int>& order,
+                                bool allowRotate, mt19937& rng, bool weighted){
+    int n = (int)base.placements.size();
+    if(cnt <= 0 || n == 0) return base;
+    if(cnt > n) cnt = n;
+    vector<int> ids(n); for(int i = 0; i < n; ++i) ids[i] = i;
+    if(weighted){
+        // Roulette by 1/density (lower density more likely to drop)
+        vector<double> w(n);
+        double W = 0;
+        for(int i = 0; i < n; ++i){
+            double d = g_items[base.placements[i].typeId].density;
+            w[i] = 1.0 / (d + 1e-9);
+            W += w[i];
+        }
+        vector<char> chosen(n, 0);
+        int picked = 0;
+        int tries = 0;
+        while(picked < cnt && tries < cnt * 20){
+            double r = ((double)(rng() & 0xFFFFFF) / (double)0xFFFFFF) * W;
+            double acc = 0;
+            for(int i = 0; i < n; ++i){
+                if(chosen[i]) continue;
+                acc += w[i];
+                if(acc >= r){ chosen[i] = 1; W -= w[i]; ++picked; break; }
+            }
+            ++tries;
+        }
+        if(picked < cnt){
+            // Fill remainder uniformly
+            for(int i = 0; i < n && picked < cnt; ++i){
+                if(!chosen[i]){ chosen[i] = 1; ++picked; }
+            }
+        }
+        PackResult r; r.totalValue = 0; r.used.assign(g_items.size(), 0);
+        for(int i = 0; i < n; ++i) if(!chosen[i]){
+            const Placed& p = base.placements[i];
+            r.placements.push_back(p); r.totalValue += g_items[p.typeId].v; r.used[p.typeId]++;
+        }
+        return fillGaps(r, order, allowRotate, allowRotate);
+    } else {
+        shuffle(ids.begin(), ids.end(), rng);
+        vector<char> drop(n, 0);
+        for(int i = 0; i < cnt; ++i) drop[ids[i]] = 1;
+        PackResult r; r.totalValue = 0; r.used.assign(g_items.size(), 0);
+        for(int i = 0; i < n; ++i) if(!drop[i]){
+            const Placed& p = base.placements[i];
+            r.placements.push_back(p); r.totalValue += g_items[p.typeId].v; r.used[p.typeId]++;
+        }
+        return fillGaps(r, order, allowRotate, allowRotate);
+    }
+}
+
+// Spatial destroy: pick a random rectangle; drop all placements whose center is inside.
+static PackResult spatialDestroy(const PackResult& base, int rw, int rh,
+                                 const vector<int>& order, bool allowRotate, mt19937& rng){
+    int n = (int)base.placements.size();
+    if(n == 0) return base;
+    int W = g_bin.W, H = g_bin.H;
+    if(rw > W) rw = W;
+    if(rh > H) rh = H;
+    int rx = (W - rw > 0) ? (int)(rng() % (uint32_t)(W - rw + 1)) : 0;
+    int ry = (H - rh > 0) ? (int)(rng() % (uint32_t)(H - rh + 1)) : 0;
+    vector<char> drop(n, 0);
+    int dc = 0;
+    for(int i = 0; i < n; ++i){
+        const Placed& p = base.placements[i];
+        const ItemType& it = g_items[p.typeId];
+        int pw = p.rot ? it.h : it.w;
+        int ph = p.rot ? it.w : it.h;
+        int cx = p.x + pw / 2, cy = p.y + ph / 2;
+        if(cx >= rx && cx < rx + rw && cy >= ry && cy < ry + rh){ drop[i] = 1; ++dc; }
+    }
+    if(dc == 0 || dc > n * 2 / 3) return base;
+    PackResult r; r.totalValue = 0; r.used.assign(g_items.size(), 0);
+    for(int i = 0; i < n; ++i) if(!drop[i]){
+        const Placed& p = base.placements[i];
+        r.placements.push_back(p); r.totalValue += g_items[p.typeId].v; r.used[p.typeId]++;
+    }
+    return fillGaps(r, order, allowRotate, allowRotate);
+}
+
 
 static PackResult choiceMaxRects(bool allowRot, int mode, double tlim){
     PackResult res; res.totalValue = 0; res.used.assign(g_items.size(), 0);
@@ -510,9 +594,11 @@ static PackResult knapsackShelfPlan(bool allowRot){
     vector<int> par(H + 1, -1);
     ll bestVal = -1;
     vector<int> bestCombo(M, 0);
-    // Greedy hill-climb over rotations (not 2^M enum): free ~half budget for
-    // downstream packers that win quality on rotate-heavy cases.
-    auto evalCombo = [&](const vector<int>& combo) -> ll {
+    // Instead of 2^M combos (up to 4096 DPs), use greedy hill-climb: start from
+    // best-density rotation per item, then try flipping one item at a time until
+    // no single flip improves. On the judge this reclaims ~50% of the time budget
+    // for downstream phases where actual quality wins live.
+    auto evalCombo = [&](const vector<int>& combo, ll* outBest) -> ll {
         vector<KItem> kitems;
         kitems.reserve(M * 12);
         for(int t = 0; t < M; ++t){
@@ -544,20 +630,24 @@ static PackResult knapsackShelfPlan(bool allowRot){
         }
         ll bestV = 0;
         for(int x = 0; x <= H; ++x){ if(dp[x] > bestV) bestV = dp[x]; }
+        if(outBest) *outBest = bestV;
         return bestV;
     };
+    // Seed 0: best density orientation per item.
     vector<int> combo(M, 0);
     if(allowRot){
         for(int t = 0; t < M; ++t){
             const ItemType& it = g_items[t];
+            // choose rot maximizing per-shelf density (perShelf / height)
             double d0 = sd[t][0].valid ? (double)sd[t][0].perShelf * it.v / (double)sd[t][0].rh : -1;
             double d1 = sd[t][1].valid ? (double)sd[t][1].perShelf * it.v / (double)sd[t][1].rh : -1;
             combo[t] = (d1 > d0) ? 1 : 0;
         }
     }
-    bestVal = evalCombo(combo);
+    bestVal = evalCombo(combo, nullptr);
     bestCombo = combo;
     if(allowRot){
+        // Hill-climb: repeatedly try flipping one item; accept improvements.
         bool improved = true;
         int passes = 0;
         while(improved && passes < 3 && elapsed() < TIME_LIMIT * 0.30){
@@ -565,11 +655,11 @@ static PackResult knapsackShelfPlan(bool allowRot){
             for(int t = 0; t < M && elapsed() < TIME_LIMIT * 0.30; ++t){
                 if(!sd[t][0].valid || !sd[t][1].valid) continue;
                 combo[t] ^= 1;
-                ll v = evalCombo(combo);
+                ll v = evalCombo(combo, nullptr);
                 if(v > bestVal){
                     bestVal = v; bestCombo = combo; improved = true;
                 } else {
-                    combo[t] ^= 1;
+                    combo[t] ^= 1; // revert
                 }
             }
         }
@@ -1274,33 +1364,6 @@ int main(){
         }
         g_msAlpha = 1.0;
     }
-    // Priority path: tall no-rotation split2 with alpha 0.94 early (protects c11).
-    // Otherwise: brief mid-style narrow beam for residual rotate/wide cases.
-    if(!allowRot && g_bin.H * 5 > g_bin.W * 6 && elapsed() < TIME_LIMIT * 0.30){
-        double oldA = g_msAlpha; g_msAlpha = 0.94;
-        auto cutsE = [&](int L){
-            vector<int> v; auto add=[&](int x){ if(x>20&&x<L-20&&find(v.begin(),v.end(),x)==v.end()) v.push_back(x); };
-            add(L/3); add(L/2); add((2*L)/3); add(L/4); add((3*L)/4);
-            for(int z=0; z<M && z<3; ++z){ const ItemType& it=g_items[ordDens[z]]; int d[2]={it.w,it.h};
-                for(int q=0;q<2;++q) for(int k=1;k<=3;++k){ add(d[q]*k); add(L-d[q]*k);} }
-            if((int)v.size()>10) v.resize(10); return v;
-        };
-        for(int sh: cutsE(g_bin.H)){
-            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.35; ++mask)
-                consider(polish(splitMixedPlanY(allowRot, sh, mask, 0)));
-            if(elapsed()>TIME_LIMIT*0.35) break;
-        }
-        for(int sw: cutsE(g_bin.W)){
-            for(int mask=0; mask<8 && elapsed()<TIME_LIMIT*0.40; ++mask)
-                consider(polish(splitMixedPlan(allowRot, sw, mask, 0)));
-            if(elapsed()>TIME_LIMIT*0.40) break;
-        }
-        g_msAlpha = oldA;
-    } else if(allowRot && elapsed() < TIME_LIMIT * 0.12){
-        double tcap = elapsed() + 0.06;
-        if(tcap > TIME_LIMIT * 0.22) tcap = TIME_LIMIT * 0.22;
-        consider(polish(beamMixedShelfPlan(allowRot, 4, 3, 5, tcap)));
-    }
 #ifdef DIAG
     g_label="beam";
 #endif
@@ -1430,8 +1493,6 @@ int main(){
             if((int)v.size() > (ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 18 : 14)) v.resize(ycut && !allowRot && g_bin.H * 5 > g_bin.W * 6 ? 18 : 14);
             return v;
         };
-        double oldAlphaSplit2 = g_msAlpha;
-        if(!allowRot && g_bin.H * 5 > g_bin.W * 6) g_msAlpha = 0.94;
         vector<int> splits2 = cuts(g_bin.W, false);
         for(uint32_t seed = 1; seed <= 3 && elapsed() < TIME_LIMIT * 0.78; ++seed){
 #ifdef DIAG
@@ -1452,7 +1513,6 @@ int main(){
                 if(elapsed() > TIME_LIMIT * 0.78) break;
             }
         }
-        g_msAlpha = oldAlphaSplit2;
     }
 #ifdef DIAG
     g_label="choicemr";
@@ -1505,8 +1565,41 @@ int main(){
     mt19937 rng(987654321u);
     int seed = 0;
     double iterCost = 0.0; // adaptive margin: last iteration's duration
+    // Interleave random-order greedy with destroy-repair on best.
     while(elapsed() + 2.0 * iterCost < TIME_LIMIT - 0.04){
         double t0 = elapsed();
+        // Every 3rd iteration: destroy-repair on best (usually cheaper and higher yield).
+        if((seed % 3) == 2 && (int)best.placements.size() > 4){
+            int n = (int)best.placements.size();
+            // Vary destruction fraction and order to explore neighborhood.
+            int drVariant = (seed / 3) % 7;
+            int cnt;
+            switch(drVariant % 4){
+                case 0: cnt = max(2, n / 20); break;
+                case 1: cnt = max(3, n / 10); break;
+                case 2: cnt = max(4, n / 6); break;
+                default: cnt = max(6, n / 4); break;
+            }
+            const vector<int>* ord = &ordDens;
+            switch((drVariant / 4) % 4){
+                case 0: ord = &ordDens; break;
+                case 1: ord = &ordMinDim; break;
+                case 2: ord = &ordAreaAsc; break;
+                default: ord = &ordVal; break;
+            }
+            bool weighted = ((drVariant & 1) == 0);
+            if(drVariant == 6){
+                // spatial destroy
+                int rw = 100 + (int)(rng() % (uint32_t)max(1, g_bin.W / 3));
+                int rh = 100 + (int)(rng() % (uint32_t)max(1, g_bin.H / 3));
+                consider(spatialDestroy(best, rw, rh, *ord, allowRot, rng));
+            } else {
+                consider(destroyRepair(best, cnt, *ord, allowRot, rng, weighted));
+            }
+            iterCost = elapsed() - t0;
+            ++seed;
+            continue;
+        }
         vector<int> ord = orderByDensity();
         int mode = seed % 8;
         if(mode == 0){
