@@ -1185,7 +1185,7 @@ int main() {
         }
     }
     // late restart: try completely shuffled orderings at best width (fresh diversification)
-    if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30) {
+    if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 50) {
         int lateW = bestR.packW;
         int lateHcap = max(1, (int)(bestR.A / lateW) - 1);
         if (lateHcap >= minW) {
