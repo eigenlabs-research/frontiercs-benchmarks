@@ -975,7 +975,7 @@ int main() {
     // swinPred = affordable first-pack window predicted from the measured window=1 pack cost.
     int swin = max(1, n / 4);
     if (!big && !((big && BIGBLF) || (!big && SMALLBLF))) {
-        static double SW1F = envInt("PP_SW1F", 80) / 100.0;
+        static double SW1F = envInt("PP_SW1F", 60) / 100.0;
         double sweepBudget = (PHASE2 && S < P2MAXS) ? min(SOFT_END, TL_MS * (P2FRAC > 0.0 ? P2FRAC : 0.55))
                                                     : SOFT_END;
         double budget1 = SW1F * max(50.0, sweepBudget - elapsed_ms());
