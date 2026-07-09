@@ -19,7 +19,7 @@ static inline double elapsed_ms() {
 }
 
 struct T { int w, h; vector<pair<int,int>> c; vector<int> lo, hi; int r, f, minx, miny;
-           unsigned short rmask[10]; vector<pair<signed char, signed char>> nbr; };
+           unsigned short rmask[10]; vector<pair<signed char, signed char>> nbr; int perim = 0; };
 struct P { int id, k; vector<pair<int,int>> b; vector<T> t; int minW = 1e9, minH = 1e9, minA = 1e9; };
 struct Pl { int idx, ti, x, y; };
 struct R { long long A; int W, H; vector<Pl> pl; bool ok = false; int packW = 0; };
@@ -863,12 +863,40 @@ int main() {
     vector<int> idx(n); iota(idx.begin(), idx.end(), 0);
     unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL);
     RNG rng(seed);
+
+    // Compute shape metrics for better ordering
+    for (auto& p : ps) {
+        for (auto& t : p.t) {
+            int perim = 0;
+            for (auto& c : t.c) {
+                int cnt = 0;
+                for (int d = 0; d < 4; d++) {
+                    int dx = (d == 0) ? 1 : (d == 1) ? -1 : 0;
+                    int dy = (d == 2) ? 1 : (d == 3) ? -1 : 0;
+                    bool hasNb = false;
+                    for (auto& other : t.c) if (other.first == c.first + dx && other.second == c.second + dy) { hasNb = true; break; }
+                    if (!hasNb) perim++;
+                }
+            }
+            t.perim = perim;
+        }
+    }
+
     auto ord4 = [&]() {
         vector<int> res = idx;
         stable_sort(res.begin(), res.end(), [&](int a, int b) {
-            int da = min(ps[a].minW, ps[a].minH);
-            int db = min(ps[b].minW, ps[b].minH);
-            if (da != db) return da < db;
+            // Aspect-aware: place "spiky" pieces (high perimeter/rel) earlier in BLF where holes are abundant
+            int ar_a = (ps[a].minW > ps[a].minH) ? ps[a].minW : ps[a].minH;
+            int ar_b = (ps[b].minW > ps[b].minH) ? ps[b].minW : ps[b].minH;
+            int min_a = min(ps[a].minW, ps[a].minH), min_b = min(ps[b].minW, ps[b].minH);
+            int max_a = max(ps[a].minW, ps[a].minH), max_b = max(ps[b].minW, ps[b].minH);
+            int perim_a = 0, perim_b = 0;
+            for (auto& t : ps[a].t) perim_a = max(perim_a, t.perim);
+            for (auto& t : ps[b].t) perim_b = max(perim_b, t.perim);
+            // Score: higher perimeter/area ratio = worse packer, place earlier
+            int score_a = perim_a - ps[a].k, score_b = perim_b - ps[b].k;
+            if (score_a != score_b) return score_a > score_b;
+            if (min_a != min_b) return min_a < min_b;
             if (ps[a].k != ps[b].k) return ps[a].k < ps[b].k;
             return ps[a].id > ps[b].id;
         });
@@ -876,14 +904,9 @@ int main() {
     };
 
     int minW = 0; for (auto& p : ps) minW = max(minW, p.minW);
-    double factor;
-    if (S < 1000) factor = 0.4;
-    else if (S < 3000) factor = 0.5;
-    else if (S < 10000) factor = 0.27;
-    else if (S < 30000) factor = 0.08;
-    else if (S < 50000) factor = 0.028;  // measured optimum W~33 at S~38k (was 0.01 -> W~19)
-    else factor = 0.009;                 // measured optimum W~24-28 at S~58-96k
-    int base = max(minW, (int)floor(sqrt((double)S * factor)));
+    int W1 = (int)ceil(sqrt((double)S));
+    int W2 = (int)ceil(sqrt((double)S * 1.25)); // circle-packing optimal
+    int base = max(minW, W1);
     if (const char* e = getenv("PP_BASEW")) { int v = atoi(e); if (v >= minW && v <= 4000) base = v; }
 
     vector<int> Ws;
@@ -891,11 +914,12 @@ int main() {
         unordered_set<int> used; used.reserve(512);
         auto addW = [&](int w) { if (w < minW) w = minW; if (used.insert(w).second) Ws.push_back(w); };
         addW(base);
-        int span = min(96, max(20, base / 2));
+        addW(W1); addW(W2);
+        int span = max(32, min(128, base / 2));
         for (int d = 1; d <= span; d++) { addW(base - d); addW(base + d); }
         addW(minW);
         addW((int)max<long long>(minW, (S + base - 1) / base));
-        for (int m = 2; m <= 6; m++) { addW(base * m / 3); addW((int)max<long long>(minW, S / ((base * m / 3) ? (base * m / 3) : 1))); }
+        for (int m = 2; m <= 8; m++) { int wm = base * m / 4; if (wm >= minW) addW(wm); addW((int)max<long long>(minW, S / max(1, wm))); }
         sort(Ws.begin(), Ws.end(), [&](int a, int b) { int da = abs(a - base), db = abs(b - base); if (da != db) return da < db; return a < b; });
     }
 
