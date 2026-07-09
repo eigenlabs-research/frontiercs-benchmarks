@@ -1194,7 +1194,7 @@ int main(){
     };
 #else
     auto consider = [&](PackResult&& r){
-        if(r.totalValue > best.totalValue) best = std::move(r);
+        if(r.totalValue > best.totalValue || (!allowRot && g_bin.W * 5 > g_bin.H * 7 && r.totalValue == best.totalValue)) best = std::move(r);
     };
 #endif
 
@@ -1250,7 +1250,7 @@ int main(){
     consider(polish(mixedShelfPlan(allowRot, 0, 0, false)));
     consider(polish(mixedShelfPlan(allowRot, 0, 0, true)));
     {
-        double alphas[1] = {0.94};
+        double alphas[1] = {allowRot ? 0.94 : 0.92};
         for(double a : alphas){
             if(elapsed() > TIME_LIMIT * 0.22) break;
             g_msAlpha = a;
