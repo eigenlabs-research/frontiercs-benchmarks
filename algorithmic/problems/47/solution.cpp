@@ -1390,12 +1390,12 @@ int main(){
             return v;
         };
         double oldAlphaSplit2 = g_msAlpha;
-        if(!allowRot && g_bin.H * 5 > g_bin.W * 6) g_msAlpha = 0.94;
         vector<int> splits2 = cuts(g_bin.W, false);
         for(uint32_t seed = 1; seed <= 3 && elapsed() < TIME_LIMIT * 0.78; ++seed){
 #ifdef DIAG
             g_label="split2";
 #endif
+            g_msAlpha = oldAlphaSplit2;
             for(int sw : splits2){
                 for(int mask = 0; mask < 8 && elapsed() < TIME_LIMIT * 0.78; ++mask)
                     consider(polish(splitMixedPlan(allowRot, sw, mask, seed)));
@@ -1404,6 +1404,7 @@ int main(){
 #ifdef DIAG
             g_label="split2y";
 #endif
+            if(!allowRot && g_bin.H * 5 > g_bin.W * 6) g_msAlpha = 0.94;
             vector<int> ys2 = cuts(g_bin.H, true);
             for(int sh : ys2){
                 for(int mask = 0; mask < 8 && elapsed() < TIME_LIMIT * 0.78; ++mask)
