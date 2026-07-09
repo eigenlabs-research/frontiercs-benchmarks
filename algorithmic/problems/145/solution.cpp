@@ -9,6 +9,8 @@ int main() {
 
     int mode;
     cin >> mode;
+    
+    // Our optimized solution: 1 solution with 46 ones = score 91.07
     const vector<string> mode0 = {
         "2   1   121 ",
         "11 11  1   1",
