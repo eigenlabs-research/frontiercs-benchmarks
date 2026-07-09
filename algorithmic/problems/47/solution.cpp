@@ -1579,6 +1579,16 @@ int main(){
         if(seed > 2000000) break;
     }
 
+    // Final polish with additional orderings not in gapOrders
+    if(elapsed() < TIME_LIMIT - 0.06){
+        vector<int> ordHd = orderByHeightDesc();
+        vector<int> ordWd = orderByWidthDesc();
+        vector<int> ordAreaDesc = orderByAreaDesc();
+        for(auto* op : {&ordHd, &ordWd, &ordAreaDesc}){
+            if(elapsed() > TIME_LIMIT) break;
+            consider(fillGaps(best, *op, allowRot, allowRot));
+        }
+    }
     if(elapsed() < TIME_LIMIT - 0.04) gapFill();
     if(best.totalValue < 0){
         best.totalValue = 0;
