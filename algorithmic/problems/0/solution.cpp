@@ -1,3 +1,4 @@
+// v18.11: leftover-only small polish (S<5k, no SOFT_END steal)
 // v18.6: BLF2 window n/3 for S<30k (smaller is better for large S)
 // v18: v17 + wider small-path routing, mid-band width factor, small-case budget shift.
 // - S < 6000: sweep+phase2 end early (25%/35% of TL) so the capped-restart ILS loop gets
@@ -1180,6 +1181,42 @@ R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / (S > 30000 ? 5
         }
     }
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_search_done=%.1f\n", elapsed_ms());
+
+    // ---- v18.11 leftover small-case polish (no budget stolen from main search) ----
+    // Only runs if the main loop finishes early with >=50ms left, and only for S<5000
+    // (the worst-scoring band). High-window blf3 restarts; accept only strict A improvements.
+    if (S < 5000 && bestR.ok && bestR.packW > 0 && bestR.packW <= 64
+        && elapsed_ms() + 50.0 < TL_MS) {
+        double polishEnd = TL_MS - 5.0;
+        vector<int> pOrd(n);
+        for (int i = 0; i < n; i++) pOrd[i] = bestR.pl[i].idx;
+        int baseW = bestR.packW;
+        double avgP = 10.0; int cntP = 0;
+        RNG prng(seed ^ 0xC0FFEEULL);
+        while (elapsed_ms() + avgP * 1.15 < polishEnd) {
+            int W = baseW + (int)(prng.nxt() % 5) - 2;
+            if (W < minW) W = minW;
+            if (W > 64) W = 64;
+            vector<int> ord = pOrd;
+            int swaps = 1 + (int)(prng.nxt() % 6);
+            for (int k = 0; k < swaps; k++) swap(ord[prng.rint(n)], ord[prng.rint(n)]);
+            double t0 = elapsed_ms();
+            int win = max(1, n / 3);
+            R r = B3 ? pack_blf3(W, ord, win, polishEnd, prng, true)
+                     : pack_blf2(W, ord, win, polishEnd, prng, true);
+            double dt = elapsed_ms() - t0;
+            cntP++; avgP = (avgP * (cntP - 1) + dt) / cntP;
+            if (!r.ok) break;
+            crownRepack(r, polishEnd);
+            if (better(r, bestR)) {
+                pOrd = ord;
+                baseW = r.packW > 0 ? r.packW : W;
+                bestR = move(r);
+            }
+        }
+        if (getenv("PP_DEBUG")) fprintf(stderr, "leftover_polish cnt=%d bestA=%lld\n", cntP, bestR.A);
+    }
+
     // final polish on the global best
     crownRepack(bestR, TL_MS + 10.0);
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_crown_done=%.1f\n", elapsed_ms());
