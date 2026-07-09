@@ -1,3 +1,4 @@
+// v18.12: large-S width factor 0.011 + BIG2 dual-width + tiny leftover polish
 // v18.6: BLF2 window n/3 for S<30k (smaller is better for large S)
 // v18: v17 + wider small-path routing, mid-band width factor, small-case budget shift.
 // - S < 6000: sweep+phase2 end early (25%/35% of TL) so the capped-restart ILS loop gets
@@ -883,7 +884,7 @@ int main() {
     else if (S < 10000) factor = 0.27;
     else if (S < 30000) factor = 0.08;
     else if (S < 50000) factor = 0.028;  // measured optimum W~33 at S~38k (was 0.01 -> W~19)
-    else factor = 0.009;                 // measured optimum W~24-28 at S~58-96k
+    else factor = 0.011;                 // v18.12: was 0.009 -> W~23; aim W~26 at S~62k
     int base = max(minW, (int)floor(sqrt((double)S * factor)));
     if (const char* e = getenv("PP_BASEW")) { int v = atoi(e); if (v >= minW && v <= 4000) base = v; }
 
@@ -1001,7 +1002,7 @@ int main() {
         if (big) {
             // aim adaptation just short of the panic threshold; panic mode guarantees completion
             double reserve = max(30.0, n * 0.006);
-            int BIG2 = envInt("PP_BIG2", 0);
+            int BIG2 = envInt("PP_BIG2", 1); // v18.12: dual-width on big path
             if (BIG2) {
                 double half = (SEARCH_END - reserve - t1) * 0.5;
                 double panic1 = t1 + half;
@@ -1180,6 +1181,29 @@ R r = (BLF2 && S < B2RESTS) ? (B3 ? pack_blf3(W, obuf, max(1, n / (S > 30000 ? 5
         }
     }
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_search_done=%.1f\n", elapsed_ms());
+
+    // leftover polish for tiny instances that finish early
+    if (S < 2500 && bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() + 80.0 < TL_MS) {
+        double polishEnd = TL_MS - 5.0;
+        vector<int> pOrd(n);
+        for (int i = 0; i < n; i++) pOrd[i] = bestR.pl[i].idx;
+        int baseW = bestR.packW;
+        double avgP = 8.0; int cntP = 0;
+        RNG prng(seed ^ 0xA5A5A5A5ULL);
+        while (elapsed_ms() + avgP * 1.15 < polishEnd) {
+            int W = max(minW, min(64, baseW + (int)(prng.nxt() % 5) - 2));
+            vector<int> ord = pOrd;
+            for (int k = 0, sw = 1 + (int)(prng.nxt() % 5); k < sw; k++)
+                swap(ord[prng.rint(n)], ord[prng.rint(n)]);
+            double t0 = elapsed_ms();
+            R r = pack_blf3(W, ord, max(1, n / 3), polishEnd, prng, true);
+            avgP = (avgP * cntP + (elapsed_ms() - t0)) / (cntP + 1); cntP++;
+            if (!r.ok) break;
+            crownRepack(r, polishEnd);
+            if (better(r, bestR)) { pOrd = ord; baseW = r.packW > 0 ? r.packW : W; bestR = move(r); }
+        }
+    }
+
     // final polish on the global best
     crownRepack(bestR, TL_MS + 10.0);
     if (getenv("PP_DEBUG")) fprintf(stderr, "t_crown_done=%.1f\n", elapsed_ms());
