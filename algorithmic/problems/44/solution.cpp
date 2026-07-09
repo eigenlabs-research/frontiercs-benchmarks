@@ -11,7 +11,7 @@
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 2250.0;
+static double TL_MS = 2400.0;
 static inline double el_ms(){ return chrono::duration<double,milli>(chrono::steady_clock::now()-T0).count(); }
 
 static int N;
@@ -39,6 +39,13 @@ int main(){
     if(N==1){ printf("2\n0\n0\n"); return 0; }
     if(N==2){ printf("3\n0\n1\n0\n"); return 0; }
 
+    // prime table over city ids (penalty: every 10th step costs 1.1x unless source id is prime)
+    vector<char> pr((size_t)N,0);
+    { vector<char> comp((size_t)N,0); for(long long i=2;i<N;i++) if(!comp[i]){ pr[i]=1; for(long long q=i*i;q<N;q+=i) comp[q]=1; } }
+    if(N>100000) TL_MS -= 20.0;
+    double RESERVE = N>150000?220.0:(N>50000?90.0:(N>5000?50.0:40.0));
+    TL_MS -= RESERVE; // reserve tail for penalty-aware polish
+
     // ---- spatial grid (~2 pts/cell) ----
     double minx=X[0],maxx=X[0],miny=Y[0],maxy=Y[0];
     for(int i=1;i<N;i++){ minx=min(minx,X[i]);maxx=max(maxx,X[i]);miny=min(miny,Y[i]);maxy=max(maxy,Y[i]); }
@@ -53,7 +60,7 @@ int main(){
     vector<int> bucket(N); { vector<int> tmp=cnt; for(int i=0;i<N;i++) bucket[tmp[cellOf[i]]++]=i; }
 
     // ---- k nearest neighbors per city ----
-    int K=min(N-1, N>50000?6:(N>5000?8:10));
+    int K=min(N-1, N>50000?6:(N>5000?8:(N>1000?10:14)));
     vector<int> nbr((size_t)N*K,-1);
     {
         vector<pair<double,int>> cand; cand.reserve(128);
@@ -173,6 +180,28 @@ int main(){
         return anyImp;
     };
 
+    // exhaustive 2-opt pass for tiny N (candidate lists too sparse there)
+    auto fullTwoOptPass=[&]()->bool{
+        bool any=false;
+        for(int i=0;i<N-1;i++){
+            if(el_ms()>TL_MS) return any;
+            int a=order[i];
+            for(int j=i+1;j<N;j++){
+                if(i==0 && j==N-1) continue;
+                int b=order[i+1], c=order[j], d2=order[(j+1)%N];
+                double bef=dist(a,b)+dist(c,d2);
+                double aft=dist(a,c)+dist(b,d2);
+                if(aft+1e-7<bef){
+                    reverse(order.begin()+i+1, order.begin()+j+1);
+                    for(int t2=i+1;t2<=j;t2++) pos[order[t2]]=t2;
+                    any=true;
+                }
+            }
+        }
+        return any;
+    };
+    auto lsStep=[&]()->bool{ return N<=140? fullTwoOptPass(): twoOptPass(); };
+
     // ---- Or-opt: relocate a run of L=1..3 cities to sit after a near neighbor ----
     // Implemented as an array rotation of the span between the run's old and new slots,
     // so the cost is proportional to how far the run moves (small: we only try inserting
@@ -248,7 +277,7 @@ int main(){
     // Local search to convergence: alternate 2-opt and Or-opt until neither improves.
     auto localSearch=[&](){
         while(el_ms()<TL_MS){
-            bool a=false; while(el_ms()<TL_MS){ if(!twoOptPass()){break;} a=true; }
+            bool a=false; while(el_ms()<TL_MS){ if(!lsStep()){break;} a=true; }
             bool b=false;
             if(N<=50000){ fill(dontlook.begin(),dontlook.end(),0); b=orOptPass(); if(b) fill(dontlook.begin(),dontlook.end(),0); }
             if(!a && !b) break;
@@ -257,12 +286,28 @@ int main(){
     };
     localSearch();
 
-    // ---- ILS: perturb (double-bridge) + re-optimize, keep best, until deadline ----
+    // exact penalized cost of the output tour (rotation fixed: city 0 leads);
+    // dir=0 forward, dir=1 reversed traversal of the cyclic order
+    auto evalDir=[&](int dir)->double{
+        int z=pos[0]; double L=0; int prev=0;
+        for(int t=1;t<=N;t++){
+            int idx = dir==0 ? (z+t)%N : (z-(t%N)+N)%N;
+            int b=order[idx];
+            double d=dist(prev,b);
+            if(t%10==0 && !pr[prev]) d*=1.1;
+            L+=d; prev=b;
+        }
+        return L;
+    };
+    auto evalBest=[&](int&dir)->double{
+        double f=evalDir(0), r=evalDir(1);
+        if(f<=r){ dir=0; return f; } dir=1; return r;
+    };
+
+    // ---- ILS: perturb (double-bridge) + re-optimize, keep best (penalized), until deadline ----
+    vector<int> best=order; int bestDir=0;
+    double bestLen=evalBest(bestDir);
     if(N>=8){
-        // best tour snapshot
-        vector<int> best=order;
-        auto tourLen=[&]()->double{ double L=0; for(int i=0;i<N;i++) L+=dist(order[i],order[nextIdx(i)]); return L; };
-        double bestLen=tourLen();
         uint64_t rng=0x9e3779b97f4a7c15ULL ^ (uint64_t)N*2654435761ULL;
         auto rnd=[&](){ rng^=rng<<7; rng^=rng>>9; return rng; };
         while(el_ms()<TL_MS){
@@ -279,55 +324,56 @@ int main(){
             for(int i=0;i<N;i++) pos[order[i]]=i;
             // re-optimize only the disturbed neighborhood cheaply: wake all, 2-opt to convergence
             fill(dontlook.begin(),dontlook.end(),0);
-            while(el_ms()<TL_MS){ if(!twoOptPass()) break; }
-            if(N<=50000){ fill(dontlook.begin(),dontlook.end(),0); orOptPass(); while(el_ms()<TL_MS){ if(!twoOptPass()) break; } }
-            double L=tourLen();
-            if(L<bestLen-1e-6){ bestLen=L; best=order; }
+            while(el_ms()<TL_MS){ if(!lsStep()) break; }
+            if(N<=50000){ fill(dontlook.begin(),dontlook.end(),0); orOptPass(); while(el_ms()<TL_MS){ if(!lsStep()) break; } }
+            int d2=0; double L=evalBest(d2);
+            if(L<bestLen-1e-6){ bestLen=L; best=order; bestDir=d2; }
             else { order=best; for(int i=0;i<N;i++) pos[order[i]]=i; } // revert
         }
         order=best; for(int i=0;i<N;i++) pos[order[i]]=i;
     }
 
-    // ---- output rotated so city 0 leads, mathematically exact penalty optimization ----
-    int z=pos[0];
-    
-    vector<char> isPrime(N, true);
-    if(N > 0) isPrime[0] = false;
-    if(N > 1) isPrime[1] = false;
-    for(int i = 2; i * i < N; i++) {
-        if(isPrime[i]) {
-            for(int j = i * i; j < N; j += i) isPrime[j] = false;
+    // ---- materialize chosen direction with city 0 leading ----
+    TL_MS += RESERVE;
+    vector<int> seq(N);
+    { int z=pos[0]; for(int i=0;i<N;i++) seq[i]= bestDir==0? order[(z+i)%N] : order[(z-i+N)%N]; }
+
+    // ---- penalty polish: swap a nearby prime into each penalized source slot (exact delta) ----
+    if(N>=12){
+        auto sAt=[&](int p)->int{ return p<N? seq[p]:0; };
+        auto stepCost=[&](int t)->double{ int a=seq[t-1], b=sAt(t); double d=dist(a,b); if(t%10==0&&!pr[a]) d*=1.1; return d; };
+        int w = N<=1200? N : (N<=5000?120:(N<=20000?140:80));
+        for(int rep=0;rep<4 && el_ms()<TL_MS;rep++){
+            bool ch=false;
+            for(int p=9;p<N;p+=10){
+                if(el_ms()>TL_MS) break;
+                if(pr[seq[p]]) continue;
+                int lo=max(1,p-w), hi=min(N-1,p+w);
+                double bd=-1e-7; int bj=-1;
+                for(int j=lo;j<=hi;j++){
+                    if(j==p||!pr[seq[j]]) continue;
+                    int T[4]={p,p+1,j,j+1}, U[4], m=0;
+                    for(int t2=0;t2<4;t2++){ bool dup=false; for(int u=0;u<m;u++) if(U[u]==T[t2]) dup=true; if(!dup) U[m++]=T[t2]; }
+                    double bef=0, aft=0;
+                    for(int u=0;u<m;u++) bef+=stepCost(U[u]);
+                    swap(seq[p],seq[j]);
+                    for(int u=0;u<m;u++) aft+=stepCost(U[u]);
+                    swap(seq[p],seq[j]);
+                    double dl=aft-bef;
+                    if(dl<bd){ bd=dl; bj=j; }
+                }
+                if(bj>=0){ swap(seq[p],seq[bj]); ch=true; }
+            }
+            if(!ch) break;
         }
     }
-    
-    double cost_fwd = 0, cost_rev = 0;
-    for(int i = 1; i <= N; i++) {
-        int a_fwd = order[(z + i - 1) % N];
-        int b_fwd = order[(z + i) % N];
-        double d_fwd = dist(a_fwd, b_fwd);
-        if(i % 10 == 0 && !isPrime[a_fwd]) d_fwd *= 1.1;
-        cost_fwd += d_fwd;
-        
-        int a_rev = order[(z - (i - 1) % N + N) % N];
-        int b_rev = order[(z - i % N + N) % N];
-        double d_rev = dist(a_rev, b_rev);
-        if(i % 10 == 0 && !isPrime[a_rev]) d_rev *= 1.1;
-        cost_rev += d_rev;
-    }
-    
-    if(cost_rev < cost_fwd) {
-        vector<int> rev_order(N);
-        for(int i=0; i<N; i++) rev_order[i] = order[(z - i % N + N) % N];
-        order = rev_order;
-        z = 0;
-    }
 
+    // ---- output ----
     string out; out.reserve((size_t)N*7+16);
     out+=to_string(N+1); out+='\n';
-    for(int i=0;i<N;i++){ out+=to_string(order[(z+i)%N]); out+='\n'; }
+    for(int i=0;i<N;i++){ out+=to_string(seq[i]); out+='\n'; }
     out+="0\n";
     fwrite(out.data(),1,out.size(),stdout);
     fflush(stdout);
     _Exit(0);
 }
-// AVALHACAR
