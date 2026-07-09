@@ -1272,7 +1272,7 @@ int main() {
         int lateHcap = max(1, (int)(bestR.A / lateW) - 1);
         if (lateHcap >= minW) {
             for (int attempt = 0; attempt < LATE && elapsed_ms() < SOFT_END - 10; attempt++) {
-                vector<int> randOrd = idx;
+                vector<int> randOrd = (attempt % 2) ? ordBLF : ordB2;
                 int ns = max(1, n / 3);
                 for (int s = 0; s < ns; s++) { int a = rng.rint(n), b = rng.rint(n); swap(randOrd[a], randOrd[b]); }
                 // BLF3 is faster (cached) - try it first, fall back to capped if it fails
