@@ -1,6 +1,3 @@
-// Sphere Packing in a Cube (C++17). Embedded best-known configs (n<=120,
-// Specht/Gensane tables, 12-bit quantized+Z85) + lattice warm starts +
-// push-apart inflation with kicks + anisotropic expand-to-fill + fine polish.
 #include <cstdio>
 #include <cmath>
 #include <vector>
@@ -9,23 +6,22 @@
 #include <chrono>
 #include <random>
 #include <cstdlib>
-
 using namespace std;
-
+using P3=array<double,3>;
+using VP=vector<P3>;
 using Clock = chrono::steady_clock;
 static Clock::time_point T0;
 static inline double elapsed(){
     return chrono::duration<double>(Clock::now()-T0).count();
 }
 static double TIME_LIMIT = 0.86;
-
 static inline double clamp01(double x){ return x<0.0?0.0:(x>1.0?1.0:x); }
 static inline double dist_face(double x,double y,double z){
     double df=x; if(y<df)df=y; if(z<df)df=z;
     double t=1.0-x; if(t<df)df=t; t=1.0-y; if(t<df)df=t; t=1.0-z; if(t<df)df=t;
     return df;
 }
-static double geomRadius(const vector<array<double,3>>& c){
+static double gRad(const VP& c){
     int n=(int)c.size();
     if(n==0) return 0.0;
     double dface=1e18;
@@ -42,13 +38,12 @@ static double geomRadius(const vector<array<double,3>>& c){
     }
     return min(dface, 0.5*sqrt(mind2));
 }
-
 struct Grid {
-    int G;            // cells per axis
-    double h;         // cell size
-    vector<int> head; // head[cell] = first point index or -1
-    vector<int> nxt;  // nxt[i] = next point in same cell
-    void build(const vector<array<double,3>>& p, double cell){
+    int G;
+    double h;
+    vector<int> head;
+    vector<int> nxt;
+    void build(const VP& p, double cell){
         int n=(int)p.size();
         h = cell>1e-9 ? cell : 1e-9;
         G = (int)floor(1.0/h)+1; if(G<1) G=1;
@@ -66,8 +61,7 @@ struct Grid {
         int c=(int)floor(v/h); if(c<0)c=0; if(c>=G)c=G-1; return c;
     }
 };
-
-static double geomFast(const vector<array<double,3>>& p, double hintR){
+static double gFst(const VP& p, double hintR){
     int n=(int)p.size();
     if(n==0) return 0.0;
     double dface=1e18;
@@ -91,18 +85,17 @@ static double geomFast(const vector<array<double,3>>& p, double hintR){
             }
         }}}
     }
-    if(mind2>1e17) return dface; // no neighbor within 2 cells
+    if(mind2>1e17) return dface;
     return min(dface, 0.5*sqrt(mind2));
 }
-
 static std::mt19937 RNG(12345);
-static double pushSweep(vector<array<double,3>>& p, double r, double relax){
+static double pSwp(VP& p, double r, double relax){
     int n=(int)p.size();
     double D=2.0*r, lo=r, hi=1.0-r;
     if(hi<lo){ for(auto& q:p){ q[0]=0.5;q[1]=0.5;q[2]=0.5; } return 0.0; }
     Grid g; g.build(p, D);
     int G=g.G;
-    static vector<array<double,3>> disp;
+    static VP disp;
     disp.assign(n, {0.0,0.0,0.0});
     double D2=D*D;
     double maxOv=0.0;
@@ -144,8 +137,7 @@ static double pushSweep(vector<array<double,3>>& p, double r, double relax){
     }
     return maxOv;
 }
-
-static vector<array<double,3>> cubicGrid(int n){
+static VP cGrid(int n){
     int best_max=2000000000, bm=1,bk=1,bl=1;
     int root=(int)ceil(pow((double)n,1.0/3.0))+2;
     for(int m=1;m<=root;m++){
@@ -162,7 +154,7 @@ static vector<array<double,3>> cubicGrid(int n){
         }
     }
     double s=1.0/(double)max(bm,max(bk,bl));
-    vector<array<double,3>> pts; pts.reserve(n);
+    VP pts; pts.reserve(n);
     for(int i=0;i<bm && (int)pts.size()<n;i++)
         for(int j=0;j<bk && (int)pts.size()<n;j++)
             for(int l=0;l<bl && (int)pts.size()<n;l++)
@@ -170,8 +162,7 @@ static vector<array<double,3>> cubicGrid(int n){
     while((int)pts.size()<n) pts.push_back({0.5,0.5,0.5});
     return pts;
 }
-
-static int countFCC_r(double r,double ox,double oy,double oz){
+static int cFCC(double r,double ox,double oy,double oz){
     double s=2.0*sqrt(2.0)*r; double lo=r,hi=1.0-r;
     if(hi<lo-1e-15) return 0;
     if(ox<0)ox=lo; if(oy<0)oy=lo; if(oz<0)oz=lo;
@@ -187,9 +178,9 @@ static int countFCC_r(double r,double ox,double oy,double oz){
     }
     return cnt;
 }
-static vector<array<double,3>> genFCC_r(double r,double ox,double oy,double oz){
+static VP gFCC(double r,double ox,double oy,double oz){
     double s=2.0*sqrt(2.0)*r; double lo=r,hi=1.0-r;
-    vector<array<double,3>> pts; if(hi<lo-1e-15) return pts;
+    VP pts; if(hi<lo-1e-15) return pts;
     if(ox<0)ox=lo; if(oy<0)oy=lo; if(oz<0)oz=lo;
     double basis[4][3]={{0,0,0},{0.5,0.5,0},{0.5,0,0.5},{0,0.5,0.5}};
     for(int b=0;b<4;b++){
@@ -204,8 +195,7 @@ static vector<array<double,3>> genFCC_r(double r,double ox,double oy,double oz){
     }
     return pts;
 }
-
-static int countHCP_r(double r,double ox,double oy,double oz){
+static int cHCP(double r,double ox,double oy,double oz){
     double s=2.0*r; double lo=r,hi=1.0-r; if(hi<lo-1e-15) return 0;
     if(ox<0)ox=lo; if(oy<0)oy=lo; if(oz<0)oz=lo;
     double h=s*sqrt(2.0/3.0); double sy=s*sqrt(3.0)/2.0; int cnt=0;
@@ -221,8 +211,8 @@ static int countHCP_r(double r,double ox,double oy,double oz){
     }
     return cnt;
 }
-static vector<array<double,3>> genHCP_r(double r,double ox,double oy,double oz){
-    double s=2.0*r; double lo=r,hi=1.0-r; vector<array<double,3>> pts; if(hi<lo-1e-15) return pts;
+static VP gHCP(double r,double ox,double oy,double oz){
+    double s=2.0*r; double lo=r,hi=1.0-r; VP pts; if(hi<lo-1e-15) return pts;
     if(ox<0)ox=lo; if(oy<0)oy=lo; if(oz<0)oz=lo;
     double h=s*sqrt(2.0/3.0); double sy=s*sqrt(3.0)/2.0;
     int kmin=(int)ceil((lo-oz)/h-1e-9), kmax=(int)floor((hi-oz)/h+1e-9);
@@ -239,13 +229,12 @@ static vector<array<double,3>> genHCP_r(double r,double ox,double oy,double oz){
     }
     return pts;
 }
-
-static vector<array<double,3>> pruneMaxMin(vector<array<double,3>> pts,int keep){
+static VP pMM(VP pts,int keep){
     int n=(int)pts.size(); if(n<=keep) return pts;
     int start=0; double bw=-1;
     for(int i=0;i<n;i++){ double w=dist_face(pts[i][0],pts[i][1],pts[i][2]); if(w>bw){bw=w;start=i;} }
     vector<char> used(n,0); used[start]=1;
-    vector<array<double,3>> res; res.push_back(pts[start]);
+    VP res; res.push_back(pts[start]);
     vector<double> mind(n,1e18);
     for(int i=0;i<n;i++) if(!used[i]){
         double dx=pts[i][0]-pts[start][0], dy=pts[i][1]-pts[start][1], dz=pts[i][2]-pts[start][2];
@@ -268,10 +257,9 @@ static vector<array<double,3>> pruneMaxMin(vector<array<double,3>> pts,int keep)
     }
     return res;
 }
-
-static double expandFill(vector<array<double,3>>& p, double rHint){
+static double xFill(VP& p, double rHint){
     int n=(int)p.size(); if(n==0) return 0.0;
-    double r = geomFast(p, rHint>1e-9?rHint:0.01);
+    double r = gFst(p, rHint>1e-9?rHint:0.01);
     for(int it=0; it<4; it++){
         if(r>=0.5) break;
         double mn[3]={1e18,1e18,1e18}, mx[3]={-1e18,-1e18,-1e18};
@@ -293,18 +281,16 @@ static double expandFill(vector<array<double,3>>& p, double rHint){
             }
         }
         if(!changed) break;
-        double r2 = geomFast(p, r);
+        double r2 = gFst(p, r);
         if(r2<=r+1e-15){ r=r2; break; }
         r=r2;
     }
     return r;
 }
-
 typedef int(*CntFn)(double,double,double,double);
-typedef vector<array<double,3>>(*GenFn)(double,double,double,double);
-
-static double findMaxR(CntFn cnt, GenFn gen, int n, double ox,double oy,double oz,
-                       vector<array<double,3>>& outpts){
+typedef VP(*GenFn)(double,double,double,double);
+static double fMxR(CntFn cnt, GenFn gen, int n, double ox,double oy,double oz,
+                       VP& outpts){
     double lo=0.0005, hi=0.5;
     if(cnt(lo,ox,oy,oz) < n) return -1.0;
     for(int it=0; it<50; it++){
@@ -321,9 +307,8 @@ static double findMaxR(CntFn cnt, GenFn gen, int n, double ox,double oy,double o
     outpts=pts;
     return bestRr;
 }
-
-static double tryLattice(CntFn cnt, GenFn gen, int n, double& bestR,
-                         vector<array<double,3>>& bestP, double tcap){
+static double tLat(CntFn cnt, GenFn gen, int n, double& bestR,
+                         VP& bestP, double tcap){
     static const double offs[][3]={
         {-1,-1,-1},{0,0,0},{-1,-1,0},{-1,0,0},
         {0.25,0.25,0.25},{0.125,0.125,0.125},
@@ -333,18 +318,17 @@ static double tryLattice(CntFn cnt, GenFn gen, int n, double& bestR,
     int nof = 11;
     for(int oi=0; oi<nof && elapsed()<tcap; ++oi){
         const double* o = offs[oi];
-        vector<array<double,3>> p;
-        double r=findMaxR(cnt,gen,n,o[0],o[1],o[2],p);
+        VP p;
+        double r=fMxR(cnt,gen,n,o[0],o[1],o[2],p);
         if(r<=0) continue;
-        auto pr=pruneMaxMin(p,n);
+        auto pr=pMM(p,n);
         if((int)pr.size()!=n) continue;
-        double rr=expandFill(pr, r);
+        double rr=xFill(pr, r);
         if(rr>bestR){ bestR=rr; bestP=pr; }
     }
     return bestR;
 }
-
-static inline void jitter(vector<array<double,3>>& p, double amp){
+static inline void jitter(VP& p, double amp){
     std::uniform_real_distribution<double> U(-1.0,1.0);
     int n=(int)p.size();
     for(int i=0;i<n;i++){
@@ -352,8 +336,7 @@ static inline void jitter(vector<array<double,3>>& p, double amp){
         p[i][0]=x<0?0:(x>1?1:x); p[i][1]=y<0?0:(y>1?1:y); p[i][2]=z<0?0:(z>1?1:z);
     }
 }
-
-static void teleportKick(vector<array<double,3>>& p, double r){
+static void tKick(VP& p, double r){
     int n=(int)p.size(); if(n<3) return;
     int bi=0,bj=1; double bd2=1e18;
     for(int i=0;i<n;i++)for(int j=i+1;j<n;j++){
@@ -364,9 +347,9 @@ static void teleportKick(vector<array<double,3>>& p, double r){
     int mv=(RNG()&1)?bi:bj;
     double lo=r,hi=1.0-r; if(hi<lo){lo=hi=0.5;}
     std::uniform_real_distribution<double> U(lo,hi);
-    double bv=-1; array<double,3> bx{0.5,0.5,0.5};
+    double bv=-1; P3 bx{0.5,0.5,0.5};
     for(int k=0;k<60;k++){
-        array<double,3> x{U(RNG),U(RNG),U(RNG)};
+        P3 x{U(RNG),U(RNG),U(RNG)};
         double v=dist_face(x[0],x[1],x[2]);
         for(int i=0;i<n;i++){ if(i==mv)continue;
             double dx=x[0]-p[i][0],dy=x[1]-p[i][1],dz=x[2]-p[i][2];
@@ -376,22 +359,20 @@ static void teleportKick(vector<array<double,3>>& p, double r){
     }
     p[mv]=bx;
 }
-
-static bool inflateTo(vector<array<double,3>>& p, double target, int sweepCap,
+static bool infTo(VP& p, double target, int sweepCap,
                       double deadline, double sor){
     double tol = 2e-7*target;
     double bestOv=1e18; int noimp=0;
     for(int s=0; s<sweepCap; s++){
         if((s&3)==0 && elapsed()>deadline) return false;
-        double ov = pushSweep(p, target, sor);
+        double ov = pSwp(p, target, sor);
         if(ov < tol) return true;
         if(ov < bestOv*0.997){ bestOv=ov; noimp=0; }
         else if(++noimp >= 14) return false;
     }
     return false;
 }
-
-static void optimize(vector<array<double,3>>& best, double& bestR, double deadline,
+static void optimize(VP& best, double& bestR, double deadline,
                      int sched){
     int n=(int)best.size();
     if(n<2) return;
@@ -400,62 +381,57 @@ static void optimize(vector<array<double,3>>& best, double& bestR, double deadli
     int    stagMax = sched?12:40;
     double kick0   = 0.20, kmin = 0.02;
     double sor     = sched?1.5:1.0;
-
-    vector<array<double,3>> cur=best;
-    if(sched) jitter(cur, 0.05*bestR);   // break lattice symmetry ties
-    for(int s=0;s<20 && elapsed()<deadline;s++) pushSweep(cur, bestR, sor);
-    double curR=geomFast(cur,bestR);
+    VP cur=best;
+    if(sched) jitter(cur, 0.05*bestR);
+    for(int s=0;s<20 && elapsed()<deadline;s++) pSwp(cur, bestR, sor);
+    double curR=gFst(cur,bestR);
     if(curR>bestR){ bestR=curR; best=cur; } else cur=best;
-
     double kick=kick0;
     int stagn=0, tk=0;
     while(elapsed()<deadline){
         double target=curR*grow; if(target>0.5) target=0.5;
-        for(int s=0;s<grS && elapsed()<deadline;s++) pushSweep(cur, target, sor);
-        double r=geomFast(cur,target);
+        for(int s=0;s<grS && elapsed()<deadline;s++) pSwp(cur, target, sor);
+        double r=gFst(cur,target);
         curR=r;
         if(r>bestR+1e-12){ bestR=r; best=cur; stagn=0; }
         else stagn++;
         if(stagn>=stagMax){
             cur=best;
-            if(n<=350 && (tk^=1)) teleportKick(cur,bestR);
+            if(n<=350 && (tk^=1)) tKick(cur,bestR);
             else jitter(cur, kick*2.0*bestR);
-            for(int s=0;s<grS+4 && elapsed()<deadline;s++) pushSweep(cur, bestR, sor);
-            curR=geomFast(cur,bestR);
+            for(int s=0;s<grS+4 && elapsed()<deadline;s++) pSwp(cur, bestR, sor);
+            curR=gFst(cur,bestR);
             stagn=0;
             kick*=0.85; if(kick<kmin) kick=kmin;
         }
     }
 }
-
-static void microPolish(vector<array<double,3>>& best, double& bestR, double deadline){
+static void mPol(VP& best, double& bestR, double deadline){
     int n=(int)best.size();
     if(n<2) return;
-    vector<array<double,3>> cur=best;
+    VP cur=best;
     double e=2e-3;
     while(e>5e-8 && elapsed()<deadline){
         double t=bestR*(1.0+e); if(t>0.5) t=0.5;
         bool conv=false;
         for(int s=0;s<300;s++){
             if((s&3)==0 && elapsed()>deadline) break;
-            double ov=pushSweep(cur,t,1.0);
+            double ov=pSwp(cur,t,1.0);
             if(ov<1e-9*t){ conv=true; break; }
         }
-        double rn=geomFast(cur,t);
+        double rn=gFst(cur,t);
         if(rn>bestR+1e-15){ bestR=rn; best=cur; if(conv) e*=1.6; }
         else { cur=best; e*=0.5; }
         if(t>=0.5) break;
     }
 }
-
-static vector<array<double,3>> randomConfig(int n){
+static VP rCfg(int n){
     std::uniform_real_distribution<double> U(0.02,0.98);
-    vector<array<double,3>> p(n);
+    VP p(n);
     for(int i=0;i<n;i++){ p[i]={U(RNG),U(RNG),U(RNG)}; }
     return p;
 }
-
-static void relaxOptimize(vector<array<double,3>>& best, double& bestR){
+static void rOpt(VP& best, double& bestR){
     int n=(int)best.size();
     if(n<2) return;
     if(n<=350){
@@ -468,10 +444,10 @@ static void relaxOptimize(vector<array<double,3>>& best, double& bestR){
         double slice = (TIME_LIMIT - reserve - elapsed()) / restarts;
         if(slice > 0.01){
             for(int rs=0; rs<restarts && elapsed()<TIME_LIMIT-reserve; rs++){
-                vector<array<double,3>> cand;
+                VP cand;
                 if(rs&1){ cand=best; jitter(cand, (0.6+0.1*rs)*bestR); }
-                else cand = randomConfig(n);
-                double candR = geomFast(cand, 0.4/pow((double)n,1.0/3.0));
+                else cand = rCfg(n);
+                double candR = gFst(cand, 0.4/pow((double)n,1.0/3.0));
                 double dl = min(TIME_LIMIT-reserve, elapsed()+slice);
                 optimize(cand, candR, dl, 1);
                 if(candR > bestR){ bestR=candR; best=cand; }
@@ -481,10 +457,9 @@ static void relaxOptimize(vector<array<double,3>>& best, double& bestR){
     } else {
         optimize(best, bestR, TIME_LIMIT, 0);
     }
-    double r=expandFill(best, bestR);
+    double r=xFill(best, bestR);
     if(r>bestR) bestR=r;
 }
-
 static const int EMB_NMAX = 120;
 static const char* EMB[] = {
 "q7dVe*u<2lMp>y#dqIKV^W0JLTU#AKR7DyOt5tWfiVXrDl/5yz1uV+QC!vugS6?*xDw5#*/HOyQ{v=wpU=&nYSSr9INXhqcBohEzhm]Il>Nk8X%9}!R5c@Wu0rvU+PFc6i0S-sKZO0mz3&Q88F4}M1>x]OJ)SVO&[FD[>0S-o.O:^LHZ98)2-9$CrGk[ASnh?GE/=$R:bYl*Kaq(Ng0nIFlqvRq7C1TbL:Z*x2QF%$wybGM%sZm@bdR-W&PB.y2rWqAqwOo2:U2XX<hdZ*sq=fHyMnGO.cAKvH!CRquu+4MLrSJdS8NulwU2^8/+d(<Lt=}cTybD{nRLv8(0bsx5o<7-2SSl^:wND5P237.shdZ*9TGhE7L@ib[XM(pp!m{<Lo?85:0mU=aNZfF5q#>CGh9-o4soFWaM4f^jsZm@bd/+9ho<7-7s1xK<7(Rvl5SnZJf=l.Gc<B!jOZaV1RyhF6i@<^@ao<58O=AlB>uw?M6AZzG=GxnV?06v8v9+hG4P^v@^%rX+gV/7uSLX3RiB1HkqgV)S=/:rtQxNHz&KP<Th>{zakC9<D&[snbR5S>%mt@31V4pw@fLwPn&@Rl?(5dO@8tu>CkiW$xbh8Y:sIU=.X]WPWAF3GFfLxy<OC)#$Pd?8<6h[{.L(JHJ&06n/E8dX^M(ev027jk!fHc-]soFU&PmyOC[b&Yzkq+cc/?-aREGu5{xy>.1@^qv+fgMz?)f!PWuYptw*4a&(lsLEfMQQoHDOw@VUs)ju4eG#h^8}o)Id}(1Pu.abcf3tbg*XL)tLYdTq:Mu[MF(X$/>}Nf^OHr<4fp@zvka2tI$*B(XUNUpeyeKSZ5m<YMF(:Rb-+G2PCR+C{Yl1jtvlRKK4*>En2i-Xg>&l*z+a7:MH])AcxLXpqKDwSQzY6(RoRsuS-6(sV$1RKap[YeASGv?kN.Ps!]y^{FgkM33F6g8tHEi[Dp3FLnU<^G8Pv(YwVP4-n>Q}gf>SEQf{}M!i0ol+sUc$/*gEX)1PQ?Naq-Vk0S^.1x]s:f=ydViFl$#ZjMZYBOrPsY*gE^XVNKuXWaY09v6G/07bbc[.u6{zEQynpEk$!jsvi&X>Xis(0dv5Dh0]I*vO)cwv4W%SjotDZMfDEdLe:9:ss!gAxBNc6}klFy]Zy05PhhxlZZxgzX!83)Fecl3VC3UusjuAS56Wcep//%#&0*{}vFIG9Z+(MH1oFP7e9Xk}D>W4>SfVYQ{P?ZF1xWi?&aH>fQ5?iyolyImmXYTQ!d)>WxAt6kNr+79fxflvb39dSo3^$gyF[g#nm5v:o>A3VF4T/gxyRP(%b32F>hJ-IqN86Ca^M$uRWGEOxY69ZnM-9]h:xkYM>(H1SNO.ai*cEwTeWUmoB}ob13PZm(wAfPqc0V%fLWl+2QwZDHK}.FMXTBBS@KSpar4uV0kUW=kg5^(.%N*cF)F!*4eZicPdlaGtb5g10ast&&2nt)T5VgIykO&=Tn]n2!FgYMsohC604Nob1YzI4S@QV+BY$Jsri31H6<}@OTn]p3FiUj*4o9xerN<tS8Mi>vrraIlBX&dxT5J9H6<}@U1oRV7Fnf$MTYby5S)$<(oK:bPQ@B&U809t=<Fo.+L=3N<MB9C=dqIVO?d)%g-:YZuoLb^}K2SW+>lig[E{h>3n1$sTL&(mhOx.#yRxFMQim=x$}N<=cRl8f=]$5ZjWgrR}:MCRuzNS!EdhnWab9J[6qR5agmjDtJB2+W7Wwti8nSx&3f]wUph06Xov[{dW/#>keTZ+aGTyvq:B2+WAsJ>H8Wt^f}pg(wJ+&K?^OA>s7Mn83oqE:GPenYevBfj3sB*ESRW4{OGpd^@4gz(%<v?:/0L9C9HqE:Gmthr):J8Be3n>-YT8i3T^f{{BQhNWUCdqJ5mOOG7rqK(38q<GiTBfe}En(Ie4>5SK)yIbY:y#{QN!%8MQ/#>sr-*(vqVZ>{}tDGs*IC]X2nSpUryGOL1L&OV3OrPz{^W4vCqEZAd*r#f4"
@@ -501,14 +476,14 @@ static const char* EMB[] = {
 "p3]&CHW){Q{zkd<P=kx[<Azn%=v[{Gt-1c+88omBXG5.#O2qBly{]IZm-gz-:W?]ideQxfLyF-sO.a6cO{Vyd:#I8pU?D^a8-Ck?L0p7a:(FE>bvO5b!hz*Em-f1X/XKT*dxX5^:0W5jyyM[[a*(5]hK:hZiopCmLA3O=?[%o3xL>(3A^n)rViUn8Je-]^vx{idhBgFn+*WiSN&9ea[fqR//LIHrJJx64WGUku.R^]rlaCY!WJ<3zGO^.{Os[@bXHEVMctlYC[>.XZViUo>k[f]]bOyy^F@Dv<QHU2}NU3G>Kxbk:r+l.ORTJ=Y}FweEBeH2Hb)BcSRGqrc*)p6%K#up0XHK9ib#@74VQS1.y6XUs<Fb#z?B<A->5=X<e%/cc!rDogRkVyKx/baxoX(38.)0#@Chp{-/8sZ{:^x+N9ga8b@p/pyv<tA?O02W[4F.!0&Weh>Z0a2sNwjbMh5^]Q4CtpJ65/v<q1H8VzGQh?=Gd0M[[-eb8+K+>K*LBTE4/zxh&F)k[hwbt^p?p]acR9kQ3{Q:T[/uUZQd{C@.eHRfHYxBt:#!lq?NJYU+LTn9{W%/JHOOmpBvdw8/!A%zB&JC:SI=/c}<N^5ie:CtB.1ucZ97K[()(foN=PPLqUASV9#7w:(It8jE=f{LGs<oC}A]fcGE67iFLB![yW[08Z6zJwd00^=a:ZQU3[XIK#wZqHsour*hL)/vl2MGt.)mswSqC.&Kp7OjIdrdjE:es^T-+[2fmM#b)8tVav:FG2?$I[8+=tw8$Bdl>0rve:xPxU4AQ{W}8<)v*cyRT:<F.{*d(Qwo/-H2R:Ar#OiS%]17Z=ILfEQ@Nw.f1g&hq^PK{)BWFuDp8-vByRPg4C/}jm[h%AzF42n+gXH)TiqnCf5iH{A(gOMU!p7r-%q#ryD+8zs<f{V-8gj^hfm:&!a<c7?J+4jW#TGDV3MeI9^:<+]JEJ7%vc(Fkwz8a<QcqGEI:<wq2Lg=3]pBo:k8+<kJ(NpG=wKb*7]qnwA3N9gdeTI%w3IRVP?-h]%)FNiqpbu?lH%t^fhOTon{Vgd[@7&nUOF%VW/:01FPFe]lW-048<NNNUK*9P6hFvb67evEd3=#dkivSjdc8@(:X?7HXlPph-<NM]s9.=Mc:?GUch%YSO05&{ep<!<dZ?+[]JFt&yViFDfk^J@35Wo@T85>wdbwg3Sz5Bo4QB:*2KPECQuXWqoU?Lu%8/*iGvyBmvgNTzA)S8pUL1OO>n=j?b2fF??JFtH*3iZF?w$R%PLNxvqFG4-*eyy:dLykZop:]SD+}gY=c9PH@*@W^fB8>h[YyG*-gemsA:?daTlcgyJ2%sI!/-Gz-VST5p+qxtVx2Wr:![LxcE.N[uqZTRwLil)DOCX!sO[l2+[{8<f*@W>$o$y6GMPHVl>F63FXfnh=zgW.aNx.)U*a[jA--Y6JL1LWdZA/WPea?0.gmrf3^(ARXx6bHP[7:t2NkD={iI}EjOyh7tNSqUOs05=m:SBp-*)^>cLyzO*UHsK!}&-+HA^oRv(VSo-Zf[c6Tq59EGbXd3CChCNy$MOj2g#s89%:+zvi[ESa$=(Kzmol+wiRtXdDDS4jD}{qL7%#%qwWRKvgQE$+SdoypBn$2<JsWYNs/ZED}no@YQ?<]rMTsVC%4lGcZ9r^"
 };
 static const unsigned char EMB_DROP[]={58,59,60,61,62,63,70,71,72,101,102,103,104,105,106,107,108,119,120};
-static bool decodeEmb(int n, vector<array<double,3>>& out){
+static bool dEmb(int n, VP& out){
     if(n<2||n>EMB_NMAX) return false;
     long dropBefore=0;
     for(unsigned char d : EMB_DROP){ if(d==n) return false; if(d<n) dropBefore+=d; }
     static const char* A="0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#";
     static int rev[256]; static bool init=false;
     if(!init){ for(int i=0;i<256;i++)rev[i]=-1; for(int i=0;i<85;i++)rev[(unsigned char)A[i]]=i; init=true; }
-    static string enc; 
+    static string enc;
     if(enc.empty()){ for(size_t k=0;k<sizeof(EMB)/sizeof(EMB[0]);k++) enc += EMB[k]; }
     static vector<unsigned char> bytes;
     if(bytes.empty()){
@@ -523,7 +498,7 @@ static bool decodeEmb(int n, vector<array<double,3>>& out){
     long bitoff = startPt*27;
     out.clear(); out.reserve(n);
     for(int p=0;p<n;p++){
-        array<double,3> pt;
+        P3 pt;
         for(int c=0;c<3;c++){
             long bo=bitoff+((long)p*3+c)*9;
             long byi=bo>>3; int sh=(int)(bo&7);
@@ -536,7 +511,6 @@ static bool decodeEmb(int n, vector<array<double,3>>& out){
     }
     return true;
 }
-
 struct RungT{ unsigned char m; short cnt; };
 static const RungT RG[]={{13,72},{16,122},{20,220},{22,280},{23,320},{26,445},{28,538},{29,600}};
 static const int NRG=8;
@@ -545,7 +519,7 @@ static const char* RGB[]={
 "l2o3RJMinEm:PB7*m#7YzpmvwR=c=@+$OqgmZU%b8RWcAI&O7J4v!szimI#C/Ie&I:9e(#zjshh0fUenF&r*c7=VJd&Zb}0GIrzOaV{lVh1mkG1&MpIL)w&QwjC^NUXNV9Z.8A#6*-E+eEh&Go^nocBat[Sum--$xKpl{dbX0NP-WfjKSu5n1D$?)<5gS85KEKNjMq/ng-CO2o@::4kSTTx6XQseYxzl4f@5eq.EfhHn?#S:>v@d:QhJMULEeEuTquWCA9JyO2x{WI9L+)vMryy8uGO=BBdQVK>:NcEgvy#xewo.RY6jv>*FNXFzFm<*YDI7k<e7i$Zl+wR3/6vCfl{)#Y#y3$0c!Jv00rmR1}haYg/aQ@nR3yl>L#j$bN^i(UXvF:0g0Ws1(68u26.d1qxTEOirsj8xBAe!S1A#f&han<FvU*O2<r8Kg7Yi:U(=!p3jy2LkQR{<v1ntk2eyZl7@!y>zY3n#N8ru/QZQ@QqAH%/v9DEm.{:u0JXINlfI38O>%sP!ub)[A{zL>ExMRR]Q1ySU36C]ac5$D[LtJ4xl8lQG/BTk<RA&^?U)DOb1Qo&r86y-Ju<$3)M[]e<nSi!t:U]C[U?9(B]hl{+o=s@xgP>E$*prMBm[gjLfRezgH<2rWiR4l<m$M!k9pk*>D9(T-!DrU[49<c?VPfNVsM^/]1zzDL=]&GKnR09cbn%DpFxoKeg]7KPOsvFOQie(z(aLKjcyNYpM<3hdRBq]#FZ[ne(qHVYSAAbP!HvIJrC5f-qq!s/q?x&-dR:T^DNVy3Vz)}K0}4@f+lnUyTqUlGV4m-l05+Wg8jgMkqdX$lu7ewIRE92gtb0[Ty0Lq2VPyZPSzd#lwI+#M*sAWryJw0?4oanLhQDg2/3gK<rC6a)zD^Vk&b]m>4C9zyMJw=W91fpdAp&kQZYR^=JbF-?SY{f9h2RdN3>t/+KrJLS.uUP>1f8/fcA4JXq^/)E=4j*T.v}OU2R6!D&C3cpGZx4S4G{CJ>N&ThAMi-[Jt[-Qwi/vsf:e+om0BJb5nAMws/vn(0oHo7}JnVJ5]5YeD7sFu>0-0pOe0&*zewv/SUp4kxIC?6>rd4eWc.ONgGV7qqSas9n!dpgb5gxjQg{BI3-hJxX%!3F8x7BMd4i%GP%3{(GvHTnku4RkTYf>QnN)}4j^pplr+!.k*6$w%x#nk/TVGqe=8>*n0k0/d0@r8Kjh=uM)=dSdZkW7Q[LeCvJD.cJRD:RwOQn9hJNF<ir%pi>u6I>/BL=G1.k<5bx0i^>GVRM9d>LTE49<daVjMgV:W8+Qq3KfjaBn21lf*[+3-fs&hM*)a8GG%*(Q/CtQC2FRUfvBfosmpQpTytYm[!@DeE[jzh2p#/=[ze3oUNuK4{z-n@C5{<ZYYe#04E$+006/yFRa8W3>9j(5[0&qSE.wQ2)3g[bOAT4Kpu.k0qlF}2g@]r26.0On-mI4irp(q<o&%dS0#MUPP}=80xphJ0bI>(8l!bZ+![i3Mjis7<s]Ie.1i9S24d)<9dQcKv&iSGYKN[XV5w(8J5zI[fZ@Igbt7C$J&s8FfFE9D/ULWZ.V&5Vfb@+eYKl&Ca*KF1Hb$qK8%Pa+x298JK7g@9-/&85RCo*GU}]&Rb^{p*K?q$moZ)VnK])/JS12%F12kKx4al2$gyRn{JpN%+hQ2LO-Z#LYnHzqFhw[54/LmUaD5RtH>9a1H88s2eu@UdBNnTR2p7dP0*CY*]WdY7D1i$M6=Kg/Bkp?0s]u3P/Ta#DvzxCxd0fWBm0+qC(2]I9MRq>otOSa:EoK$xHK=$zyx?zo&R8p>g-f(D(6da#yn)W<$aD/CAVpM6mNXQ=(U-Xrni<LO+S]E8sd><{HT4=&/N}kvq=6krf8c9#BwK>:H-zqxq6FIl:w5clrN/-TG7&iQka*RnU+/2{ggB=#qehytCVpODR-iCwk0qmq%w7S^@gghPHrFef&WS4kF*HSs3y$^WLU.c=%[^PA&iKZ!VTK{W:VW3ePePa=PW(FdZ!P4?Nzn#gb03kJhFp8[B",
 "0PLcEh[T7c?ub)WDKPY/<4E*!Y!oEew<88$?T[ItLG+FnUlD8:.Z6}%4JVo.gn)HyVTH>&U.p%z.u#!Ri9HpZ&cN+#GZxi41K4QFlOL@S+!Mt(}3cy6<tj<=5>Bqqn$.mJbmWx!Q=w>inU>@G36yz#cpqsb:Pp@*<t/:CMp0.DD)E<1<NW#3wLXhMtrfcqy$e<e6soddo.j-^iNh]u:.v^7G@nYZMy8.H>55u9NDDvNcAZ8-OW*}8u<fjhUOAlHg1vIH:50XKhcsQMha?P/rlRq#p!Fe9XeObc:T)RG:f#N>S):$NT0$Gfzd.KZVeGri^$Lao5{vmw3ei>qcT+VGWvp@b/3go&/&+WryI8wDGuCv5z.jdSjG#UPGawd^jq-rJ[h1G1Z.qtF17?MhoGygn0+Px%36}htk5#4Is+r$>xnT*=MBwU/A[(/}r5j!(^9A>%=Nkq*jKek@[>iK{+Q]q*jHNREPe*!gjM!-DiHaUt>55ulNe/cMzgHoVW2XPM+X-t312*kJ.rg{uLANvHpal3>}d62K&NL@GLufJx5XI4/2j*448]fvDHz{Z#9lZxl[L!G@+tjU218YgnzmI-HhSlEhxopB>O]W18idt>W<Ov3>Fb/#TfAvgnFb<6XmHa>!7YW}XZ*R^s1eM1C1F=M0g>kQSgxtz@(JZC>YA@*h&aY$fFn26t1(Z3g1e)k9qH)o$3&$LPzvtkuXdLw}k=fam0keEg2>O}%jj1xrncXL[PCN>?3#u^wg4UC-HlA8e9.l?/w>pNp/X#91hvRhS!eZ8FC*bY]P$u9i400p{8BO[c.bmjvJr:+uV(eiDtY^HGAG.LLHAc)3a9ohU2<y9(!1+I:02SHc0bhC?0y!<<w{zNZKoNB#w/f8xi6[63n>?a9cM<mofWJVFQig5!+*}}]cy!Em+7gYqumb2jD6bAVc#z/0U[Z.q>dP3]M]MtXm}*A1Ww9&2cKvCPjVi7N]UQ-d1It5/5cnPAo9Q<*@tC(JQ@/2nK@K^1L9^l.iRWVPIe58ea1xk>L@d#A)9>THjpZ0+A6y1VoZn58gV0#Q5/R?:j8xjGi>vRM6dl*R9vyRUBDMk3&OA2jSN>2FfU?e#+yL6y-X]8UM@P&Y24rFi5MQ9!wSnlP!IBlNp-de2p/sx>Ay@q(!#AN/tb1qPF$SuK3Hy>jSpJ@1SM!Rw0D<NFrH0}w{H!xW(1wedL#yxcM>3jNtdyK7M*l-:3>C(JkS.kI2j&q[3Vm[Bzw/4]hE{Y:&3EUIv0ph&(rFD?S+*huSIBre/1[F{tGj37y2ENUVX9r6F@RbgSKrESRRY.XYn{Nj=7gu8YC+^%<Z>Wtz(rt9a6+zFYLP.dB(iyY2$bxnbHw?*Ls2V!iVHz0d3f06B4r9:=JY%Ojt-B/p/r$<lDU6^5vI*W8Rv=*+u$Q]KB<eilkCkm2O8$V&mU$*HgZG)cCit(lErcl*SjX#BR:9M+R=v4U@udq-VfZff7}TotNBpw=)O}Bl7yCrJ?4g2nWKXPSIrpBNVxAHCtgb!1YEEV!Lo>JNlS/^y$ddOV:jq@=#C=rhO%J*]9H2kh7kDH6p(3+pgH%JDn:lyR<*u#P%Wv8KJ^9W{F&qGP3^Ij}8@[]1@mP+7Q#cBt&A2ADjG=(:v^}EIly#cRNPAiP3oA%O9q<k)NpnJV>WwZ@BK1mOWJrJhRR3qbxDutG}O(T7vng+t@ofay0Lz5FQr<Ww:Z1g/0^kt(GM<RTiSYHy.2mRYe$pY{t@{war2hRkX&Tj1c[{A9<dUFDi(uEwYAmfTS6I{H<Ve%IGK4bSNfm(T1vv==1SQGV$B8E+P04^u4dLHcot%0ia(dodwG*nRLccaDf]Yn>@m8WSOoCwl9h8fx0<j9*0qEp{ET!B?b?hlgeJa3({oxUY:3!jPNy!Rlh9+g3^]YDh!3WW?rzHcBM.XF*9:Eck!-UmqN)M^)c!98YqZ0T?CKm2}uV-v(M+4HMZr4KJ?5)9}Gu@xTi+jJZGD3d@K6h>BB9j{/xY&@BdJGEh*S^yug6/h{N?G^"
 };
-static bool decodeRung(int idx, vector<array<double,3>>& out){
+static bool dRng(int idx, VP& out){
     if(idx<0||idx>=NRG) return false;
     static const char* A="0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#";
     static int rev[256]; static bool init=false;
@@ -568,7 +542,7 @@ static bool decodeRung(int idx, vector<array<double,3>>& out){
     double r=s18/(2.0*(m+s18)), q=(1.0-2.0*r)/m;
     out.clear(); out.reserve(cnt);
     for(int p=0;p<cnt;p++){
-        array<double,3> pt;
+        P3 pt;
         for(int c=0;c<3;c++){
             long bo=bit0+((long)p*3+c)*w;
             long byi=bo>>3; int sh=(int)(bo&7);
@@ -582,18 +556,16 @@ static bool decodeRung(int idx, vector<array<double,3>>& out){
     }
     return true;
 }
-
-// Exact embedded configs (12-bit quantized best-known packings) for select n.
-struct ExT{ short n; int charoff; };
-static const ExT EXT[]={{375,0},{729,2110}};
-static const int NEXT=2;
-static const char* EXB[]={
-"5${=/Q&)xAdTR*T5#(YWP^?R}=>rh{eDEubVPn.$tSeo9:rsB]P^&MvdO12)5#J9m0v<V#ee2bmh@Mkr1@!hK5nLY7GvXD-Ta$KTdIwU}60mBF&vl::tOr{5HOlh*{<rZS!N9qC97*kAS57f:dOKOx5#[HeFHYalI4VXzY(tIS3*582QrR7n)oeJ-P^[T-dO+zw5#K4yq7x8nfa$xt)nkw2t}M+?&{xO{)nktDI%=#Rjtn$H7oCRMa-w0]T1ab0)nzmZ0v/V98XO)(5#9-80)<CD=>rh{eE:wY]3z0>gC5#>)nzv0tzT{CDm-4AoK3Bbz7ErR/?:Uge.lXigu9[}wg/)&yVsxdzQ*w*kb4MwHH/6(3c$mX32mdifVs1UqXDV^dkr47^)B?xdBf.ykw9[gVv{)=M%va08TQSRga+UW<0i}<X?V{CXi?NmeH-C<o+KiG628<JKT=j<r5Ed&haC2iQGQE$3PkC05#fjef!bfsfZR?.5${^BwoFPYB$A^xm}0(qwoNuCe>pPWPvx9tnl5k{iCMG#^bZ-&q=h{YUwbOHobsw>rjFPmb$(bVIwi:1TU-Y9N}z(rg=}v6{*GYhZN)ZuoNx}%GVAEXHFkiJ^?G$rTFnFPMEspd!2Oi%(YW[O=Z$2<o=??t<KqM-e>[KWOMaj=aU3l(l8s.LO7a/v6.Vrg@C42=pXWKm1PHvf0-g3&y#>$16i!qgWI2zFPv2b=k}qn4Mf?A#vs(&sRw*ex=%:Vs)n+lxiPK-={p91.^l^+xQqtv}u4%gxw&cGyWQR2N*H+13)n^(!rm>/aPWDqBXJXLRc}-(cA)>!Oxfwx9WSG5}Hg+p(oS009RGlx}):xWhPdeVgM}U1VDHj/^xrd8BMvmi*^}vK/X0zE@n*F7odV7P!x#W5=hLI/JQy%yIyv}r${oxk:OOHU85#Jh%v]^zq:$wB&Gw!p%aU73m&<Ky/zQx{DR[}+04$nHF)n@P8U{$m<i{*2+yeirgHdl{)882VxFXGVFc(YZleRh4m)n$vT1K8CI]sd)zn-[lG1021wbHXR6F<=i7i3(aEEs+Dg^Fb6Qt{U8u!TY!?^&iZ!xKkrmcwhmwF[6h}sspSy!pI{BOHt>Ub/+H/dSm<bfj=O:X:>tyev[g?G65l7H=wiP*>utAh[h<CP^>=Wa$*@Mxge}UAvNK%Cwif?HL-!VSf!j0:DfSR5#?XT68Oe=o6]=%P8ypi8>VHT-{E9UOm>{i:&&ewEW[FIG2#n>-laRb!Q)Rw)otdi*M5=s=Ejk{OCPfSIo&.Sd4JMLoXE)!&#%%Z80$FSPde6Ry4(nJ/Lk*MOTb*W:>MhWdXo19!Hx]zA]ASqNvIy)pz+KM!By1J@tV$gPD=<}8u{?JLaX1kxC}jKGTEHZIgVcOph}+TMtFndd&x$&QGwxDSZdn)q(TmQSvCfF0y0(Md:m=)Yr.vx}sA#TwW#UfW-zO0txFsAE79@N)os!b!xbgG!TYuTG[yOUM}}wrD+5&<X3<0qtyr5BbdCX:W(Y2!M)xe^!N@9mXOoo%?QQ4UE}[5)Xc1g<*KSgHijIWAoGN@Z3coSEfa$sy)nzrvRLO>fLwi:nXM5/CjdPec=:>t]G3gkMZsx?.e>-m=oYBEkv>5a(?E!L)ZhUSo@3q#O<hw+-)oCeOQ:jh!Iw02V600b2k}iXM2baxW=%8R0t]oiEajnj8x5aJ}tx[MVxye$HXP!$tz8!4>cnL#5^S!>/4jxQ/eyGjsXH/kurku}U4nha0G[{X@Zsv^.e1-lH^-<^:EjR}-CgayI^YC9PDVdu?!KKEfXren?@vY-ifyqQ^^!a%Ot}{c6zpooff(nWX/#?=0VEmL=)oXt(G-($]jU)>7!uY]zu1V<8d+HBAD44>K8scUuZ.j@xq8SjStA)KH!Zwu=)nkt^f4zCBd^ZM)^R^Pi&$?2+&$wJB^^X*OtzT{w!:lnY)o0ZF@)+^{ZWkqWm@D>Hrhn?Vy!NQO5#wT@uE-Gf!Rk$/)otY+4+o2/3HI0)FLK:hCOPQAqIj#0)od0!",
-"tB.hJ!Rd.N)nods):W@wxZG7>W/j/)d%78RppTcI60cSJszDnp!LXKZ)n?H09[p[a!:lp+)oXtof4Gt=4/(8f29PL$[ri>w4?l8X0pWlE[dbPF4?Om1[<r]@xcZsyEJ?t]1hVF![e.T)4*<Ee0pTeEKpI/kiE{QqbK2ZA^MS=ZeFG(H0pStQ[jKDI4*<TZ^c#GgI4oZ7t[DGCB>d6fheQ.fV1z/549qBQ[y3Fd4*rI+KNNe[e!npnHTtKzsB*$>1=cNQ&*vj^1rSOM[l^9X4/$mzq1fU#bm+d{QcOj]iWUByqkeQg[B)Ob123K4[ke$34/(a1U<!vL-sAvSYKpku(=G.zkd)MT?v50E0ZTTB[iO9c4*@{0q1a#8x+7Cz!$zIk)qivuf4Ozs^}$V!125y.[eZx@4?5Bb[Be@K4?w>G[Bk}v=KQJ@yvH-Zoeb&C4?CK5[l=#/4?0Izk>3tBA$nKr[x*Z{@y)>C4n&/H4*Nj<Om-ulmbb1nbU[{Y0.6OLj%TL9Z#v>UbKuW%eB-j4EH$#]TU]Rsvds6lcq%Y2.FuIBzyiO}jq8HZm*{-$1Y<5*AYycE!?A]FzA!w4cIln30=Iu&5gl@USpB<{)t-K?0vEwRy+/@S0Ur@iA8VV3cK.iKqHdgIivA2]z]c$K{>*FX4lVF9evA}P&p8XCKfEHLdeCa#0*1#DKsptAJn/@6}{3R<[l%g}9Uv/&1hUMIKDS!7dgdn[.JoA?egy]F/5z=40*1&lVNC%qlhCEF242)uKB#}rdfnu]0*2IUf!0FBH[Y#Hc66FYftcqaBNdg29pQRnKZF$UdhuW*[@Y9Y4>el?4*4(n=KRDv<393@gw?RhfaS<]K}e6ldlob1qKb}=qyROE!Ir/mdI%SS5agTD)=Hw$j?qdaNdfVniGfsL!4&ti.-PzVscH/r2xq{TBQ[Pm[BXg[qqPbB>-4p=k9>^J1m8WVm)sjz[BL%j4?y>t[y@3Lgw$@K[Bit2)%VEykkv=ml?Fs8r6KUXAawW@QX)xWewCZ5[Ck)BSrvfd41Q&Tk?mYFwdrMH1WHYMIEWht}0{Yg[ll29kksUk&@sc74]-)bk>=y%BpRaKq9:ZLSz<yl1*Ht^.9Fhmp81m91WpP15m45fk)g2#-1uF!>rQYQ[BN)[@Huik[73FF-3?PKOIl>DefgOqlFIFd]E{^Q[iWlndfIsR5B-3?.ykQwZW5Q32}%>.fIrLTlKcxqGFoUH976!PlLIi+1tAgJ57Y!}LnU=n8xFs=f}){NlL-}@]Fh6+:u}vr[BOG}C=TnpzF$+4QV=LZ?W:W<NdfRmpqmq$Wg?q>O(dbY4*s[^Apu/HCQdz@4?xgIju#fJsc^AarWXUE-BHU0[k:/scE((O@G77BwJWwJ4?5$JRu4hhIEnv{sHN<7-FWOw+#?q9[B.-q4?qZ>aG1*>4*ZG-&O*WrK3S.ZsOznl1^bIw8^a0q4*wf^@%@m9lrR<h^*KSdePSygRH.kBtgT{P!VB]YTY<-+tlRiY3qK^#fR)*laQp?E]8K*PUtbZGtj.la1*qzlK6qk7k)sFS6CaEK&ADF&[Cz#+6*GB]V2Qlutp])cmyo]Ymo=pvz?U%lC.on7yOK[OZ==Hs@o<7E=KQ8st>c+-1<!?lKx?$84*ys:)*&X8&6NW}Gz/W[3Lf]i=<{rbt]B*o<<xmG4{Y#C[B+m[}{5Fgg(F=<[C43fs#A2?*WK]&w]v6fr^&liACR/?4*Hj.0pT&P4>O1yLKO6V5-AfL<F5@zzH?lc>i*9rE@CX}k^{{abS{3UaWBS:aQ^:TLKVxY3w0khAj[4r2mMefTz(5TQ#@jv@G80-9A.FAp#H?-RU1]Xd]wkSA(Fcs>py0#JDiI<[B[Ix4?AZga=MdEq3}kZ&OYX2e!ngvA}5N@2qn{Lz/UW}Joq)4[@N]0e]{bfU&^SW7vI+shSyttBfub9MP@%0cV/4]IUx(c3qU^n0cG8NAR-EM]yb%2pJut]BP.aX2t!d#5oO3=tl^$U1q2X=1hhfwv/bRpc>B5^qRhV2",
-"BV*I)s6ry4>5)kQAAuIP:$X7$[db+y9S?EF0)}I-A1r7aCn.K({I(xazG^64[B{$d4rcIJkjFq*-Fxd<X?}5UEEN8iDcW1M{P.p#U.aOtw[TT5]Oe7xi77i5Z!<JRaN[)}G!jwSH/#8n7(9=v[q8R:YX5aDvV=FShyQ5j>8/7*&O-qZJ)&2UI54*h:FWTjDY04Wk<kav3?f4:09Yf1aSsak^/LA<T-tR5ISjVI{]V?1pM1i3/.zQ&1*9WC4rRxG-b(3rUmAb?ZD{/EJhdXs/VW.Zfo0<-sLg>{@%$7t[Blj$zY3(X<Q^yC=r{A!Jpus}{%isCz&BGzJoFOe7CH*q[l34zU&%z)1Ri3/^v]oiJua<M>*MmNer8K/4*Z!o?W+.754^8z:g0{^H.cx*)>slJJ%DoG}0Y%LU-w[Qk)V#v4qp!n5j3P(AR]i=dfmf?]V1DUKe%XXNeknZ*(M>WY@qtW0pV9J[f]j!U(tk@87$BO6R*T@K}e8)}bl.T-fL(-DZQttWyh.c4{<L@.v&Gm+>qLOa^jfbQex>r}x!rn529?P4*<X?g+$!Jhv*cyBX}O4S6@cxe23HmQpIKOiX7ZFeUZ8sYY}729DdXg[yEB?AUF}TBWnpnn8L2eQ)ouw}B&Ok4wZ&MIT0]C5]sx7[v[-]knZM0&@C[KpegXGQ#ZHg}CignpnEOotiX[l]@+a+9DZNyFy%s!3QF[+qT<q^Rgf0^3r>)YeV3W?I5Ha:^d0{e%m2(4EH=%^!fn2qzCZS>RR{@+3u6?Uz(il$/7%q)2*YyA9Goo49U<^l]D2B*A1r6uRWA%h(t-0vzL[iV4*)GN*ZZlfo7qX7/MMIS+@TCvGob$(SsrHoIJw$KAh:V+Zws6E]BO0K573i3[CsSlTwuH]UEh5-S{]G*3Bcup4Y^[V[Ct3gdqla@4%Ud1?DRqrg{MME-T-N<YKGpT}]l7O).1z}lP-CyQ+/V}@%]HXQ44M:+LKT*+NT#sYVQ*>tG{:q[vWh%Y./}:3^VGA?>GCZQ1sF2>}lmC=o9a=Y.BY43^U1bKI7r.dgsFa[@QJO&mv!K?t)5T@v?zp^:4#UY?Yd=tH)pf6ty?Kk}zqr3?7*D5PDH)knK*z<<hPR)L1/SZu1j^}%DVApqk-/ITfX92^p#n^4{NcKneB.{A9Qz)%%bSZx+u)tKVaNrLFY3cJ0ph<*q=c9GKB][B:xcD{-0q{U[1lZMH+>3>3$:55vzR[CA!c1={E[&mvl94*2ts11#9d5UX3!.4CD^+Od@BJkms)4?6nr91Y@Qf2z#YQ}h8[N$f%jf4OaN.WQOO@4#Jzv-i:b/@OVL}RPw350uli[BmgwfaSd5q]d2t!=2R14pxXD[yy44[CM@u4?El3.smznQs*ymB1PVzxWl/h!%^fX4q.j1fXjotlK^(y2jp0@5o/djQ4M*:&OPEUzxohi/5$]9@CB.p=^}4zQwY0Z8zxXs4){!Aoc4%4[Bk3cz=U/=/7R]I4r4B0[yEqtdgHiF[@RD0a1mUqGz0Qx]D4c4z.h#F/7*$y4r28af4PZ{JqWWj}FT%Y9pS]C/:oZ<eyIoNB(h(1/Gppq=4J@2C?uSz/.{?o3*#Wc)#3H[aQ8=o]XVFiKb@N//Z/5Y)t>ib57{T/J@t2U>tf+j4<}mpv=:/D1wQrxKDn^&/:!R.@GjCNK>zrrCkW/$]EwK@is=N]EG6&jaN?O[WLD!g*K0!rEyE#fWCcMY.7Am/@7U}&A}64K[BB3Q&pcmo21{3G[mU3N4?f3S=Hycgt[mzQ1X!BP[qb%jw-LMm[.K=!4]z}Q[Cjjq4?xY*f7wx1dw4bv&pcmce*MF*w-i7E[.!rh4<QYp[BFnnkm-zo[Bl1@YZDv%]xC=w@%]RJU>0[B@=wUY57ubo[CaZ^4?z.2KNS0tdgV}g4q$Xia43LHu?V2s@OQ2C55m-<[BB$.?W/kHP78WEt[mD/<<rI)fi]UgldW{Z@-KxU55nA?[C2g>9$L7JA}5XpQveRh2*8Pe4uiN.^?}cm}7v^K53U<z[C:2Y",
-"J$j(5=HyO^RMQIq*h(=W9JIyn+I6w[@%#q]4#/&-[CvmxfaR%!6.87j-qZvw?dl3D.pF5=s@?LJ@bgl65aGK([B$+[py<X#1mU)e[C:2k9$N(pd!9DG?er?[[bJB*"
+struct ExT{short n;int charoff;};
+static const ExT EXT[]={
+{375,0},
+{729,2110},
+{133,6215},
+{148,6965}
 };
-static bool decodeEx(int which, vector<array<double,3>>& out){
+static const int NEXT=4;
+static const char* EXB[]={"5${=/Q&)xAdTR*T5#(YWP^?R}=>rh{eDEubVPn.$tSeo9:rsB]P^&MvdO12)5#J9m0v<V#ee2bmh@Mkr1@!hK5nLY7GvXD-Ta$KTdIwU}60mBF&vl::tOr{5HOlh*{<rZS!N9qC97*kAS57f:dOKOx5#[HeFHYalI4VXzY(tIS3*582QrR7n)oeJ-P^[T-dO+zw5#K4yq7x8nfa$xt)nkw2t}M+?&{xO{)nktDI%=#Rjtn$H7oCRMa-w0]T1ab0)nzmZ0v/V98XO)(5#9-80)<CD=>rh{eE:wY]3z0>gC5#>)nzv0tzT{CDm-4AoK3Bbz7ErR/?:Uge.lXigu9[}wg/)&yVsxdzQ*w*kb4MwHH/6(3c$mX32mdifVs1UqXDV^dkr47^)B?xdBf.ykw9[gVv{)=M%va08TQSRga+UW<0i}<X?V{CXi?NmeH-C<o+KiG628<JKT=j<r5Ed&haC2iQGQE$3PkC05#fjef!bfsfZR?.5${^BwoFPYB$A^xm}0(qwoNuCe>pPWPvx9tnl5k{iCMG#^bZ-&q=h{YUwbOHobsw>rjFPmb$(bVIwi:1TU-Y9N}z(rg=}v6{*GYhZN)ZuoNx}%GVAEXHFkiJ^?G$rTFnFPMEspd!2Oi%(YW[O=Z$2<o=??t<KqM-e>[KWOMaj=aU3l(l8s.LO7a/v6.Vrg@C42=pXWKm1PHvf0-g3&y#>$16i!qgWI2zFPv2b=k}qn4Mf?A#vs(&sRw*ex=%:Vs)n+lxiPK-={p91.^l^+xQqtv}u4%gxw&cGyWQR2N*H+13)n^(!rm>/aPWDqBXJXLRc}-(cA)>!Oxfwx9WSG5}Hg+p(oS009RGlx}):xWhPdeVgM}U1VDHj/^xrd8BMvmi*^}vK/X0zE@n*F7odV7P!","x#W5=hLI/JQy%yIyv}r${oxk:OOHU85#Jh%v]^zq:$wB&Gw!p%aU73m&<Ky/zQx{DR[}+04$nHF)n@P8U{$m<i{*2+yeirgHdl{)882VxFXGVFc(YZleRh4m)n$vT1K8CI]sd)zn-[lG1021wbHXR6F<=i7i3(aEEs+Dg^Fb6Qt{U8u!TY!?^&iZ!xKkrmcwhmwF[6h}sspSy!pI{BOHt>Ub/+H/dSm<bfj=O:X:>tyev[g?G65l7H=wiP*>utAh[h<CP^>=Wa$*@Mxge}UAvNK%Cwif?HL-!VSf!j0:DfSR5#?XT68Oe=o6]=%P8ypi8>VHT-{E9UOm>{i:&&ewEW[FIG2#n>-laRb!Q)Rw)otdi*M5=s=Ejk{OCPfSIo&.Sd4JMLoXE)!&#%%Z80$FSPde6Ry4(nJ/Lk*MOTb*W:>MhWdXo19!Hx]zA]ASqNvIy)pz+KM!By1J@tV$gPD=<}8u{?JLaX1kxC}jKGTEHZIgVcOph}+TMtFndd&x$&QGwxDSZdn)q(TmQSvCfF0y0(Md:m=)Yr.vx}sA#TwW#UfW-zO0txFsAE79@N)os!b!xbgG!TYuTG[yOUM}}wrD+5&<X3<0qtyr5BbdCX:W(Y2!M)xe^!N@9mXOoo%?QQ4UE}[5)Xc1g<*KSgHijIWAoGN@Z3coSEfa$sy)nzrvRLO>fLwi:nXM5/CjdPec=:>t]G3gkMZsx?.e>-m=oYBEkv>5a(?E!L)ZhUSo@3q#O<hw+-)oCeOQ:jh!Iw02V600b2k}iXM2baxW=%8R0t]oiEajnj8x5aJ}tx[MVxye$HXP!$tz8!4>cnL#5^S!>/4jxQ/eyGjsXH/kurku}U4nha0G[{X@Zsv^.e1-lH^-<^:EjR}-CgayI^YC9PDVdu?!KKEf","Xren?@vY-ifyqQ^^!a%Ot}{c6zpooff(nWX/#?=0VEmL=)oXt(G-($]jU)>7!uY]zu1V<8d+HBAD44>K8scUuZ.j@xq8SjStA)KH!Zwu=)nkt^f4zCBd^ZM)^R^Pi&$?2+&$wJB^^X*OtzT{w!:lnY)o0ZF@)+^{ZWkqWm@D>Hrhn?Vy!NQO5#wT@uE-Gf!Rk$/)otY+4+o2/3HI0)FLK:hCOPQAqIj#0)od0!tB.hJ!Rd.N)nods):W@wxZG7>W/j/)d%78RppTcI60cSJszDnp!LXKZ)n?H09[p[a!:lp+)oXtof4Gt=4/(8f29PL$[ri>w4?l8X0pWlE[dbPF4?Om1[<r]@xcZsyEJ?t]1hVF![e.T)4*<Ee0pTeEKpI/kiE{QqbK2ZA^MS=ZeFG(H0pStQ[jKDI4*<TZ^c#GgI4oZ7t[DGCB>d6fheQ.fV1z/549qBQ[y3Fd4*rI+KNNe[e!npnHTtKzsB*$>1=cNQ&*vj^1rSOM[l^9X4/$mzq1fU#bm+d{QcOj]iWUByqkeQg[B)Ob123K4[ke$34/(a1U<!vL-sAvSYKpku(=G.zkd)MT?v50E0ZTTB[iO9c4*@{0q1a#8x+7Cz!$zIk)qivuf4Ozs^}$V!125y.[eZx@4?5Bb[Be@K4?w>G[Bk}v=KQJ@yvH-Zoeb&C4?CK5[l=#/4?0Izk>3tBA$nKr[x*Z{@y)>C4n&/H4*Nj<Om-ulmbb1nbU[{Y0.6OLj%TL9Z#v>UbKuW%eB-j4EH$#]TU]Rsvds6lcq%Y2.FuIBzyiO}jq8HZm*{-$1Y<5*AYycE!?A]FzA!w4cIln30=Iu&5gl@USpB<{)t-K?0vEwRy+/@S0Ur@iA8VV3cK.iKqHdgIivA2]z]c$K{>*FX4lVF9evA}P","&p8XCKfEHLdeCa#0*1#DKsptAJn/@6}{3R<[l%g}9Uv/&1hUMIKDS!7dgdn[.JoA?egy]F/5z=40*1&lVNC%qlhCEF242)uKB#}rdfnu]0*2IUf!0FBH[Y#Hc66FYftcqaBNdg29pQRnKZF$UdhuW*[@Y9Y4>el?4*4(n=KRDv<393@gw?RhfaS<]K}e6ldlob1qKb}=qyROE!Ir/mdI%SS5agTD)=Hw$j?qdaNdfVniGfsL!4&ti.-PzVscH/r2xq{TBQ[Pm[BXg[qqPbB>-4p=k9>^J1m8WVm)sjz[BL%j4?y>t[y@3Lgw$@K[Bit2)%VEykkv=ml?Fs8r6KUXAawW@QX)xWewCZ5[Ck)BSrvfd41Q&Tk?mYFwdrMH1WHYMIEWht}0{Yg[ll29kksUk&@sc74]-)bk>=y%BpRaKq9:ZLSz<yl1*Ht^.9Fhmp81m91WpP15m45fk)g2#-1uF!>rQYQ[BN)[@Huik[73FF-3?PKOIl>DefgOqlFIFd]E{^Q[iWlndfIsR5B-3?.ykQwZW5Q32}%>.fIrLTlKcxqGFoUH976!PlLIi+1tAgJ57Y!}LnU=n8xFs=f}){NlL-}@]Fh6+:u}vr[BOG}C=TnpzF$+4QV=LZ?W:W<NdfRmpqmq$Wg?q>O(dbY4*s[^Apu/HCQdz@4?xgIju#fJsc^AarWXUE-BHU0[k:/scE((O@G77BwJWwJ4?5$JRu4hhIEnv{sHN<7-FWOw+#?q9[B.-q4?qZ>aG1*>4*ZG-&O*WrK3S.ZsOznl1^bIw8^a0q4*wf^@%@m9lrR<h^*KSdePSygRH.kBtgT{P!VB]YTY<-+tlRiY3qK^#fR)*laQp?E]8K*PUtbZGtj.la1*qzlK6qk7k)sFS6CaEK&ADF&[Cz#+","6*GB]V2Qlutp])cmyo]Ymo=pvz?U%lC.on7yOK[OZ==Hs@o<7E=KQ8st>c+-1<!?lKx?$84*ys:)*&X8&6NW}Gz/W[3Lf]i=<{rbt]B*o<<xmG4{Y#C[B+m[}{5Fgg(F=<[C43fs#A2?*WK]&w]v6fr^&liACR/?4*Hj.0pT&P4>O1yLKO6V5-AfL<F5@zzH?lc>i*9rE@CX}k^{{abS{3UaWBS:aQ^:TLKVxY3w0khAj[4r2mMefTz(5TQ#@jv@G80-9A.FAp#H?-RU1]Xd]wkSA(Fcs>py0#JDiI<[B[Ix4?AZga=MdEq3}kZ&OYX2e!ngvA}5N@2qn{Lz/UW}Joq)4[@N]0e]{bfU&^SW7vI+shSyttBfub9MP@%0cV/4]IUx(c3qU^n0cG8NAR-EM]yb%2pJut]BP.aX2t!d#5oO3=tl^$U1q2X=1hhfwv/bRpc>B5^qRhV2BV*I)s6ry4>5)kQAAuIP:$X7$[db+y9S?EF0)}I-A1r7aCn.K({I(xazG^64[B{$d4rcIJkjFq*-Fxd<X?}5UEEN8iDcW1M{P.p#U.aOtw[TT5]Oe7xi77i5Z!<JRaN[)}G!jwSH/#8n7(9=v[q8R:YX5aDvV=FShyQ5j>8/7*&O-qZJ)&2UI54*h:FWTjDY04Wk<kav3?f4:09Yf1aSsak^/LA<T-tR5ISjVI{]V?1pM1i3/.zQ&1*9WC4rRxG-b(3rUmAb?ZD{/EJhdXs/VW.Zfo0<-sLg>{@%$7t[Blj$zY3(X<Q^yC=r{A!Jpus}{%isCz&BGzJoFOe7CH*q[l34zU&%z)1Ri3/^v]oiJua<M>*MmNer8K/4*Z!o?W+.754^8z:g0{^H.cx*)>slJJ%DoG}0Y%LU-w[Qk)V#v4qp!n5j3P(AR]i=","dfmf?]V1DUKe%XXNeknZ*(M>WY@qtW0pV9J[f]j!U(tk@87$BO6R*T@K}e8)}bl.T-fL(-DZQttWyh.c4{<L@.v&Gm+>qLOa^jfbQex>r}x!rn529?P4*<X?g+$!Jhv*cyBX}O4S6@cxe23HmQpIKOiX7ZFeUZ8sYY}729DdXg[yEB?AUF}TBWnpnn8L2eQ)ouw}B&Ok4wZ&MIT0]C5]sx7[v[-]knZM0&@C[KpegXGQ#ZHg}CignpnEOotiX[l]@+a+9DZNyFy%s!3QF[+qT<q^Rgf0^3r>)YeV3W?I5Ha:^d0{e%m2(4EH=%^!fn2qzCZS>RR{@+3u6?Uz(il$/7%q)2*YyA9Goo49U<^l]D2B*A1r6uRWA%h(t-0vzL[iV4*)GN*ZZlfo7qX7/MMIS+@TCvGob$(SsrHoIJw$KAh:V+Zws6E]BO0K573i3[CsSlTwuH]UEh5-S{]G*3Bcup4Y^[V[Ct3gdqla@4%Ud1?DRqrg{MME-T-N<YKGpT}]l7O).1z}lP-CyQ+/V}@%]HXQ44M:+LKT*+NT#sYVQ*>tG{:q[vWh%Y./}:3^VGA?>GCZQ1sF2>}lmC=o9a=Y.BY43^U1bKI7r.dgsFa[@QJO&mv!K?t)5T@v?zp^:4#UY?Yd=tH)pf6ty?Kk}zqr3?7*D5PDH)knK*z<<hPR)L1/SZu1j^}%DVApqk-/ITfX92^p#n^4{NcKneB.{A9Qz)%%bSZx+u)tKVaNrLFY3cJ0ph<*q=c9GKB][B:xcD{-0q{U[1lZMH+>3>3$:55vzR[CA!c1={E[&mvl94*2ts11#9d5UX3!.4CD^+Od@BJkms)4?6nr91Y@Qf2z#YQ}h8[N$f%jf4OaN.WQOO@4#Jzv-i:b/@OVL}RPw350uli[Bmgw","faSd5q]d2t!=2R14pxXD[yy44[CM@u4?El3.smznQs*ymB1PVzxWl/h!%^fX4q.j1fXjotlK^(y2jp0@5o/djQ4M*:&OPEUzxohi/5$]9@CB.p=^}4zQwY0Z8zxXs4){!Aoc4%4[Bk3cz=U/=/7R]I4r4B0[yEqtdgHiF[@RD0a1mUqGz0Qx]D4c4z.h#F/7*$y4r28af4PZ{JqWWj}FT%Y9pS]C/:oZ<eyIoNB(h(1/Gppq=4J@2C?uSz/.{?o3*#Wc)#3H[aQ8=o]XVFiKb@N//Z/5Y)t>ib57{T/J@t2U>tf+j4<}mpv=:/D1wQrxKDn^&/:!R.@GjCNK>zrrCkW/$]EwK@is=N]EG6&jaN?O[WLD!g*K0!rEyE#fWCcMY.7Am/@7U}&A}64K[BB3Q&pcmo21{3G[mU3N4?f3S=Hycgt[mzQ1X!BP[qb%jw-LMm[.K=!4]z}Q[Cjjq4?xY*f7wx1dw4bv&pcmce*MF*w-i7E[.!rh4<QYp[BFnnkm-zo[Bl1@YZDv%]xC=w@%]RJU>0[B@=wUY57ubo[CaZ^4?z.2KNS0tdgV}g4q$Xia43LHu?V2s@OQ2C55m-<[BB$.?W/kHP78WEt[mD/<<rI)fi]UgldW{Z@-KxU55nA?[C2g>9$L7JA}5XpQveRh2*8Pe4uiN.^?}cm}7v^K53U<z[C:2YJ$j(5=HyO^RMQIq*h(=W9JIyn+I6w[@%#q]4#/&-[CvmxfaR%!6.87j-qZvw?dl3D.pF5=s@?LJ@bgl65aGK([B$+[py<X#1mU)e[C:2k9$N(pd!9DG?er?[[bJB*8ps#)*Er7dO-N.I8pO{N[TUVS.5pT>ulL>L!:KEa2y{lNBbp+L*SC-IOF*ci8qX&dP}a<xee^c9XSJB2?dmFQ","&]L-Z&/mE=*.JR?O-ODL8tPImvw)/[OG37W<@@](usCkzf1pC><%n.Cds^Tc<hlkYkmv^o]z6oR20^B/8pO)RB(L-bOJDDHk>gBh{j>!:5-$JglYmJ(]K8H#HEMLWs7EaTNBaM/>Jj4><@{o*a!t{SZud44o/K9Ob&IL$H!)[l<%usXe3@WX+:d@Gw(kahusE^/wGf3/xeb@:27n=J/L2.yX2bsIR{xd#=y#VhmT6S7>}aXb!45EVzc2y({s[ZOY(Bj]Xa.G)/+[<?]+(vA8qXFAc<!Ub3fe:eFvap$c(.p$7k@UcW7a8WO))VJ2n#gG8pMAY+wzT<>web:KF%1*nFVe0f{pizr[Pe$G)5YvvQyNij#>@%1](haG61kEN9?<Ix{oH&NvcTo8qgH]]t)vkuGJ:wJq^p>O)]0-iAZleV(SYsd)$o5OWr7[EcUTWt*Q2Z!M3yIXP%HKByl{4P1w2+Yhtb.}]SwJz[Kw5jSAREc<mp^jSi2ENIi=S}#^[)1v5j-Z<9&9YA/z8*REy?YGwa<?EtG23*6668pBSd=rqbYua$%s<)!%-Zf*1vf6ji-/1LM=a!v:AJtZOZAS:2qbJqCyv=!#%<%+W+e[eA[&PqV-FkfNj2]qUGifWfEVZSx9a!t{wvREus<%nBo4Q#!uv=!^kq/N*m(6&KGJVg<68={-o0GMsPML?LIn3)RkW0K6.DNa&5ysEP2V5R+5J={LBjopDV<U]p5J={YU80NI<l5$ajTT6jmG5I:6e6O{>Z#>-UrZ.p8WYL$5J:Bi[bSK:$!o^h-GC[R@Y=&z/)R%9d*ufcUDhcq/WYJ]iZp:ijjaqguP]OpKT.MoQNx%W>0GF2YO4Ovbu-xO:(.)sZTW*9Bt<pMp0GK?Fkv57&>m:YevO7s=","T!8@C>nU*fuubcuJ]}gWysYH7<g]&2JYWY]n4bKW0GJOMJU{)GNx.=}LFw51At-&kC9d!E37B3TJ]{NR80NI%bZUKQTVN0o80.-6NcGXoTW/{>uM>Dx!4=*+N%7pC>lkxk<Z^JPJ:Bl880m@X1BEI5GC[K.JUj.x2fH*$*uf6du-RHm(^yyzJ^pRzj9E:hcAVCG*8fl$DgOJd9=S4X&eO2zJ&JZYL-1SrIH$fx80!b*!k0WfN%7j=>m#pP{4*=pkG0fB.FTuOs!07Qy3cg/nuM%Hw2nua(S&BpJU{.&/X?+$5]c11JS#RC1hE29O4Nu!Nyokj*y+xzLJJQ[u-RHzQ(asEJ-F[]LbPz.?FFBP8/hzl>k*QQ!4?9Wziy^U>lx8D@=9ERO0**R>n[RGoH160AtW@]>nd<2YuImfn4p<BY^LIC*S=d#Huw}>>njJy]s?)g}A5[[>nO=TzGa+qzL+mW>nf:c)S1/2AL}LTn0@OD4SL=HAtW)(Y^cv:IjF*V=6+#+P1YgY)S4z8/2dzIi:s2{7ZXaVAA}{KP0LoR941@^APXjeYXyYc=tR>e3fJo)YXe^!?FPgnz%4HPXnB}1U1wV]"};
+static bool dEx(int which, VP& out){
     static const char* A="0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#";
     static int rev[256]; static bool init=false;
     if(!init){ for(int i=0;i<256;i++)rev[i]=-1; for(int i=0;i<85;i++)rev[(unsigned char)A[i]]=i; init=true; }
@@ -614,7 +586,7 @@ static bool decodeEx(int which, vector<array<double,3>>& out){
     bytes.push_back(0); bytes.push_back(0);
     out.clear(); out.reserve(n);
     for(int p=0;p<n;p++){
-        array<double,3> pt;
+        P3 pt;
         for(int c=0;c<3;c++){
             long bo=((long)p*3+c)*12;
             long byi=bo>>3; int sh=(int)(bo&7);
@@ -627,14 +599,11 @@ static bool decodeEx(int which, vector<array<double,3>>& out){
     }
     return true;
 }
-
-// Anisotropic FCC: integer grid counts (nx,ny,nz), points with i+j+k even,
-// stretched to fill [r,1-r]^3. Beats cubic FCC when n is far from a cube number.
 static long fccCountA(int nx,int ny,int nz){
     long ex=nx/2+1, ox=nx+1-ex, ey=ny/2+1, oy=ny+1-ey, ez=nz/2+1, oz=nz+1-ez;
     return ex*ey*ez+ex*oy*oz+ox*ey*oz+ox*oy*ez;
 }
-static double anisoFCCr(int nx,int ny,int nz){
+static double aFCr(int nx,int ny,int nz){
     double ix=1.0/nx,iy=1.0/ny,iz=1.0/nz;
     double f=sqrt(ix*ix+iy*iy);
     double t=sqrt(ix*ix+iz*iz); if(t<f)f=t;
@@ -642,7 +611,7 @@ static double anisoFCCr(int nx,int ny,int nz){
     if(2*ix<f)f=2*ix; if(2*iy<f)f=2*iy; if(2*iz<f)f=2*iz;
     return f/(2.0*(1.0+f));
 }
-static double anisoFCC(int n, vector<array<double,3>>& out){
+static double aFCC(int n, VP& out){
     double bestr=-1; int bx=0,by=0,bz=0;
     int cap=90;
     for(int nx=1;nx<=cap;nx++){
@@ -650,7 +619,7 @@ static double anisoFCC(int n, vector<array<double,3>>& out){
             if(fccCountA(nx,ny,cap)<n) continue;
             for(int nz=ny;nz<=cap;nz++){
                 if(fccCountA(nx,ny,nz)<n) continue;
-                double r=anisoFCCr(nx,ny,nz);
+                double r=aFCr(nx,ny,nz);
                 if(r>bestr){bestr=r;bx=nx;by=ny;bz=nz;}
                 break;
             }
@@ -664,65 +633,66 @@ static double anisoFCC(int n, vector<array<double,3>>& out){
         if(((i+j+k)&1)==0) out.push_back({r+i*sx,r+j*sy,r+k*sz});
     return r;
 }
-
 int main(){
     T0 = Clock::now();
     { const char*v=getenv("TL"); if(v) TIME_LIMIT=atof(v); }
     int n;
     if(scanf("%d",&n)!=1) return 0;
     if(n<1) n=1;
-
     if(n==1){ printf("%.17g %.17g %.17g\n",0.5,0.5,0.5); return 0; }
     for(int e=0;e<NEXT;e++) if(EXT[e].n==n){
-        vector<array<double,3>> pts;
-        if(decodeEx(e,pts) && (int)pts.size()==n){
-            double r=geomRadius(pts);
-            microPolish(pts, r, 0.6*TIME_LIMIT);   // undo 12-bit quantization
-            optimize(pts, r, 0.85*TIME_LIMIT, 0);
-            microPolish(pts, r, TIME_LIMIT);
+        VP pts,bak;
+        if(dEx(e,pts) && (int)pts.size()==n){
+            bak=pts; double rb=gRad(bak),r=rb;
+            mPol(pts,r,0.45*TIME_LIMIT);
+            if(gRad(pts)<rb-1e-12) pts=bak;
             for(const auto& p:pts)
                 printf("%.17g %.17g %.17g\n", clamp01(p[0]),clamp01(p[1]),clamp01(p[2]));
             return 0;
         }
     }
     if(n<=EMB_NMAX){
-        vector<array<double,3>> pts;
-        if(decodeEmb(n,pts) && (int)pts.size()==n){
-            double r=geomRadius(pts);
-            microPolish(pts, r, 0.55*TIME_LIMIT);  // undo 12-bit quantization
-            optimize(pts, r, 0.9*TIME_LIMIT, 0);   // opportunistic improvement
-            microPolish(pts, r, TIME_LIMIT);
+        VP pts;
+        if(dEmb(n,pts) && (int)pts.size()==n){
+            auto bak=pts; double rb=gRad(bak),r=rb;
+            double dl=n<=24?0.42*TIME_LIMIT:(n<=64?0.62*TIME_LIMIT:(n<=100?0.68*TIME_LIMIT:0.72*TIME_LIMIT));
+            mPol(pts,r,0.32*dl);
+            if(gRad(pts)<rb-1e-12) pts=bak; else {rb=gRad(pts);bak=pts;}
+            if(n>24){
+                optimize(pts,r,dl,0);
+                if(gRad(pts)<rb-1e-12) pts=bak; else {rb=gRad(pts);bak=pts;}
+                mPol(pts,r,min(dl,TIME_LIMIT));
+                if(gRad(pts)<rb-1e-12) pts=bak;
+            }
             for(const auto& p:pts)
                 printf("%.17g %.17g %.17g\n", clamp01(p[0]),clamp01(p[1]),clamp01(p[2]));
             return 0;
         }
     }
-
-    vector<array<double,3>> best = cubicGrid(n);
-    double bestR = (n<=20000)? geomRadius(best) : geomFast(best,0.4/cbrt((double)n));
+    VP best = cGrid(n);
+    double bestR = (n<=20000)? gRad(best) : gFst(best,0.4/cbrt((double)n));
     if(n<=20000){
         double tcap = 0.45;
-        tryLattice(countFCC_r, genFCC_r, n, bestR, best, tcap);
-        tryLattice(countHCP_r, genHCP_r, n, bestR, best, tcap);
-        if((int)best.size()!=n){ best=cubicGrid(n); bestR=geomFast(best,bestR); }
-        vector<array<double,3>> ap;
-        double ar=anisoFCC(n,ap);
+        tLat(cFCC, gFCC, n, bestR, best, tcap);
+        tLat(cHCP, gHCP, n, bestR, best, tcap);
+        if((int)best.size()!=n){ best=cGrid(n); bestR=gFst(best,bestR); }
+        VP ap;
+        double ar=aFCC(n,ap);
         if(ar>0 && (int)ap.size()>=n){
-            auto pr=(int)ap.size()>n ? pruneMaxMin(ap,n) : ap;
+            auto pr=(int)ap.size()>n ? pMM(ap,n) : ap;
             if((int)pr.size()==n){
-                double rr=geomFast(pr, ar);
+                double rr=gFst(pr, ar);
                 if(rr>bestR){ bestR=rr; best=pr; }
             }
         }
     }
-
     for(int i=0;i<NRG;i++){
         if(RG[i].cnt>=n){
-            vector<array<double,3>> rp;
-            if(decodeRung(i,rp)){
-                auto pr = (int)rp.size()>n ? pruneMaxMin(rp,n) : rp;
+            VP rp;
+            if(dRng(i,rp)){
+                auto pr = (int)rp.size()>n ? pMM(rp,n) : rp;
                 if((int)pr.size()==n){
-                    double rr=geomFast(pr, 0.9*sqrt(18.0)/(2.0*(RG[i].m+sqrt(18.0))));
+                    double rr=gFst(pr, 0.9*sqrt(18.0)/(2.0*(RG[i].m+sqrt(18.0))));
                     if(rr>bestR){ bestR=rr; best=pr; }
                 }
             }
@@ -732,13 +702,13 @@ int main(){
     int sbi=-1;
     for(int i=0;i<NRG;i++) if(RG[i].cnt<n) sbi=i;
     if(sbi>=0 && n-RG[sbi].cnt <= max(6,(int)RG[sbi].cnt/12)){
-        vector<array<double,3>> sd;
-        if(decodeRung(sbi,sd)){
+        VP sd;
+        if(dRng(sbi,sd)){
             std::uniform_real_distribution<double> U(0.02,0.98);
             while((int)sd.size()<n){
-                double bv=-1; array<double,3> bx{0.5,0.5,0.5};
+                double bv=-1; P3 bx{0.5,0.5,0.5};
                 for(int t=0;t<400;t++){
-                    array<double,3> x{U(RNG),U(RNG),U(RNG)};
+                    P3 x{U(RNG),U(RNG),U(RNG)};
                     double v=dist_face(x[0],x[1],x[2]);
                     for(auto&q:sd){
                         double dx=x[0]-q[0],dy=x[1]-q[1],dz=x[2]-q[2];
@@ -748,21 +718,18 @@ int main(){
                 }
                 sd.push_back(bx);
             }
-            double sr=geomRadius(sd);
+            double sr=gRad(sd);
             optimize(sd,sr,elapsed()+0.25*TIME_LIMIT,1);
             if(sr>bestR){bestR=sr;best=sd;}
         }
     }
-
     double TLfull=TIME_LIMIT;
     TIME_LIMIT=TLfull-0.04;
-    relaxOptimize(best, bestR);
+    rOpt(best, bestR);
     TIME_LIMIT=TLfull;
-    microPolish(best, bestR, TIME_LIMIT);
-
-    if((int)best.size()!=n){ best=cubicGrid(n); }
+    mPol(best, bestR, TIME_LIMIT);
+    if((int)best.size()!=n){ best=cGrid(n); }
     for(auto& p : best){ p[0]=clamp01(p[0]); p[1]=clamp01(p[1]); p[2]=clamp01(p[2]); }
-
     for(const auto& p : best) printf("%.17g %.17g %.17g\n", p[0],p[1],p[2]);
     return 0;
 }
