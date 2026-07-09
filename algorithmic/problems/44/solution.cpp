@@ -11,7 +11,7 @@
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 2400.0;
+static double TL_MS = 2300.0;
 static inline double el_ms(){ return chrono::duration<double,milli>(chrono::steady_clock::now()-T0).count(); }
 
 static int N;
@@ -43,7 +43,7 @@ int main(){
     vector<char> pr((size_t)N,0);
     { vector<char> comp((size_t)N,0); for(long long i=2;i<N;i++) if(!comp[i]){ pr[i]=1; for(long long q=i*i;q<N;q+=i) comp[q]=1; } }
     if(N>100000) TL_MS -= 20.0;
-    double RESERVE = N>150000?220.0:(N>50000?90.0:(N>5000?50.0:40.0));
+    double RESERVE = N>150000?200.0:(N>50000?120.0:(N>5000?70.0:45.0));
     TL_MS -= RESERVE; // reserve tail for endgame touch-up
 
     // ---- spatial grid (~2 pts/cell) ----
@@ -60,7 +60,7 @@ int main(){
     vector<int> bucket(N); { vector<int> tmp=cnt; for(int i=0;i<N;i++) bucket[tmp[cellOf[i]]++]=i; }
 
     // ---- k nearest neighbors per city ----
-    int K=min(N-1, N>50000?6:(N>5000?24:10));
+    int K=min(N-1, N>100000?8:(N>50000?8:(N>20000?10:(N>5000?10:(N>1000?12:10)))));
     vector<int> nbr((size_t)N*K,-1);
     {
         vector<pair<double,int>> cand; cand.reserve(128);
@@ -84,10 +84,11 @@ int main(){
         }
     }
 
-    // ---- nearest-neighbor construction ----
+    // ---- nearest-neighbor construction (multi-start on medium N) ----
     vector<int> order(N), pos(N); vector<char> used(N,0);
-    {
-        int cur=0; used[0]=1; order[0]=0;
+    auto buildNN=[&](int start){
+        fill(used.begin(),used.end(),0);
+        int cur=start; used[start]=1; order[0]=start;
         for(int step=1;step<N;step++){
             int best=-1; double bd=1e300;
             for(int t=0;t<K;t++){ int j=nbr[(size_t)cur*K+t]; if(j>=0&&!used[j]){ best=j; break; } }
@@ -100,7 +101,7 @@ int main(){
                         int c=xx*G+yy;
                         for(int b=cnt[c];b<cnt[c+1];b++){ int j=bucket[b]; if(!used[j]){ double d=dist(cur,j); if(d<bd){bd=d;best=j;} } }
                     }
-                    if(best>=0){ // safety: scan one more ring for a possibly-closer point
+                    if(best>=0){
                         int r2=ring+1,a0=max(0,cx-r2),a1=min(G-1,cx+r2),b0=max(0,cy-r2),b1=min(G-1,cy+r2);
                         for(int xx=a0;xx<=a1;xx++) for(int yy=b0;yy<=b1;yy++){
                             if(xx>a0&&xx<a1&&yy>b0&&yy<b1) continue;
@@ -113,6 +114,24 @@ int main(){
             }
             if(best<0){ for(int j=0;j<N;j++) if(!used[j]){best=j;break;} }
             used[best]=1; order[step]=best; cur=best;
+        }
+    };
+    auto tourLen=[&](){ double L=0; for(int i=0;i<N;i++) L+=dist(order[i],order[(i+1)%N]); return L; };
+    {
+        buildNN(0);
+        if(1500<N && N<=25000){
+            double bestL=tourLen(); vector<int> bestO=order;
+            int far=1; double fd=dist(0,1);
+            for(int i=2;i<N;i++){ double d=dist(0,i); if(d>fd){fd=d;far=i;} }
+            int seeds[3]={far, N/2, N-1};
+            int nseed = N<=8000?3:2;
+            for(int si=0; si<nseed; si++){
+                if(el_ms()>TL_MS*0.12) break;
+                buildNN(seeds[si]);
+                double L=tourLen();
+                if(L+1e-9<bestL){ bestL=L; bestO=order; }
+            }
+            order.swap(bestO);
         }
         for(int i=0;i<N;i++) pos[order[i]]=i;
     }
@@ -313,36 +332,84 @@ int main(){
 
     // ---- materialize chosen direction with city 0 leading ----
     TL_MS += RESERVE;
+    if(TL_MS>2380.0) TL_MS=2380.0;
     vector<int> seq(N);
     { int z=pos[0]; for(int i=0;i<N;i++) seq[i]= bestDir==0? order[(z+i)%N] : order[(z-i+N)%N]; }
 
-    // ---- endgame touch-up: swap a nearby prime into each penalized source slot (exact delta) ----
+    // ---- endgame touch-up: prime-slot swaps + exact-cost neighbor 2-opt ----
     if(N>=12){
         auto sAt=[&](int p)->int{ return p<N? seq[p]:0; };
         auto stepCost=[&](int t)->double{ int a=seq[t-1], b=sAt(t); double d=dist(a,b); if(t%10==0&&!pr[a]) d*=1.1; return d; };
-        int w = N<=1200? N : (N<=5000?120:(N<=20000?140:80));
-        for(int rep=0;rep<4 && el_ms()<TL_MS;rep++){
-            bool ch=false;
-            for(int p=9;p<N;p+=10){
-                if(el_ms()>TL_MS) break;
-                if(pr[seq[p]]) continue;
-                int lo=max(1,p-w), hi=min(N-1,p+w);
-                double bd=-1e-7; int bj=-1;
-                for(int j=lo;j<=hi;j++){
-                    if(j==p||!pr[seq[j]]) continue;
-                    int T[4]={p,p+1,j,j+1}, U[4], m=0;
-                    for(int t2=0;t2<4;t2++){ bool dup=false; for(int u=0;u<m;u++) if(U[u]==T[t2]) dup=true; if(!dup) U[m++]=T[t2]; }
-                    double bef=0, aft=0;
-                    for(int u=0;u<m;u++) bef+=stepCost(U[u]);
-                    swap(seq[p],seq[j]);
-                    for(int u=0;u<m;u++) aft+=stepCost(U[u]);
-                    swap(seq[p],seq[j]);
-                    double dl=aft-bef;
-                    if(dl<bd){ bd=dl; bj=j; }
+        int w = N<=1200? N : (N<=5000?160:(N<=20000?180:100));
+        auto primeAlign=[&](int reps){
+            for(int rep=0;rep<reps && el_ms()<TL_MS;rep++){
+                bool ch=false;
+                for(int p=9;p<N;p+=10){
+                    if(el_ms()>TL_MS) break;
+                    if(pr[seq[p]]) continue;
+                    int lo=max(1,p-w), hi=min(N-1,p+w);
+                    double bd=-1e-7; int bj=-1;
+                    for(int j=lo;j<=hi;j++){
+                        if(j==p||!pr[seq[j]]) continue;
+                        int T[4]={p,p+1,j,j+1}, U[4], m=0;
+                        for(int t2=0;t2<4;t2++){ bool dup=false; for(int u=0;u<m;u++) if(U[u]==T[t2]) dup=true; if(!dup) U[m++]=T[t2]; }
+                        double bef=0, aft=0;
+                        for(int u=0;u<m;u++) bef+=stepCost(U[u]);
+                        swap(seq[p],seq[j]);
+                        for(int u=0;u<m;u++) aft+=stepCost(U[u]);
+                        swap(seq[p],seq[j]);
+                        double dl=aft-bef;
+                        if(dl<bd){ bd=dl; bj=j; }
+                    }
+                    if(bj>=0){ swap(seq[p],seq[bj]); ch=true; }
                 }
-                if(bj>=0){ swap(seq[p],seq[bj]); ch=true; }
+                if(!ch) break;
             }
-            if(!ch) break;
+        };
+        primeAlign(N>100000?3:5);
+        if(N<=100000){
+            vector<int> seqPos(N,-1);
+            for(int i=0;i<N;i++) seqPos[seq[i]]=i;
+            auto cityAt=[&](int p)->int{ if(p<=0||p>=N) return 0; return seq[p]; };
+            auto afterCity=[&](int p,int l,int r)->int{
+                if(p<=0||p>=N) return 0;
+                if(p<l||p>r) return seq[p];
+                return seq[l+r-p];
+            };
+            auto revDelta=[&](int l,int r)->double{
+                if(l>=r) return 0.0;
+                double before=0, after=0;
+                auto add=[&](int t, bool flipped){
+                    if(t<1||t>N) return;
+                    int a = flipped? afterCity(t-1,l,r): cityAt(t-1);
+                    int b = flipped? afterCity(t,l,r): cityAt(t);
+                    double d=dist(a,b); if(t%10==0&&!pr[a]) d*=1.1;
+                    if(flipped) after+=d; else before+=d;
+                };
+                add(l,false); add(l,true);
+                if(r+1!=l){ add(r+1,false); add(r+1,true); }
+                for(int t=l+1;t<=r;t++){ add(t,false); add(t,true); }
+                return after-before;
+            };
+            for(int pass=0; pass<(N<=20000?4:(N<=80000?2:1)) && el_ms()<TL_MS; pass++){
+                bool any=false;
+                for(int i=1;i<N-1;i++){
+                    if(((i&255)==0) && el_ms()>TL_MS) break;
+                    int c1=seq[i];
+                    for(int t=0;t<K;t++){
+                        int c3=nbr[(size_t)c1*K+t]; if(c3<0) break;
+                        int j=seqPos[c3];
+                        if(j<=i || j>=N) continue;
+                        if(revDelta(i,j)<-1e-7){
+                            reverse(seq.begin()+i, seq.begin()+j+1);
+                            for(int p=i;p<=j;p++) seqPos[seq[p]]=p;
+                            any=true; break;
+                        }
+                    }
+                }
+                if(!any) break;
+            }
+            primeAlign(3);
         }
     }
 
