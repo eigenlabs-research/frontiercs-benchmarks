@@ -1312,6 +1312,10 @@ int main(){
         consider(polish(beamMixedShelfPlan(allowRot, 14, 5, 5, TIME_LIMIT * 0.80)));
         g_msAlpha = 1.0;
     }
+    // Wide-and-shallow beam for broad exploration
+    if(allowRot && elapsed() < TIME_LIMIT * 0.85){
+        consider(polish(beamMixedShelfPlan(allowRot, 22, 8, 3, TIME_LIMIT * 0.85)));
+    }
 #endif
 #ifdef DIAG
     g_label="hybrid";
@@ -1324,6 +1328,12 @@ int main(){
         }
         sort(stripCands.begin(), stripCands.end());
         stripCands.erase(unique(stripCands.begin(), stripCands.end()), stripCands.end());
+        // Add standard fraction strips for more diverse split points
+        stripCands.push_back(g_bin.W / 3);
+        stripCands.push_back(g_bin.W / 2);
+        stripCands.push_back((2 * g_bin.W) / 3);
+        sort(stripCands.begin(), stripCands.end());
+        stripCands.erase(unique(stripCands.begin(), stripCands.end()), stripCands.end());
         {
             int n = min((int)stripCands.size(), 3);
             vector<int> sums;
@@ -1333,7 +1343,7 @@ int main(){
             sort(stripCands.begin(), stripCands.end());
             stripCands.erase(unique(stripCands.begin(), stripCands.end()), stripCands.end());
         }
-        if((int)stripCands.size() > (allowRot ? 6 : 8)) stripCands.resize(allowRot ? 6 : 8);
+        if((int)stripCands.size() > (allowRot ? 8 : 10)) stripCands.resize(allowRot ? 8 : 10);
         for(int d : stripCands){
             if(elapsed() > TIME_LIMIT * 0.45) break;
             consider(polish(mixedShelfPlan(allowRot, 0, d, false)));
