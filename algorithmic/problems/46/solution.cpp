@@ -345,7 +345,7 @@ static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 
 int main(){
     auto T0 = chrono::steady_clock::now();
-    const auto budget = chrono::milliseconds(995); // increased budget for more iterations with longer tenure
+    const auto budget = chrono::milliseconds(995); // near-1s budget
 
     if(scanf("%d %d", &J, &M) != 2) return 0;
     N = J*M;
@@ -399,9 +399,9 @@ int main(){
 
     mt19937 rng(777u);
     trySeed(seedGT(0, rng)); // MWR
-    trySeed(seedGT(1, rng)); // LPT
+    trySeed(seedGT(4, rng)); // PMWR (wrem/(nextP+1))
     if(chrono::steady_clock::now() - T0 < budget)
-        trySeed(seedGT(2, rng)); // SPT
+        trySeed(seedGT(1, rng)); // LPT
 
     // Trivial lower bound: max(machine load, job length). If reached, we are
     // provably optimal and can stop immediately.
@@ -430,7 +430,7 @@ int main(){
 #define STUCK_LIM 1000000000
 #endif
 #ifndef TEN_MIN
-#define TEN_MIN 15
+#define TEN_MIN 18
 #endif
 #ifndef TEN_SPAN_DIV
 #define TEN_SPAN_DIV 2
@@ -461,7 +461,7 @@ int main(){
             int tmin, span;
             if(stag <= DYN_S1){ tmin = 8; span = spanShort; }
             else if(stag >= DYN_S2){
-                tmin = TENURE_MIN + (int)min(6LL, (stag - DYN_S2)/DYN_ESC);
+                tmin = TENURE_MIN + (int)min(12LL, (stag - DYN_S2)/DYN_ESC);
                 span = spanLong;
             } else {
                 int f = (int)((stag - DYN_S1)*100/(DYN_S2 - DYN_S1)); // 0..100
@@ -615,6 +615,29 @@ int main(){
                 }
                 fill(tabuTB.begin(), tabuTB.end(), 0);
                 sinceImp = 0;
+            }
+            else {
+                // Wall-clock based diversification: if wall-time stagnation > 300ms,
+                // do a small perturbation to escape hard local optima.
+                long long stagMs = chrono::duration_cast<chrono::milliseconds>(nowT - lastImpT).count();
+                if(stagMs >= 300 && sinceImp > 3000){
+                    cur = best;
+                    evalSeq(cur, true); curC = bestC;
+                    // 3-5 random block moves for stronger perturbation
+                    int nk = 3 + (int)(rng() % 3);
+                    for(int r=0; r<nk; ++r){
+                        genMoves(cur);
+                        if(gmoves.empty()) break;
+                        const Mv& mv = gmoves[rng() % gmoves.size()];
+                        applyMove(cur, mv);
+                        long long nc = evalSeq(cur, true);
+                        if(nc < 0){ undoMove(cur, mv); evalSeq(cur, true); }
+                        else curC = nc;
+                    }
+                    fill(tabuTB.begin(), tabuTB.end(), 0);
+                    sinceImp = 0;
+                    lastImpT = chrono::steady_clock::now();
+                }
             }
         }
 #ifdef DIAG
