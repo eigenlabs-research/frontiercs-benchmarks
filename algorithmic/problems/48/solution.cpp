@@ -12,7 +12,7 @@ static Clock::time_point T0;
 static inline double elapsed(){
 return chrono::duration<double>(Clock::now()-T0).count();
 }
-static double TIME_LIMIT=0.94;
+static double TIME_LIMIT=0.945;
 static inline double clamp01(double x){ return x<0.0?0.0:(x>1.0?1.0:x); }
 static inline double dist_face(double x,double y,double z){
 double df=x; if(y<df)df=y; if(z<df)df=z;
