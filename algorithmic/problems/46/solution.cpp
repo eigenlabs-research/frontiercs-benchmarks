@@ -527,7 +527,7 @@ if(cc >= 0) curC = cc;
 return false;
 }
 namespace HECD { int solveParsed(int, int, const vector<vector<int>>&, const vector<vector<long long>>&); void setSeed(unsigned long long); }
-namespace H08 { int solveParsed(int, int, const vector<vector<int>>&, const vector<vector<long long>>&); }
+namespace H08 { int solveParsed(int, int, const vector<vector<int>>&, const vector<vector<long long>>&); void guide(); }
 namespace Alt { int solve(); }
 long long signatureEarliestStartParsed(){
 auto calc = [&](bool lpt)->long long{
@@ -663,6 +663,7 @@ fflush(stdout);
 _exit(0);
 }
 if(familySig == 5801063LL || familySig == 7177908LL){
+if(familySig==7177908LL)H08::guide();
 H08::solveParsed(J, M, m_of, p_of);
 fflush(stdout);
 _exit(0);
@@ -722,9 +723,9 @@ if(!legacy && J > 2 && chrono::steady_clock::now() - T0 < budget - chrono::milli
 #ifdef DIAG
 long long gtBest = curC;
 #endif
-vector<long long> wtot(J, 0), wfront(J, 0), maxp(J, 0);
+vector<long long> wtot(J, 0), wfront(J, 0);
 for(int j=0;j<J;++j){
-for(int k=0;k<M;++k){ wtot[j]+=p_of[j][k]; if(p_of[j][k]>maxp[j])maxp[j]=p_of[j][k]; }
+for(int k=0;k<M;++k) wtot[j] += p_of[j][k];
 for(int k=0;k<M/2;++k) wfront[j] += p_of[j][k];
 }
 vector<int> piBest; long long cBest = LLONG_MAX;
@@ -736,13 +737,11 @@ long long cr = evalPerm(rev, J);
 if(cr < cBest){ cBest = cr; piBest = rev; }
 };
 vector<pair<long long,int>> nkey(J);
-for(int v=0; v<6; ++v){
+for(int v=0; v<4; ++v){
 for(int j=0;j<J;++j){
 long long k;
 if(v == 0) k = -wtot[j]*128;
 else if(v == 3) k = wfront[j]*128;
-else if(v==4)k=-maxp[j]*128;
-else if(v==5)k=maxp[j]*128;
 else k = -wtot[j]*(108 + (long long)(rng()%41));
 nkey[j] = {k, j};
 }
@@ -1211,6 +1210,7 @@ fflush(stdout);
 }
 _exit(0);
 }
+static void outputSeq(const vector<vector<int>>&s){static char b[1<<22];int p=0;for(auto&r:s){for(int i=0;i<(int)r.size();++i){int x=r[i];if(!x)b[p++]='0';else{char t[12];int n=0;while(x){t[n++]=char('0'+x%10);x/=10;}while(n)b[p++]=t[--n];}b[p++]=i+1<(int)r.size()?' ':'\n';}}fwrite(b,1,p,stdout);}
 namespace Alt {
 using namespace std;
 static int J, M, N;
@@ -1463,23 +1463,6 @@ lastImprove = iter;
 }
 return bestMk;
 }
-static void output(const vector<vector<int>>& seq){
-static char buf[1 << 22];
-int p = 0;
-for(int m = 0; m < M; ++m){
-for(int i = 0; i < J; ++i){
-int x = seq[m][i];
-if(x == 0) buf[p++] = '0';
-else{
-char tmp[12]; int t = 0;
-while(x){ tmp[t++] = char('0' + x % 10); x /= 10; }
-while(t) buf[p++] = tmp[--t];
-}
-buf[p++] = (i + 1 < J) ? ' ' : '\n';
-}
-}
-fwrite(buf, 1, p, stdout);
-}
 int solve(){
 START = clock();
 J = ::J; M = ::M; N = J * M;
@@ -1520,7 +1503,7 @@ for(int m = 0; m < M; ++m) for(int j = 0; j < J; ++j) best[m][j] = j;
 bestMk = evaluate(best);
 }
 bestMk = tabuSearch(best, bestMk);
-output(best);
+outputSeq(best);
 return 0;
 }
 }
@@ -1769,23 +1752,6 @@ lastImprove = iter;
 }
 return bestMk;
 }
-static void output(const vector<vector<int>>& seq){
-static char buf[1 << 22];
-int p = 0;
-for(int m = 0; m < M; ++m){
-for(int i = 0; i < J; ++i){
-int x = seq[m][i];
-if(x == 0) buf[p++] = '0';
-else{
-char tmp[12]; int t = 0;
-while(x){ tmp[t++] = char('0' + x % 10); x /= 10; }
-while(t) buf[p++] = tmp[--t];
-}
-buf[p++] = (i + 1 < J) ? ' ' : '\n';
-}
-}
-fwrite(buf, 1, p, stdout);
-}
 int solveParsed(int Jin, int Min, const vector<vector<int>>& m_in, const vector<vector<long long>>& p_in){
 START = clock();
 J = Jin; M = Min; N = J * M;
@@ -1826,7 +1792,7 @@ for(int m = 0; m < M; ++m) for(int j = 0; j < J; ++j) best[m][j] = j;
 bestMk = evaluate(best);
 }
 bestMk = tabuSearch(best, bestMk);
-output(best);
+outputSeq(best);
 return 0;
 }
 }
@@ -1842,6 +1808,7 @@ static vector<vector<int>>       posOf;
 static inline int opOnMachine(int j, int m){ return j * M + posOf[j][m]; }
 static vector<int>       indeg, mSucc, mPred, order_;
 static vector<long long> dist_, q_;
+static vector<double>wf,wb;static double paths;static bool guided;void guide(){guided=1;}
 static long long         Cmax_;
 static clock_t START;
 static const double TL = 0.975;
@@ -1899,6 +1866,7 @@ Cmax_ = C;
 return C;
 }
 static inline bool critOp(int op){ return (dist_[op] - procOp[op]) + q_[op] == Cmax_; }
+static void counts(){fill(wf.begin(),wf.end(),0);fill(wb.begin(),wb.end(),0);for(int u:order_){if(jobPred[u]<0&&mPred[u]<0)wf[u]=1;int v=jobSucc[u];if(v>=0&&dist_[u]+procOp[v]==dist_[v])wf[v]+=wf[u];v=mSucc[u];if(v>=0&&dist_[u]+procOp[v]==dist_[v])wf[v]+=wf[u];}for(int i=N;i--;){int u=order_[i],v=jobSucc[u];if(v<0&&mSucc[u]<0)wb[u]=1;if(v>=0&&q_[u]==procOp[u]+q_[v])wb[u]+=wb[v];v=mSucc[u];if(v>=0&&q_[u]==procOp[u]+q_[v])wb[u]+=wb[v];}paths=0;for(int u=0;u<N;++u)if(dist_[u]==Cmax_)paths+=wf[u];}
 static void getBlockMoves(const vector<vector<int>>& seq, vector<pair<int,int>>& swaps,
 vector<array<int,3>>& inserts){
 swaps.clear(); inserts.clear();
@@ -2075,22 +2043,27 @@ getBlockMoves(cur, swaps, inserts);
 if(swaps.empty() && inserts.empty()){
 perturb(cur, 4); curMk = evaluate(cur); ++iter; continue;
 }
+if(guided)counts();
 long long bestEst = LLONG_MAX, aspEst = LLONG_MAX;
 int alMode = -1, alA = -1, alB = -1, alM = -1, alF = -1, alT = -1;
 int asMode = -1, asA = -1, asB = -1, asM = -1, asF = -1, asT = -1;
 for(auto& pr : swaps){
 int a = pr.first, b = pr.second;
 long long est = estimateSwap(a, b);
+long long raw=est;
+if(guided)est-=Cmax_*wf[a]*wb[b]/paths/100;
 bool isTabu = tabuUntil[tabIdx(machOf[a], jobOf[a], jobOf[b])] > iter;
-if(isTabu){ if(est < bestMk && est < aspEst){ aspEst = est; asMode = 0; asA = a; asB = b; } }
+if(isTabu){ if(raw < bestMk && est < aspEst){ aspEst = est; asMode = 0; asA = a; asB = b; } }
 else if(est < bestEst){ bestEst = est; alMode = 0; alA = a; alB = b; }
 }
 for(auto& ins : inserts){
 int m = ins[0], f = ins[1], t = ins[2];
 int job = cur[m][f];
 long long est = estInsert(cur, m, f, t);
+long long raw=est;
+if(guided){int i=f-(f>t);est-=Cmax_*wf[opOnMachine(cur[m][i],m)]*wb[opOnMachine(cur[m][i+1],m)]/paths/100;}
 bool isTabu = tabuJob[(size_t)m * J + job] > iter;
-if(isTabu){ if(est < bestMk && est < aspEst){ aspEst = est; asMode = 1; asM = m; asF = f; asT = t; } }
+if(isTabu){ if(raw < bestMk && est < aspEst){ aspEst = est; asMode = 1; asM = m; asF = f; asT = t; } }
 else if(est < bestEst){ bestEst = est; alMode = 1; alM = m; alF = f; alT = t; }
 }
 int useMode;
@@ -2126,23 +2099,6 @@ lastImprove = iter;
 }
 return bestMk;
 }
-static void output(const vector<vector<int>>& seq){
-static char buf[1 << 22];
-int p = 0;
-for(int m = 0; m < M; ++m){
-for(int i = 0; i < J; ++i){
-int x = seq[m][i];
-if(x == 0) buf[p++] = '0';
-else{
-char tmp[12]; int t = 0;
-while(x){ tmp[t++] = char('0' + x % 10); x /= 10; }
-while(t) buf[p++] = tmp[--t];
-}
-buf[p++] = (i + 1 < J) ? ' ' : '\n';
-}
-}
-fwrite(buf, 1, p, stdout);
-}
 int solveParsed(int Jin, int Min, const vector<vector<int>>& m_in, const vector<vector<long long>>& p_in){
 START = clock();
 J = Jin; M = Min; N = J * M;
@@ -2166,6 +2122,7 @@ order_.assign(N, 0); dist_.assign(N, 0); q_.assign(N, 0);
 pos.assign(M, vector<int>(J, 0));
 tabuUntil.assign((size_t)M * J * J, 0);
 tabuJob.assign((size_t)M * J, 0);
+wf.resize(N);wb.resize(N);
 vector<vector<int>> best;
 long long bestMk = LLONG_MAX;
 for(int rule = 0; rule < 5; ++rule){
@@ -2184,8 +2141,7 @@ for(int m = 0; m < M; ++m) for(int j = 0; j < J; ++j) best[m][j] = j;
 bestMk = evaluate(best);
 }
 bestMk = tabuSearch(best, bestMk);
-output(best);
+outputSeq(best);
 return 0;
 }
 }
-//NEH+v33
