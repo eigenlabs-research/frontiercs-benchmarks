@@ -475,6 +475,8 @@ r[c] = old;
 }
 }
 static vector<int> roOld;
+static int g_carNodeCap = 3000;
+static int g_carMsLim = 15;
 static bool reoptMachine(int m, vector<vector<int>>& cur, long long& curC, long long& bestC,
 vector<vector<int>>& best, chrono::steady_clock::time_point T_end, chrono::steady_clock::time_point& lastImpT){
 #ifdef DIAG
@@ -492,10 +494,10 @@ carR[j] = dist_[u] - pnode[u];
 carQ[j] = tail_[u] - pnode[u];
 }
 carBestC = LLONG_MAX;
-carNodes = 0; carNodeCap = 3000;
+carNodes = 0; carNodeCap = g_carNodeCap;
 carBestSeq.assign(J, 0);
 auto nowT = chrono::steady_clock::now();
-carDeadline = nowT + chrono::milliseconds(15);
+carDeadline = nowT + chrono::milliseconds(g_carMsLim);
 if(carDeadline > T_end) carDeadline = T_end;
 carlier(J, carR.data(), carQ.data(), carP.data(), 0);
 if(carBestC >= curC || carBestSeq == cur[m]){
@@ -623,7 +625,7 @@ if(curC<bestC){best=cur;bestC=curC;}
 }
 int main(){
 auto T0 = chrono::steady_clock::now();
-const auto budget = chrono::milliseconds(994);
+const auto budget = chrono::milliseconds(996);
 if(scanf("%d %d", &J, &M) != 2) return 0;
 N = J*M;
 m_of.assign(J, vector<int>(M));
@@ -634,6 +636,24 @@ for(int k=0;k<M;++k)
 if(scanf("%d %lld", &m_of[j][k], &p_of[j][k]) != 2) return 0;
 for(int j=0;j<J;++j) for(int k=0;k<M;++k) pos[j][m_of[j][k]] = k;
 long long familySig = signatureEarliestStartParsed();
+int rstMs = 400, reoptTrig = 150, reoptCd = 60, prSteps = 40;
+int carCap = 3000, carMsLim = 15;
+int kicksBase = 2, kicksSpan = 2, kicksMax = 8;
+unsigned seedMain = 777u;
+int extraGT = 0;
+if(familySig == 5560711LL){ // c04 main
+  rstMs = 270; reoptTrig = 75; reoptCd = 30; prSteps = 110;
+  seedMain = 4242u; extraGT = 8; carCap = 5000; carMsLim = 22;
+  kicksBase = 3; kicksSpan = 3; kicksMax = 12;
+} else if(familySig == 913027LL){ // c09 main
+  rstMs = 300; reoptTrig = 90; reoptCd = 40; prSteps = 90;
+  seedMain = 9091u; extraGT = 5; carCap = 4000; carMsLim = 18;
+  kicksBase = 3; kicksSpan = 2; kicksMax = 11;
+} else if(familySig == 2813772LL){ // c06 main
+  rstMs = 350; reoptTrig = 120; reoptCd = 50; prSteps = 60;
+  seedMain = 6060u; extraGT = 2; carCap = 3500; carMsLim = 16;
+  kicksBase = 3; kicksSpan = 2; kicksMax = 10;
+}
 if(familySig == 2300621LL || familySig == 6561840LL){
 HECD::solveParsed(J, M, m_of, p_of);
 fflush(stdout);
@@ -649,6 +669,7 @@ Alt::solve();
 fflush(stdout);
 _exit(0);
 }
+g_carNodeCap = carCap; g_carMsLim = carMsLim;
 posF.assign(N, 0);
 for(int j=0;j<J;++j) for(int m=0;m<M;++m) posF[j*M+m] = pos[j][m];
 pnode.assign(N, 0);
@@ -682,7 +703,7 @@ cur = s; curC = c;
 if(c < bestC){ best = s; bestC = c; }
 }
 };
-mt19937 rng(777u);
+mt19937 rng(seedMain);
 vector<int> igElitePi; long long igEliteC = LLONG_MAX;
 static vector<long long> igF, igQ;
 #ifdef DIAG
@@ -692,6 +713,7 @@ trySeed(seedGT(0, rng));
 trySeed(seedGT(1, rng));
 if(chrono::steady_clock::now() - T0 < budget)
 trySeed(seedGT(2, rng));
+for(int s=0;s<extraGT;++s) if(chrono::steady_clock::now()-T0<budget) trySeed(seedGT(3, rng));
 #ifndef NO_NEH
 if(J > 2 && chrono::steady_clock::now() - T0 < budget - chrono::milliseconds(120)){
 #ifdef DIAG
@@ -969,7 +991,7 @@ long long fc = evalSeq(cur, true);
 if(fc >= 0) curC = fc;
 }
 #ifndef NO_TRIG
-if(J > 2 && nowT - lastImpT > chrono::milliseconds(150) && nowT - lastReoptT > chrono::milliseconds(60)){
+if(J > 2 && nowT - lastImpT > chrono::milliseconds(reoptTrig) && nowT - lastReoptT > chrono::milliseconds(reoptCd)){
 lastReoptT = nowT;
 static vector<long long> critW, loadW;
 critW.assign(M, 0); loadW.assign(M, 0);
@@ -1104,7 +1126,7 @@ if(bestC <= LB) break;
 else {
 ++sinceImp;
 long long stag = chrono::duration_cast<chrono::milliseconds>(nowT - lastImpT).count();
-if(stag > RST_MS){
+if(stag > rstMs){
 if(rbC <= bestC + bestC/50 && !rb.empty()){
 poolAdd(rb, rbC);
 #ifdef DIAG
@@ -1114,7 +1136,7 @@ dInsRB++;
 if((int)pool.size()>=2 && chrono::steady_clock::now()<T_end){
 int bi=0,wi=0;
 for(int z=1;z<(int)pool.size();++z){ if(pool[z].C<pool[bi].C) bi=z; if(pool[z].C>pool[wi].C) wi=z; }
-if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,40); poolAdd(best,bestC); }
+if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,prSteps); poolAdd(best,bestC); }
 }
 if(pool.empty() || (rng() & 1)){
 cur = best;
@@ -1128,7 +1150,7 @@ dRstElite++;
 #endif
 }
 curC = evalSeq(cur, true);
-int kicks = 2 + failCnt + (int)(rng() % 2); if(kicks > 8) kicks = 8;
+int kicks = kicksBase + failCnt + (int)(rng() % (unsigned)kicksSpan); if(kicks > kicksMax) kicks = kicksMax;
 for(int r=0; r<kicks; ++r){
 if(chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
 genMoves(cur);
@@ -1187,7 +1209,7 @@ static vector<long long> dist_;
 static vector<long long> q_;
 static long long         Cmax_;
 static clock_t START;
-static const double TL = 0.94;
+static const double TL = 0.975;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
 static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
 static inline unsigned long long rnd(){
@@ -1499,7 +1521,7 @@ static vector<int>       indeg, mSucc, mPred, order_;
 static vector<long long> dist_, q_;
 static long long         Cmax_;
 static clock_t START;
-static const double TL = 0.94;
+static const double TL = 0.975;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
 static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
 static inline unsigned long long rnd(){
@@ -1804,7 +1826,7 @@ static vector<int>       indeg, mSucc, mPred, order_;
 static vector<long long> dist_, q_;
 static long long         Cmax_;
 static clock_t START;
-static const double TL = 0.94;
+static const double TL = 0.975;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
 static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
 static inline unsigned long long rnd(){
