@@ -640,6 +640,10 @@ if(c < bestC){ best = s; bestC = c; }
 };
 mt19937 rng(777u);
 vector<int> igElitePi; long long igEliteC = LLONG_MAX;
+static vector<long long> igF, igQ;
+#ifdef DIAG
+int igChk = 0;
+#endif
 trySeed(seedGT(0, rng));
 trySeed(seedGT(1, rng));
 if(chrono::steady_clock::now() - T0 < budget)
@@ -720,7 +724,7 @@ cBest = curP;
 #define IG_SHALLOW_MS 60
 #endif
 long long gtC = curC;
-int sliceMs = (cBest < gtC + gtC/20) ? IG_DEEP_MS : IG_SHALLOW_MS;
+int sliceMs = (cBest < gtC + gtC/10) ? IG_DEEP_MS : IG_SHALLOW_MS;
 auto igEnd = chrono::steady_clock::now() + chrono::milliseconds(sliceMs);
 auto igCap = T0 + budget - chrono::milliseconds(700);
 if(igEnd > igCap) igEnd = igCap;
@@ -728,27 +732,66 @@ long long sump = 0; for(int j=0;j<J;++j) sump += wtot[j];
 double Temp = 0.4 * (double)sump / (double)(J*M*10);
 vector<int> piCur = piBest, piNew;
 long long cCur = cBest;
-int d = J-1 < 4 ? J-1 : 4;
-int rem[4];
+int dMax = J-1 < 6 ? J-1 : 6;
+int rem[6];
+int d = dMax;
 int igIter = 0;
 while(d >= 1 && chrono::steady_clock::now() < igEnd){
 ++igIter;
+d = 2 + (int)(rng() % (unsigned)(dMax >= 2 ? dMax - 1 : 1)); if(d > dMax) d = dMax; if(d < 1) d = 1;
 piNew = piCur;
 for(int t=0;t<d;++t){ int i = (int)(rng() % (unsigned)piNew.size()); rem[t] = piNew[i]; piNew.erase(piNew.begin()+i); }
+long long cNew = LLONG_MAX;
 for(int t=0;t<d;++t){
 int j = rem[t]; int L = (int)piNew.size();
+igF.assign((size_t)(L+1)*M, 0);
+for(int p=0;p<L;++p){
+long long* Fp = &igF[(size_t)p*M]; long long* Fn = &igF[(size_t)(p+1)*M];
+for(int m=0;m<M;++m) Fn[m] = Fp[m];
+int jj = piNew[p]; long long cur2 = 0;
+const int* mo = m_of[jj].data();
+const long long* po = p_of[jj].data();
+for(int k=0;k<M;++k){
+int m = mo[k];
+long long s = cur2 > Fn[m] ? cur2 : Fn[m];
+cur2 = s + po[k]; Fn[m] = cur2;
+}
+}
+long long CL = 0; { long long* FL=&igF[(size_t)L*M]; for(int m=0;m<M;++m) if(FL[m]>CL) CL=FL[m]; }
+igQ.assign((size_t)(L+1)*M, 0);
+for(int p=L-1;p>=0;--p){
+long long* Qp = &igQ[(size_t)p*M]; long long* Qn = &igQ[(size_t)(p+1)*M];
+for(int m=0;m<M;++m) Qp[m] = Qn[m];
+int jj = piNew[p]; long long cur2 = 0;
+const int* mo = m_of[jj].data();
+const long long* po = p_of[jj].data();
+for(int k=M-1;k>=0;--k){
+int m = mo[k];
+long long tt = cur2 > Qp[m] ? cur2 : Qp[m];
+cur2 = tt + po[k]; Qp[m] = cur2;
+}
+}
 int bp = 0; long long bc = LLONG_MAX;
+const int* moj = m_of[j].data();
+const long long* poj = p_of[j].data();
 for(int p=0;p<=L;++p){
-ncand.clear();
-for(int x=0;x<p;++x) ncand.push_back(piNew[x]);
-ncand.push_back(j);
-for(int x=p;x<L;++x) ncand.push_back(piNew[x]);
-long long c = evalPerm(ncand, L+1);
-if(c < bc){ bc = c; bp = p; }
+const long long* Fp = &igF[(size_t)p*M];
+const long long* Qp = &igQ[(size_t)p*M];
+long long cur2 = 0, mk = CL;
+for(int k=0;k<M;++k){
+int m = moj[k];
+long long s = cur2 > Fp[m] ? cur2 : Fp[m];
+cur2 = s + poj[k];
+long long v = cur2 + Qp[m]; if(v > mk) mk = v;
+}
+if(mk < bc){ bc = mk; bp = p; }
 }
 piNew.insert(piNew.begin()+bp, j);
+cNew = bc;
+#ifdef DIAG
+if(igChk < 50){ long long ref = evalPerm(piNew, L+1); if(ref != bc) fprintf(stderr,"IG-ACCEL MISMATCH %lld vs %lld\n", bc, ref); ++igChk; }
+#endif
 }
-long long cNew = evalPerm(piNew, J);
 if(cNew <= cCur || (Temp > 0 && (double)(rng() & 0xfffff) * (1.0/1048576.0) < exp(-(double)(cNew - cCur)/Temp))){
 piCur = piNew; cCur = cNew;
 }
