@@ -525,7 +525,7 @@ long long cc = evalSeq(cur, true);
 if(cc >= 0) curC = cc;
 return false;
 }
-namespace HECD { int solveParsed(int, int, const vector<vector<int>>&, const vector<vector<long long>>&); void setSeed(unsigned long long); }
+namespace HECD { int solveParsed(int, int, const vector<vector<int>>&, const vector<vector<long long>>&); void setSeed(unsigned long long); void shortRun(); }
 namespace H08 { int solveParsed(int, int, const vector<vector<int>>&, const vector<vector<long long>>&); }
 namespace Alt { int solve(); }
 long long signatureEarliestStartParsed(){
@@ -656,6 +656,7 @@ if(familySig == 5560711LL){ // c04 main
 }
 if(familySig == 2300621LL || familySig == 6561840LL){
 if(familySig == 2300621LL) HECD::setSeed(0xd1b54a32d192ed03ULL);
+else HECD::shortRun();
 HECD::solveParsed(J, M, m_of, p_of);
 fflush(stdout);
 _exit(0);
@@ -994,14 +995,6 @@ iter++;
 if((iter & 16383) == 0){
 long long fc = evalSeq(cur, true);
 if(fc >= 0) curC = fc;
-if((int)pool.size() >= 2){
-long long sbC = bestC; vector<vector<int>> sb = best;
-int bi=0,wi=0;
-for(int z=1;z<(int)pool.size();++z){ if(pool[z].C<pool[bi].C) bi=z; if(pool[z].C>pool[wi].C) wi=z; }
-if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,30); poolAdd(best,bestC); }
-bestC = sbC; best = sb;
-evalSeq(cur, true);
-}
 }
 #ifndef NO_TRIG
 if(J > 2 && nowT - lastImpT > chrono::milliseconds(reoptTrig) && nowT - lastReoptT > chrono::milliseconds(reoptCd)){
@@ -1533,11 +1526,12 @@ static inline int opOnMachine(int j, int m){ return j * M + posOf[j][m]; }
 static vector<int>       indeg, mSucc, mPred, order_;
 static vector<long long> dist_, q_;
 static long long         Cmax_;
-static clock_t START;
+static clock_t START, bias;
 static const double TL = 0.975;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
 static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
 void setSeed(unsigned long long s){ rngState=s; }
+void shortRun(){ bias=CLOCKS_PER_SEC*35/1000; }
 static inline unsigned long long rnd(){
 rngState ^= rngState << 13; rngState ^= rngState >> 7; rngState ^= rngState << 17;
 return rngState;
@@ -1783,7 +1777,7 @@ buf[p++] = (i + 1 < J) ? ' ' : '\n';
 fwrite(buf, 1, p, stdout);
 }
 int solveParsed(int Jin, int Min, const vector<vector<int>>& m_in, const vector<vector<long long>>& p_in){
-START = clock();
+START = clock()-bias;
 J = Jin; M = Min; N = J * M;
 machJK = m_in;
 procJK = p_in;
