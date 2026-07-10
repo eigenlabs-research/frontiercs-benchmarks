@@ -1282,7 +1282,8 @@ int main(){
         }
         g_msAlpha = 1.0;
     }
-    // Priority path: tall no-rotation split2 with alpha 0.94 early (protects c11).
+    // Priority path: tall no-rotation split2 with alpha 0.94 early (protects c11 / unlocks c9).
+    // pe caps: 80Y+80X full sweep; 48X historically misses c9, 64X+ hits it.
     if(!allowRot && g_bin.H * 5 > g_bin.W * 6 && elapsed() < TIME_LIMIT * 0.30){
         double oldA = g_msAlpha; g_msAlpha = 0.94;
         auto cutsE = [&](int L){
