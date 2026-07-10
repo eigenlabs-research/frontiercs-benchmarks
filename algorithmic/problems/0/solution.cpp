@@ -1286,8 +1286,8 @@ int main() {
         }
     }
     } // end champion search block (skipped when best-fit produced the result)
-    if (!useBF) crownRepack(bestR, TL_MS + 10.0);
-    else if (bestR.ok) crownRepack(bestR, TL_MS + 10.0); // second pass if time
+    if (!useBF) crownRepack(bestR, TL_MS + 20.0);
+    else if (bestR.ok) crownRepack(bestR, TL_MS + 20.0);
 
     int maxX = -1, maxY = -1;
     for (auto& p : bestR.pl) {
