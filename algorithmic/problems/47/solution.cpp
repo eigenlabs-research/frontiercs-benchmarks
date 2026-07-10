@@ -1293,10 +1293,10 @@ int main(){
             if((int)v.size()>10) v.resize(10); return v;
         };
         int pe=0;
-        for(int sh:cutsE(g_bin.H))for(int mask=0;mask<8&&pe<80&&elapsed()<TIME_LIMIT*0.55;++mask,++pe)
+        for(int sh:cutsE(g_bin.H))for(int mask=0;mask<8&&pe<60&&elapsed()<TIME_LIMIT*0.55;++mask,++pe)
             consider(polish(splitMixedPlanY(allowRot,sh,mask,0)));
         pe=0;
-        for(int sw:cutsE(g_bin.W))for(int mask=0;mask<8&&pe<80&&elapsed()<TIME_LIMIT*0.75;++mask,++pe)
+        for(int sw:cutsE(g_bin.W))for(int mask=0;mask<8&&pe<60&&elapsed()<TIME_LIMIT*0.75;++mask,++pe)
             consider(polish(splitMixedPlan(allowRot,sw,mask,0)));
         g_msAlpha = oldA;
     }
@@ -1325,9 +1325,9 @@ int main(){
         g_msAlpha = 1.0;
     }
     // Focused beam with alpha=0.94 and reduced depth for shorter shelves
-    if(allowRot && elapsed() < TIME_LIMIT * 0.80){
+    if(allowRot && elapsed() < TIME_LIMIT * 0.78){
         g_msAlpha = 0.94;
-        consider(polish(beamMixedShelfPlan(allowRot, 14, 5, 5, TIME_LIMIT * 0.80)));
+        consider(polish(beamMixedShelfPlan(allowRot, 14, 5, 5, TIME_LIMIT * 0.78)));
         g_msAlpha = 1.0;
     }
     // Wide-and-shallow beam for broad exploration
