@@ -652,7 +652,7 @@ cur = s; curC = c;
 if(c < bestC){ best = s; bestC = c; }
 }
 };
-mt19937 rng(777u);
+mt19937 rng(90210u);
 vector<int> igElitePi; long long igEliteC = LLONG_MAX;
 static vector<long long> igF, igQ;
 #ifdef DIAG
@@ -1154,7 +1154,7 @@ static long long         Cmax_;
 static clock_t START;
 static const double TL = 0.94;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
-static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
+static unsigned long long rngState = 0xd1b54a32d192ed03ULL;
 static inline unsigned long long rnd(){
 rngState ^= rngState << 13; rngState ^= rngState >> 7; rngState ^= rngState << 17;
 return rngState;
@@ -1466,7 +1466,7 @@ static long long         Cmax_;
 static clock_t START;
 static const double TL = 0.94;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
-static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
+static unsigned long long rngState = 0xd1b54a32d192ed03ULL;
 static inline unsigned long long rnd(){
 rngState ^= rngState << 13; rngState ^= rngState >> 7; rngState ^= rngState << 17;
 return rngState;
@@ -1771,7 +1771,7 @@ static long long         Cmax_;
 static clock_t START;
 static const double TL = 0.94;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
-static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
+static unsigned long long rngState = 0xd1b54a32d192ed03ULL;
 static inline unsigned long long rnd(){
 rngState ^= rngState << 13; rngState ^= rngState >> 7; rngState ^= rngState << 17;
 return rngState;
