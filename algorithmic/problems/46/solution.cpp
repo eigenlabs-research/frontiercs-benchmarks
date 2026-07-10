@@ -640,6 +640,7 @@ if(c < bestC){ best = s; bestC = c; }
 };
 mt19937 rng(777u);
 vector<int> igElitePi; long long igEliteC = LLONG_MAX;
+vector<int> igBestPi;
 trySeed(seedGT(0, rng));
 trySeed(seedGT(1, rng));
 if(chrono::steady_clock::now() - T0 < budget)
@@ -757,6 +758,7 @@ if(cBest < igEliteC){ igEliteC = cBest; igElitePi = piBest; }
 cBest = cNew; piBest = piNew;
 } else if(cNew < igEliteC && piNew != piBest){ igEliteC = cNew; igElitePi = piNew; }
 }
+igBestPi = piBest;
 #ifdef DIAG
 fprintf(stderr, "IG iters=%d slice=%d cPi=%lld gtC=%lld %s\n", igIter, sliceMs, cBest, gtC, cBest < gtC ? "PI-WINS" : "gt-wins");
 #endif
@@ -846,14 +848,74 @@ else { pool[poolHead] = {s, C, h}; poolHead = (poolHead+1)%E; }
 vector<vector<int>> rb; long long rbC = LLONG_MAX;
 int failCnt = 0;
 bool afterRst = false;
+bool afterPr = false;
+long long prTrig = 0;
+#ifdef DIAG
+long long dPr = 0, dPrFall = 0, dPrEval = 0, dPrFeas = 0, dPrD0 = 0, dPrWin = 0;
+#endif
+#ifndef NO_PR
+auto pathRelink = [&](const vector<vector<int>>& A, const vector<vector<int>>& B, vector<vector<int>>& out, long long& outC){
+vector<vector<int>> S = A;
+long long D0 = 0;
+for(int m=0;m<M;++m) for(int i=0;i<J;++i) if(S[m][i] != B[m][i]) D0++;
+if(D0 < 4) return;
+#ifdef DIAG
+dPr++; dPrD0 += D0;
+#endif
+long long floorD = D0/10; if(floorD < 2) floorD = 2;
+int stride = N > 600 ? 3 : 1;
+auto prEnd = chrono::steady_clock::now() + chrono::milliseconds(15);
+if(prEnd > T_end) prEnd = T_end;
+vector<int> fixp(M, 0);
+int mvCnt = 0;
+bool any = true;
+while(any){
+any = false;
+for(int m=0;m<M;++m){
+int i = fixp[m];
+while(i < J && S[m][i] == B[m][i]) ++i;
+if(i >= J){ fixp[m] = J; continue; }
+int want = B[m][i];
+int j = i+1;
+while(j < J && S[m][j] != want) ++j;
+if(j >= J){ fixp[m] = J; continue; }
+for(int t=j;t>i;--t) S[m][t] = S[m][t-1];
+S[m][i] = want;
+fixp[m] = i+1;
+any = true;
+++mvCnt;
+if(mvCnt % stride == 0){
+long long c = evalSeq(S);
+#ifdef DIAG
+dPrEval++;
+if(c >= 0) dPrFeas++;
+#endif
+if(c >= 0 && c < outC){
+long long dA = 0, dB = 0;
+for(int mm=0;mm<M && (dA < floorD || dB < floorD);++mm) for(int ii=0;ii<J;++ii){ dA += S[mm][ii] != A[mm][ii]; dB += S[mm][ii] != B[mm][ii]; }
+if(dA >= floorD && dB >= floorD){ outC = c; out = S; }
+}
+}
+if((mvCnt & 7) == 0 && chrono::steady_clock::now() >= prEnd) return;
+}
+}
+};
+#endif
 auto lastReoptT = T0;
 int lastReoptM = -1;
+#ifndef NO_PR
+if(!igBestPi.empty()){
+vector<vector<int>> es(M, igBestPi);
+long long ec = evalSeq(es);
+if(ec > 0) poolAdd(es, ec);
+}
+#endif
 if(!igElitePi.empty()){
 vector<vector<int>> es(M, igElitePi);
 long long ec = evalSeq(es);
 if(ec > 0) poolAdd(es, ec);
-evalSeq(cur, true);
 }
+if(!igBestPi.empty() || !igElitePi.empty()) evalSeq(cur, true);
 #ifndef NO_SWEEP
 if(J > 2){
 vector<pair<long long,int>> mord(M);
@@ -1009,8 +1071,10 @@ failCnt = 0;
 iterLastImp = iter;
 dInsBest++;
 if(afterRst) dRstWin++;
+if(afterPr) dPrWin++;
 #endif
 afterRst = false;
+afterPr = false;
 if(bestC <= LB) break;
 }
 }
@@ -1024,6 +1088,43 @@ poolAdd(rb, rbC);
 dInsRB++;
 #endif
 }
+bool prOK = false;
+#ifndef NO_PR
+if((int)pool.size() >= 2 && chrono::steady_clock::now() + chrono::milliseconds(35) < T_end){
+++prTrig;
+const vector<vector<int>> *pa = nullptr, *pb = nullptr;
+if(prTrig & 1){
+unsigned long long hb = solHash(best);
+for(int t=0;t<8;++t){ int k = (int)(rng()%pool.size()); if(pool[k].h != hb){ pa = &best; pb = &pool[k].seq; break; } }
+} else {
+int k1 = (int)(rng()%pool.size());
+int k2 = (int)((k1 + 1 + rng()%(unsigned)(pool.size()-1)) % pool.size());
+pa = &pool[k1].seq; pb = &pool[k2].seq;
+}
+if(pa){
+vector<vector<int>> sp; long long cp = LLONG_MAX;
+pathRelink(*pa, *pb, sp, cp);
+pathRelink(*pb, *pa, sp, cp);
+if(cp < LLONG_MAX && cp < bestC + bestC/20){
+cur = sp;
+long long cc = evalSeq(cur, true);
+if(cc >= 0){
+curC = cc;
+prOK = true;
+afterPr = true;
+long long worst = LLONG_MIN;
+for(const Elite& e : pool) if(e.C > worst) worst = e.C;
+if(cc < worst) poolAdd(cur, cc);
+}
+}
+}
+#ifdef DIAG
+if(!prOK) dPrFall++;
+#endif
+}
+#endif
+if(!prOK){
+afterPr = false;
 if(pool.empty() || (rng() & 1)){
 cur = best;
 #ifdef DIAG
@@ -1047,6 +1148,7 @@ long long nc = evalSeq(cur, true);
 if(nc < 0){ undoMove(cur, mv); evalSeq(cur, true); }
 else curC = nc;
 }
+}
 fill(tabuTB.begin(), tabuTB.end(), 0);
 sinceImp = 0; rbC = LLONG_MAX;
 lastImpT = chrono::steady_clock::now();
@@ -1062,6 +1164,7 @@ dRst++;
 extern long long g_pops, g_calls;
 extern long long g_roAtt, g_roAcc, g_roCyc, g_roUs;
 fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d) reopt att=%lld acc=%lld cyc=%lld ms=%.1f rst=%lld(best %lld/elite %lld, wins %lld) pool ins=%lld/%lld\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N, g_roAtt, g_roAcc, g_roCyc, g_roUs/1000.0, dRst, dRstBest, dRstElite, dRstWin, dInsBest, dInsRB);
+fprintf(stderr, "PR trig=%lld relinks=%lld meanD0=%.0f evals=%lld feas=%lld frac=%.2f fall=%lld prWins=%lld\n", prTrig, dPr, dPr ? (double)dPrD0/dPr : 0.0, dPrEval, dPrFeas, dPrEval ? (double)dPrFeas/dPrEval : 0.0, dPrFall, dPrWin);
 #endif
 }
 {
