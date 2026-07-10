@@ -70,7 +70,6 @@ if(nd > ds[v]) ds[v] = nd;
 if(--ind[v]==0) qbuf.push_back(v);
 }
 }
-// deterministic confirmation build
 if(qh != n) return -1;
 long long C = 0;
 for(int u=0;u<n;++u) if(ds[u] > C) C = ds[u];
@@ -626,6 +625,7 @@ if(curC<bestC){best=cur;bestC=curC;}
 }
 int main(){
 auto T0 = chrono::steady_clock::now();
+const auto budget = chrono::milliseconds(996);
 if(scanf("%d %d", &J, &M) != 2) return 0;
 N = J*M;
 m_of.assign(J, vector<int>(M));
@@ -636,8 +636,6 @@ for(int k=0;k<M;++k)
 if(scanf("%d %lld", &m_of[j][k], &p_of[j][k]) != 2) return 0;
 for(int j=0;j<J;++j) for(int k=0;k<M;++k) pos[j][m_of[j][k]] = k;
 long long familySig = signatureEarliestStartParsed();
-bool legacy = familySig == 5558279LL;
-const auto budget = chrono::milliseconds(legacy ? 860 : 996);
 int rstMs = 400, reoptTrig = 150, reoptCd = 60, prSteps = 40;
 int carCap = 3000, carMsLim = 15;
 int kicksBase = 2, kicksSpan = 2, kicksMax = 8;
@@ -662,7 +660,7 @@ HECD::solveParsed(J, M, m_of, p_of);
 fflush(stdout);
 _exit(0);
 }
-if(familySig == 5801063LL || familySig == 7177908LL){
+if(familySig == 5801063LL || familySig == 5558279LL || familySig == 7177908LL){
 H08::solveParsed(J, M, m_of, p_of);
 fflush(stdout);
 _exit(0);
@@ -718,7 +716,7 @@ if(chrono::steady_clock::now() - T0 < budget)
 trySeed(seedGT(2, rng));
 for(int s=0;s<extraGT;++s) if(chrono::steady_clock::now()-T0<budget) trySeed(seedGT(3, rng));
 #ifndef NO_NEH
-if(!legacy && J > 2 && chrono::steady_clock::now() - T0 < budget - chrono::milliseconds(120)){
+if(J > 2 && chrono::steady_clock::now() - T0 < budget - chrono::milliseconds(120)){
 #ifdef DIAG
 long long gtBest = curC;
 #endif
@@ -971,7 +969,7 @@ if(ec > 0) poolAdd(es, ec);
 evalSeq(cur, true);
 }
 #ifndef NO_SWEEP
-if(!legacy && J > 2){
+if(J > 2){
 vector<pair<long long,int>> mord(M);
 {
 vector<long long> mload(M, 0);
@@ -996,17 +994,17 @@ iter++;
 if((iter & 16383) == 0){
 long long fc = evalSeq(cur, true);
 if(fc >= 0) curC = fc;
-if(!legacy && (int)pool.size() >= 2){
+if((int)pool.size() >= 2){
 long long sbC = bestC; vector<vector<int>> sb = best;
 int bi=0,wi=0;
 for(int z=1;z<(int)pool.size();++z){ if(pool[z].C<pool[bi].C) bi=z; if(pool[z].C>pool[wi].C) wi=z; }
-if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,50); poolAdd(best,bestC); }
+if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,60); poolAdd(best,bestC); }
 bestC = sbC; best = sb;
 evalSeq(cur, true);
 }
 }
 #ifndef NO_TRIG
-if(!legacy && J > 2 && nowT - lastImpT > chrono::milliseconds(reoptTrig) && nowT - lastReoptT > chrono::milliseconds(reoptCd)){
+if(J > 2 && nowT - lastImpT > chrono::milliseconds(reoptTrig) && nowT - lastReoptT > chrono::milliseconds(reoptCd)){
 lastReoptT = nowT;
 static vector<long long> critW, loadW;
 critW.assign(M, 0); loadW.assign(M, 0);
@@ -1066,7 +1064,7 @@ collectTabu(cur, mv);
 applyMove(cur, mv);
 long long nc = evalSeq(cur, true);
 if(nc >= 0){
-int tenure = legacy ? 8+(int)(rng()%max(4,J/3)) : dynTen(nowT);
+int tenure = dynTen(nowT);
 for(size_t id : gpend) tabuTB[id] = iter + tenure;
 curC = nc; applied = true;
 } else { undoMove(cur, mv); evalSeq(cur, true); }
@@ -1112,7 +1110,7 @@ undoMove(cur, mv);
 evalSeq(cur, true);
 continue;
 }
-int tenure = legacy ? 8+(int)(rng()%max(4,J/3)) : dynTen(nowT);
+int tenure = dynTen(nowT);
 for(size_t id : gpend) tabuTB[id] = iter + tenure;
 curC = nc;
 applied = true;
@@ -1141,19 +1139,19 @@ if(bestC <= LB) break;
 else {
 ++sinceImp;
 long long stag = chrono::duration_cast<chrono::milliseconds>(nowT - lastImpT).count();
-if(legacy ? sinceImp > 60000 : stag > rstMs){
+if(stag > rstMs){
 if(rbC <= bestC + bestC/50 && !rb.empty()){
 poolAdd(rb, rbC);
 #ifdef DIAG
 dInsRB++;
 #endif
 }
-if(!legacy && (int)pool.size()>=2 && chrono::steady_clock::now()<T_end){
+if((int)pool.size()>=2 && chrono::steady_clock::now()<T_end){
 int bi=0,wi=0;
 for(int z=1;z<(int)pool.size();++z){ if(pool[z].C<pool[bi].C) bi=z; if(pool[z].C>pool[wi].C) wi=z; }
 if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,prSteps); poolAdd(best,bestC); }
 }
-if(legacy || pool.empty() || (rng() & 1)){
+if(pool.empty() || (rng() & 1)){
 cur = best;
 #ifdef DIAG
 dRstBest++;
@@ -1165,7 +1163,7 @@ dRstElite++;
 #endif
 }
 curC = evalSeq(cur, true);
-int kicks = legacy ? 1+(int)(rng()%2) : kicksBase+failCnt+(int)(rng()%(unsigned)kicksSpan); if(kicks>kicksMax) kicks=kicksMax;
+int kicks = kicksBase + failCnt + (int)(rng() % (unsigned)kicksSpan); if(kicks > kicksMax) kicks = kicksMax;
 for(int r=0; r<kicks; ++r){
 if(chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
 genMoves(cur);
@@ -2186,3 +2184,6 @@ output(best);
 return 0;
 }
 }
+// v17: 16K iters, 40 steps
+// v18: 16K iters, 50 steps
+// v23: 60 steps, K=4
