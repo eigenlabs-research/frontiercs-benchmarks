@@ -567,7 +567,7 @@ static PackResult knapsackShelfPlan(bool allowRot){
         // Use steepest-ascent: try all single flips per pass, pick the best.
         bool improved = true;
         int passes = 0;
-        while(improved && passes < 5 && elapsed() < TIME_LIMIT * 0.30){
+        while(improved && passes < 7 && elapsed() < TIME_LIMIT * 0.30){
             improved = false; ++passes;
             int bestFlip = -1; ll bestFlipVal = bestVal;
             for(int t = 0; t < M && elapsed() < TIME_LIMIT * 0.30; ++t){
@@ -1290,7 +1290,7 @@ int main(){
             add(L/3); add(L/2); add((2*L)/3); add(L/4); add((3*L)/4);
             for(int z=0; z<M && z<3; ++z){ const ItemType& it=g_items[ordDens[z]]; int d[2]={it.w,it.h};
                 for(int q=0;q<2;++q) for(int k=1;k<=3;++k){ add(d[q]*k); add(L-d[q]*k);} }
-            if((int)v.size()>10) v.resize(10); return v;
+            if((int)v.size()>14) v.resize(14); return v;
         };
         int pe=0;
         for(int sh:cutsE(g_bin.H))for(int mask=0;mask<8&&pe<80&&elapsed()<TIME_LIMIT*0.55;++mask,++pe)
@@ -1485,7 +1485,7 @@ int main(){
             if(elapsed() > TIME_LIMIT * 0.93) break;
             consider(pruneLow(best, c, ordAreaAsc, allowRot));
         }
-        int ds[3]={4,8,12};
+        int ds[5]={4,8,12,16,20};
         for(int c:ds)for(int side=0;side<4&&elapsed()<TIME_LIMIT*0.955;++side)consider(pruneSide(best,c,ordDens,allowRot,side));
         if(!allowRot&&g_bin.H*5>g_bin.W*6)for(int ln=1;ln<=2;++ln)for(int side=0;side<2&&elapsed()<TIME_LIMIT*0.965;++side){
             consider(pruneLine(best,ln,ordDens,allowRot,side));
