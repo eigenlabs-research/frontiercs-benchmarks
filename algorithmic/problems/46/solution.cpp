@@ -374,7 +374,7 @@ static int carNodes, carNodeCap;
 static chrono::steady_clock::time_point carDeadline;
 static vector<long long> carR, carQ, carP;
 #ifdef DIAG
-long long g_roAtt = 0, g_roAcc = 0, g_roCyc = 0, g_roUs = 0;
+long long g_roAtt = 0, g_roAcc = 0, g_roCyc = 0, g_roUs = 0, g_roEps = 0;
 #endif
 static long long schrage1(int n, const long long* r, const long long* q, const long long* p, int* seqOut){
 static vector<char> done; done.assign(n, 0);
@@ -462,7 +462,7 @@ r[c] = old;
 }
 static vector<int> roOld;
 static bool reoptMachine(int m, vector<vector<int>>& cur, long long& curC, long long& bestC,
-vector<vector<int>>& best, chrono::steady_clock::time_point T_end, chrono::steady_clock::time_point& lastImpT){
+vector<vector<int>>& best, chrono::steady_clock::time_point T_end, chrono::steady_clock::time_point& lastImpT, long long epsAdd){
 #ifdef DIAG
 g_roAtt++;
 auto diagT0 = chrono::steady_clock::now();
@@ -484,7 +484,7 @@ auto nowT = chrono::steady_clock::now();
 carDeadline = nowT + chrono::milliseconds(15);
 if(carDeadline > T_end) carDeadline = T_end;
 carlier(J, carR.data(), carQ.data(), carP.data(), 0);
-if(carBestC >= curC || carBestSeq == cur[m]){
+if(carBestC >= curC + epsAdd || carBestSeq == cur[m]){
 long long cc = evalSeq(cur, true);
 if(cc >= 0) curC = cc;
 return false;
@@ -492,12 +492,15 @@ return false;
 roOld = cur[m];
 cur[m] = carBestSeq;
 long long nc = evalSeq(cur, true);
-if(nc >= 0 && nc < curC){
+if(nc >= 0 && (nc < curC || (epsAdd > 0 && nc < curC + epsAdd && nc < bestC + bestC/50))){
+bool impRo = nc < curC;
 curC = nc;
 if(nc < bestC){ best = cur; bestC = nc; }
 lastImpT = chrono::steady_clock::now();
 #ifdef DIAG
-g_roAcc++;
+if(impRo) g_roAcc++; else g_roEps++;
+#else
+(void)impRo;
 #endif
 return true;
 }
@@ -641,9 +644,7 @@ if(c < bestC){ best = s; bestC = c; }
 mt19937 rng(777u);
 vector<int> igElitePi; long long igEliteC = LLONG_MAX;
 static vector<long long> igF, igQ;
-#ifdef DIAG
 int igChk = 0;
-#endif
 trySeed(seedGT(0, rng));
 trySeed(seedGT(1, rng));
 if(chrono::steady_clock::now() - T0 < budget)
@@ -741,7 +742,7 @@ while(d >= 1 && chrono::steady_clock::now() < igEnd){
 d = 2 + (int)(rng() % (unsigned)(dMax >= 2 ? dMax - 1 : 1)); if(d > dMax) d = dMax; if(d < 1) d = 1;
 piNew = piCur;
 for(int t=0;t<d;++t){ int i = (int)(rng() % (unsigned)piNew.size()); rem[t] = piNew[i]; piNew.erase(piNew.begin()+i); }
-long long cNew = LLONG_MAX;
+long long lastBc = LLONG_MAX;
 for(int t=0;t<d;++t){
 int j = rem[t]; int L = (int)piNew.size();
 igF.assign((size_t)(L+1)*M, 0);
@@ -749,12 +750,10 @@ for(int p=0;p<L;++p){
 long long* Fp = &igF[(size_t)p*M]; long long* Fn = &igF[(size_t)(p+1)*M];
 for(int m=0;m<M;++m) Fn[m] = Fp[m];
 int jj = piNew[p]; long long cur2 = 0;
-const int* mo = m_of[jj].data();
-const long long* po = p_of[jj].data();
 for(int k=0;k<M;++k){
-int m = mo[k];
+int m = m_of[jj][k];
 long long s = cur2 > Fn[m] ? cur2 : Fn[m];
-cur2 = s + po[k]; Fn[m] = cur2;
+cur2 = s + p_of[jj][k]; Fn[m] = cur2;
 }
 }
 long long CL = 0; { long long* FL=&igF[(size_t)L*M]; for(int m=0;m<M;++m) if(FL[m]>CL) CL=FL[m]; }
@@ -763,35 +762,31 @@ for(int p=L-1;p>=0;--p){
 long long* Qp = &igQ[(size_t)p*M]; long long* Qn = &igQ[(size_t)(p+1)*M];
 for(int m=0;m<M;++m) Qp[m] = Qn[m];
 int jj = piNew[p]; long long cur2 = 0;
-const int* mo = m_of[jj].data();
-const long long* po = p_of[jj].data();
 for(int k=M-1;k>=0;--k){
-int m = mo[k];
+int m = m_of[jj][k];
 long long tt = cur2 > Qp[m] ? cur2 : Qp[m];
-cur2 = tt + po[k]; Qp[m] = cur2;
+cur2 = tt + p_of[jj][k]; Qp[m] = cur2;
 }
 }
 int bp = 0; long long bc = LLONG_MAX;
-const int* moj = m_of[j].data();
-const long long* poj = p_of[j].data();
 for(int p=0;p<=L;++p){
 const long long* Fp = &igF[(size_t)p*M];
 const long long* Qp = &igQ[(size_t)p*M];
 long long cur2 = 0, mk = CL;
 for(int k=0;k<M;++k){
-int m = moj[k];
+int m = m_of[j][k];
 long long s = cur2 > Fp[m] ? cur2 : Fp[m];
-cur2 = s + poj[k];
+cur2 = s + p_of[j][k];
 long long v = cur2 + Qp[m]; if(v > mk) mk = v;
 }
 if(mk < bc){ bc = mk; bp = p; }
 }
-piNew.insert(piNew.begin()+bp, j);
-cNew = bc;
+piNew.insert(piNew.begin()+bp, j); lastBc = bc;
 #ifdef DIAG
 if(igChk < 50){ long long ref = evalPerm(piNew, L+1); if(ref != bc) fprintf(stderr,"IG-ACCEL MISMATCH %lld vs %lld\n", bc, ref); ++igChk; }
 #endif
 }
+long long cNew = lastBc;
 if(cNew <= cCur || (Temp > 0 && (double)(rng() & 0xfffff) * (1.0/1048576.0) < exp(-(double)(cNew - cCur)/Temp))){
 piCur = piNew; cCur = cNew;
 }
@@ -869,6 +864,9 @@ return tmin + (int)(rng() % (unsigned)span);
 #ifndef RST_MS
 #define RST_MS 200
 #endif
+#ifndef EPS_DIV
+#define EPS_DIV 100
+#endif
 struct Elite { vector<vector<int>> seq; long long C; unsigned long long h; };
 vector<Elite> pool;
 const int E = 6; int poolHead = 0;
@@ -908,7 +906,7 @@ sort(mord.begin(), mord.end());
 }
 for(int t=0;t<M;++t){
 if(chrono::steady_clock::now() >= T_end) break;
-reoptMachine(mord[t].second, cur, curC, bestC, best, T_end, lastImpT);
+reoptMachine(mord[t].second, cur, curC, bestC, best, T_end, lastImpT, 0);
 }
 if(bestC <= LB) timeUp = true;
 }
@@ -941,7 +939,7 @@ if(pick < 0 || critW[mm] > critW[pick] || (critW[mm] == critW[pick] && loadW[mm]
 }
 if(pick >= 0){
 lastReoptM = pick;
-reoptMachine(pick, cur, curC, bestC, best, T_end, lastImpT);
+reoptMachine(pick, cur, curC, bestC, best, T_end, lastImpT, bestC/EPS_DIV > 0 ? bestC/EPS_DIV : 1);
 }
 }
 #endif
@@ -1103,8 +1101,8 @@ dRst++;
 }
 #ifdef DIAG
 extern long long g_pops, g_calls;
-extern long long g_roAtt, g_roAcc, g_roCyc, g_roUs;
-fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d) reopt att=%lld acc=%lld cyc=%lld ms=%.1f rst=%lld(best %lld/elite %lld, wins %lld) pool ins=%lld/%lld\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N, g_roAtt, g_roAcc, g_roCyc, g_roUs/1000.0, dRst, dRstBest, dRstElite, dRstWin, dInsBest, dInsRB);
+extern long long g_roAtt, g_roAcc, g_roCyc, g_roUs, g_roEps;
+fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d) reopt att=%lld acc=%lld eps=%lld cyc=%lld ms=%.1f rst=%lld(best %lld/elite %lld, wins %lld) pool ins=%lld/%lld\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N, g_roAtt, g_roAcc, g_roEps, g_roCyc, g_roUs/1000.0, dRst, dRstBest, dRstElite, dRstWin, dInsBest, dInsRB);
 #endif
 }
 {
