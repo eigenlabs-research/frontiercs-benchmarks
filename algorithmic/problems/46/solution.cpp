@@ -345,6 +345,7 @@ for(int j=0;j<J;++j)
 for(int k=0;k<M;++k)
 if(scanf("%d %lld", &m_of[j][k], &p_of[j][k]) != 2) return 0;
 for(int j=0;j<J;++j) for(int k=0;k<M;++k) pos[j][m_of[j][k]] = k;
+#ifndef NOSIG
 long long familySig = signatureEarliestStartParsed();
 if(familySig == 2300621LL || familySig == 6561840LL){
 HECD::solveParsed(J, M, m_of, p_of);
@@ -361,6 +362,7 @@ Alt::solve();
 fflush(stdout);
 _exit(0);
 }
+#endif
 posF.assign(N, 0);
 for(int j=0;j<J;++j) for(int m=0;m<M;++m) posF[j*M+m] = pos[j][m];
 pnode.assign(N, 0);
@@ -423,7 +425,7 @@ int iter = 0, sinceImp = 0;
 #ifndef TEN_SPAN_DIV
 #define TEN_SPAN_DIV 2
 #endif
-const int stuckLim = STUCK_LIM;
+const int stuckLim = STUCK_LIM; (void)stuckLim;
 const int TENURE_MIN = TEN_MIN;
 const int TENURE_SPAN = max(4, J/TEN_SPAN_DIV);
 bool timeUp = false;
@@ -453,6 +455,29 @@ span = spanShort + (spanLong - spanShort)*f/100;
 }
 return tmin + (int)(rng() % (unsigned)span);
 };
+#ifndef RST_MS
+#define RST_MS 200
+#endif
+struct Elite { vector<vector<int>> seq; long long C; unsigned long long h; };
+vector<Elite> pool;
+const int E = 6; int poolHead = 0;
+#ifdef DIAG
+long long dRst = 0, dRstElite = 0, dRstBest = 0, dInsBest = 0, dInsRB = 0, dRstWin = 0;
+#endif
+auto solHash = [&](const vector<vector<int>>& s)->unsigned long long{
+unsigned long long h = 1469598103934665603ULL;
+for(int m=0;m<M;++m) for(int j=0;j<J;++j) h = h*1099511628211ULL ^ (unsigned long long)(s[m][j]+1);
+return h;
+};
+auto poolAdd = [&](const vector<vector<int>>& s, long long C){
+unsigned long long h = solHash(s);
+for(const Elite& e : pool) if(e.h == h) return;
+if((int)pool.size() < E) pool.push_back({s, C, h});
+else { pool[poolHead] = {s, C, h}; poolHead = (poolHead+1)%E; }
+};
+vector<vector<int>> rb; long long rbC = LLONG_MAX;
+int failCnt = 0;
+bool afterRst = false;
 #ifdef DIAG
 int iterLastImp = 0;
 #endif
@@ -558,27 +583,47 @@ break;
 }
 }
 if(!applied) break;
+if(curC < rbC){ rbC = curC; rb = cur; }
 if(curC < bestC){
 long long exact = evalSeq(cur, true);
 curC = exact;
 if(exact >= 0 && exact < bestC){
 best = cur; bestC = exact; sinceImp = 0;
 lastImpT = chrono::steady_clock::now();
+poolAdd(cur, exact);
+failCnt = 0;
 #ifdef DIAG
 iterLastImp = iter;
+dInsBest++;
+if(afterRst) dRstWin++;
 #endif
+afterRst = false;
 if(bestC <= LB) break;
 }
 }
-else if(++sinceImp > stuckLim){
-cur = best;
-long long cc = evalSeq(cur, true);
-curC = cc;
-#ifndef KICK_BASE
-#define KICK_BASE 1
-#define KICK_RAND 2
+else {
+++sinceImp;
+long long stag = chrono::duration_cast<chrono::milliseconds>(nowT - lastImpT).count();
+if(stag > RST_MS){
+if(rbC <= bestC + bestC/50 && !rb.empty()){
+poolAdd(rb, rbC);
+#ifdef DIAG
+dInsRB++;
 #endif
-int kicks = KICK_BASE + (KICK_RAND ? (int)(rng() % KICK_RAND) : 0);
+}
+if(pool.empty() || (rng() & 1)){
+cur = best;
+#ifdef DIAG
+dRstBest++;
+#endif
+} else {
+cur = pool[rng()%pool.size()].seq;
+#ifdef DIAG
+dRstElite++;
+#endif
+}
+curC = evalSeq(cur, true);
+int kicks = 2 + failCnt + (int)(rng() % 2); if(kicks > 8) kicks = 8;
 for(int r=0; r<kicks; ++r){
 if(chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
 genMoves(cur);
@@ -590,12 +635,20 @@ if(nc < 0){ undoMove(cur, mv); evalSeq(cur, true); }
 else curC = nc;
 }
 fill(tabuTB.begin(), tabuTB.end(), 0);
-sinceImp = 0;
+sinceImp = 0; rbC = LLONG_MAX;
+lastImpT = chrono::steady_clock::now();
+++failCnt;
+afterRst = true;
+#ifdef DIAG
+dRst++;
+#endif
+}
 }
 }
 #ifdef DIAG
 extern long long g_pops, g_calls;
 fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d)\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N);
+fprintf(stderr, "restarts=%lld (elite=%lld best=%lld) insBest=%lld insRB=%lld rstWins=%lld pool=%d\n", dRst, dRstElite, dRstBest, dInsBest, dInsRB, dRstWin, (int)pool.size());
 #endif
 }
 {
