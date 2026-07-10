@@ -593,28 +593,34 @@ int main(){
         if(f<=r){ dir=0; return f; } dir=1; return r;
     };
 
-    // ---- ILS: perturb (double-bridge) + re-optimize, keep best (penalized), until deadline ----
+    // ---- ILS: windowed double-bridge + re-optimize (segment-local), keep best, until deadline ----
     vector<int> best=order; int bestDir=0;
     double bestLen=evalBest(bestDir);
     if(N>=8){
         uint64_t rng=0x9e3779b97f4a7c15ULL ^ (uint64_t)N*2654435761ULL;
         auto rnd=[&](){ rng^=rng<<7; rng^=rng>>9; return rng; };
+        int win = N<=60?N:max(24,min(N,N<=2000?N/4:(N<=50000?400:N)));
         while(el_ms()<TL_MS){
-            // double bridge: pick 3 cut points 1<=a<b<c<N, reconnect A D C B
-            int a=1+(int)(rnd()%(N-3)), b=1+(int)(rnd()%(N-3)), c=1+(int)(rnd()%(N-3));
+            int span = min(win, N-1);
+            if(span<4) break;
+            int base = win>=N? 0 : (int)(rnd()%N);
+            auto W=[&](int off){ return (base+off)%N; };
+            int a=1+(int)(rnd()%(span-3)), b=1+(int)(rnd()%(span-3)), c=1+(int)(rnd()%(span-3));
             int lo=min({a,b,c}), hi=max({a,b,c}), mid=a+b+c-lo-hi;
-            if(lo==mid||mid==hi){ continue; }
-            static vector<int> nt; nt.clear(); nt.reserve(N);
-            for(int i=0;i<lo;i++) nt.push_back(order[i]);
-            for(int i=mid;i<hi;i++) nt.push_back(order[i]);
-            for(int i=lo;i<mid;i++) nt.push_back(order[i]);
-            for(int i=hi;i<N;i++) nt.push_back(order[i]);
-            order.swap(nt);
-            for(int i=0;i<N;i++) pos[order[i]]=i;
-            // re-optimize only the disturbed neighborhood cheaply: wake all, 2-opt to convergence
-            fill(dontlook.begin(),dontlook.end(),0);
+            if(lo==mid||mid==hi) continue;
+            static vector<int> wbuf; wbuf.clear(); wbuf.reserve(span);
+            for(int i=0;i<span;i++) wbuf.push_back(order[W(i)]);
+            static vector<int> nt; nt.clear(); nt.reserve(span);
+            for(int i=0;i<lo;i++) nt.push_back(wbuf[i]);
+            for(int i=mid;i<hi;i++) nt.push_back(wbuf[i]);
+            for(int i=lo;i<mid;i++) nt.push_back(wbuf[i]);
+            for(int i=hi;i<span;i++) nt.push_back(wbuf[i]);
+            for(int i=0;i<span;i++){ int city=nt[i]; order[W(i)]=city; pos[city]=W(i); }
+            for(int i=0;i<span;i++) dontlook[wbuf[i]]=0;
+            { int before=(base==0?N-1:base-1), after=W(span-1)+1<N?W(span-1)+1:0;
+              dontlook[order[before]]=0; dontlook[order[(after)%N]]=0; }
             while(el_ms()<TL_MS){ if(!twoOptPass()) break; }
-            if(N<=50000){ fill(dontlook.begin(),dontlook.end(),0); orOptPass(); while(el_ms()<TL_MS){ if(!twoOptPass()) break; } }
+            if(N<=50000){ orOptPass(); while(el_ms()<TL_MS){ if(!twoOptPass()) break; } }
             int d2=0; double L=evalBest(d2);
             if(L<bestLen-1e-6){ bestLen=L; best=order; bestDir=d2; }
             else { order=best; for(int i=0;i<N;i++) pos[order[i]]=i; } // revert
@@ -691,10 +697,11 @@ int main(){
 }
 
 __attribute__((noinline)) static void legacyOracleSolve(){
+    // prime table over city ids (every 10th step costs 1.1x unless source id is prime)
     vector<char> pr((size_t)N,0);
     { vector<char> comp((size_t)N,0); for(long long i=2;i<N;i++) if(!comp[i]){ pr[i]=1; for(long long q=i*i;q<N;q+=i) comp[q]=1; } }
     if(N>100000) TL_MS -= 20.0;
-    double RESERVE = N==15000?10.0:(N>150000?220.0:(N>50000?90.0:(N>5000?50.0:40.0)));
+    double RESERVE = N>150000?220.0:(N>50000?90.0:(N>5000?50.0:40.0));
     TL_MS -= RESERVE; // reserve tail for endgame touch-up
 
     // ---- spatial grid (~2 pts/cell) ----
@@ -1039,8 +1046,6 @@ __attribute__((noinline)) static void legacyOracleSolve(){
             if(!ch) break;
         }
     }
-    { auto ec=[&](int t){int a=seq[t-1],b=t<N?seq[t]:0;double d=dist(a,b);return d*((t%10==0&&!pr[a])?1.1:1.0);};
-      for(int r=0;r<3&&el_ms()<TL_MS;r++){bool ch=0;for(int i=1;i+1<N&&el_ms()<TL_MS;i++)for(int g=1;g<=2&&i+g<N;g++){int j=i+g;double a=0,b=0;for(int t=i;t<=j+1;t++)a+=ec(t);swap(seq[i],seq[j]);for(int t=i;t<=j+1;t++)b+=ec(t);if(b+1e-7<a)ch=1;else swap(seq[i],seq[j]);}if(!ch)break;} }
 
     string out; out.reserve((size_t)N*7+16);
     out+=to_string(N+1); out+='\n';
