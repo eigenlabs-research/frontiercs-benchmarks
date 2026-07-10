@@ -1,3 +1,4 @@
+#pragma STDC FP_CONTRACT OFF
 #include <cstdio>
 #include <cmath>
 #include <vector>
