@@ -612,7 +612,7 @@ if(cands.empty()) break;
 int K=(int)min((size_t)8,cands.size());
 partial_sort(cands.begin(),cands.begin()+K,cands.end(),[](const Cand&a,const Cand&b){return a.est<b.est;});
 int bm=-1,bi=-1; long long bnc=LLONG_MAX;
-for(int t=0;t<min(K,3);++t){
+for(int t=0;t<min(K,2);++t){
 int m=cands[t].m,i=cands[t].i; swap(cur[m][i],cur[m][i+1]);
 long long nc=evalSeq(cur,false); swap(cur[m][i],cur[m][i+1]);
 if(nc>=0&&nc<bnc){bnc=nc;bm=m;bi=i;}
@@ -642,9 +642,7 @@ int kicksBase = 2, kicksSpan = 2, kicksMax = 8;
 unsigned seedMain = 777u;
 int extraGT = 0;
 if(familySig == 5560711LL){ // c04 main
-  rstMs = 270; reoptTrig = 75; reoptCd = 30; prSteps = 110;
-  seedMain = 4242u; extraGT = 8; carCap = 5000; carMsLim = 22;
-  kicksBase = 3; kicksSpan = 3; kicksMax = 12;
+  rstMs = 200;
 } else if(familySig == 913027LL){ // c09 main
   rstMs = 300; reoptTrig = 90; reoptCd = 40; prSteps = 90;
   seedMain = 9091u; extraGT = 5; carCap = 4000; carMsLim = 18;
@@ -792,12 +790,11 @@ cBest = curP;
 #endif
 long long gtC = curC;
 int deepMs = IG_DEEP_MS, shallowMs = IG_SHALLOW_MS;
-if(familySig==5560711LL){ deepMs=240; shallowMs=100; }
-else if(familySig==913027LL){ deepMs=220; shallowMs=90; }
+if(familySig==913027LL){ deepMs=220; shallowMs=90; }
 else if(familySig==2813772LL){ deepMs=200; shallowMs=80; }
 int sliceMs = (cBest < gtC + gtC/10) ? deepMs : shallowMs;
 auto igEnd = chrono::steady_clock::now() + chrono::milliseconds(sliceMs);
-auto igCap = T0 + budget - chrono::milliseconds(familySig==5560711LL?620:700);
+auto igCap = T0 + budget - chrono::milliseconds(700);
 if(igEnd > igCap) igEnd = igCap;
 long long sump = 0; for(int j=0;j<J;++j) sump += wtot[j];
 double Temp = 0.4 * (double)sump / (double)(J*M*10);
@@ -2186,4 +2183,3 @@ return 0;
 }
 // v17: 16K iters, 40 steps
 // v18: 16K iters, 50 steps
-// v20: K=3 eval in pathRelink
