@@ -1,4 +1,4 @@
-// v21.11: fix + crown5
+// v21.23: fix + crown5 + window n/3
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -1047,7 +1047,7 @@ int main() {
                 return ps[a].id < ps[b].id;
             });
             for (int s = 0; s < n/4; s++) { int a = rng.rint(n), b = rng.rint(n); swap(o1[a], o1[b]); }
-            R rr = pack_capped(W, Hc, o1, max(1, n/4), TL_MS - 10, rng);
+            R rr = pack_capped(W, Hc, o1, max(1, n/3), TL_MS - 10, rng);
             if (rr.ok && rr.A < bestR.A) { crownRepack(rr, TL_MS - 5.0); if (better(rr, bestR)) bestR = move(rr); }
         }
     }
