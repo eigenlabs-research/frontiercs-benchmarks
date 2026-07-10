@@ -1,2191 +1,1572 @@
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC optimize("O3,unroll-loops")
-#endif
-#include <cstdio>
-#include <vector>
-#include <array>
 #include <algorithm>
+#include <bitset>
 #include <chrono>
-#include <random>
-#include <climits>
-#include <ctime>
 #include <cmath>
-#include <unistd.h>
+#include <cstdint>
+#include <iostream>
+#include <numeric>
+#include <utility>
+#include <vector>
 using namespace std;
-#ifdef NO_REOPT
-#define NO_SWEEP
-#define NO_TRIG
-#endif
-static int J, M, N;
-static vector<vector<int>> m_of;
-static vector<vector<long long>> p_of;
-static vector<vector<int>> pos;
-static vector<int> posF;
-static vector<long long> pnode;
-static vector<int> msucc, mpred, indeg, qbuf;
-static vector<int> jsuc;
-static vector<char> jpre;
-static vector<long long> dist_, tail_;
-static vector<char> crit;
-static long long gCmax = 0;
-static long long evalSeq(const vector<vector<int>>& seq, bool fillCrit = false){
-const int n = N;
-int* __restrict ind = indeg.data();
-int* __restrict msu = msucc.data();
-const int* __restrict jsu = jsuc.data();
-const char* __restrict jpr = jpre.data();
-const long long* __restrict pn = pnode.data();
-long long* __restrict ds = dist_.data();
-for(int u=0;u<n;++u) ind[u] = jpr[u];
-for(int m=0;m<M;++m){
-const int* s = seq[m].data();
-int prev = s[0]*M + posF[s[0]*M + m];
-mpred[prev] = -1;
-for(int i=1;i<J;++i){
-int v = s[i]*M + posF[s[i]*M + m];
-msu[prev] = v;
-mpred[v] = prev;
-ind[v]++;
-prev = v;
-}
-msu[prev] = -1;
-}
-fill(dist_.begin(), dist_.begin()+n, 0);
-qbuf.clear();
-int qh=0;
-for(int u=0;u<n;++u) if(ind[u]==0){ ds[u]=pn[u]; qbuf.push_back(u); }
-while(qh < (int)qbuf.size()){
-int u = qbuf[qh++];
-long long du = ds[u];
-int v = jsu[u];
-if(v >= 0){
-long long nd = du + pn[v];
-if(nd > ds[v]) ds[v] = nd;
-if(--ind[v]==0) qbuf.push_back(v);
-}
-v = msu[u];
-if(v >= 0){
-long long nd = du + pn[v];
-if(nd > ds[v]) ds[v] = nd;
-if(--ind[v]==0) qbuf.push_back(v);
-}
-}
-// deterministic confirmation build
-if(qh != n) return -1;
-long long C = 0;
-for(int u=0;u<n;++u) if(ds[u] > C) C = ds[u];
-gCmax = C;
-if(fillCrit){
-long long* __restrict tl = tail_.data();
-const int* __restrict qb = qbuf.data();
-for(int idx=n-1; idx>=0; --idx){
-int u = qb[idx];
-long long mx = 0;
-int v = jsu[u];
-if(v >= 0 && tl[v] > mx) mx = tl[v];
-v = msu[u];
-if(v >= 0 && tl[v] > mx) mx = tl[v];
-tl[u] = pn[u] + mx;
-}
-fill(crit.begin(), crit.begin()+n, 0);
-for(int u=0;u<n;++u) if(ds[u] + tl[u] - pn[u] == C) crit[u] = 1;
-}
-return C;
-}
-static vector<vector<int>> seedGT(int mode, mt19937& rng){
-vector<int> jp(J, 0);
-vector<long long> jr(J, 0), mf(M, 0), wrem(J, 0);
-for(int j=0;j<J;++j) for(int k=0;k<M;++k) wrem[j] += p_of[j][k];
-vector<vector<int>> seq(M);
-int remaining = N;
-while(remaining > 0){
-long long bf = LLONG_MAX;
-for(int j=0;j<J;++j){
-if(jp[j] >= M) continue;
-int k = jp[j], m = m_of[j][k];
-long long s = max(jr[j], mf[m]);
-long long f = s + p_of[j][k];
-if(f < bf) bf = f;
-}
-int cm = -1;
-for(int j=0;j<J;++j){
-if(jp[j] >= M) continue;
-int k = jp[j], m = m_of[j][k];
-long long s = max(jr[j], mf[m]);
-if(s + p_of[j][k] == bf){ cm = m; break; }
-}
-int cj = -1; long long cp = 0;
-for(int j=0;j<J;++j){
-if(jp[j] >= M) continue;
-int k = jp[j], m = m_of[j][k];
-if(m != cm) continue;
-long long s = max(jr[j], mf[m]);
-if(s < bf){
-long long pr;
-if(mode==0) pr = wrem[j];
-else if(mode==1) pr = p_of[j][k];
-else if(mode==2) pr = -p_of[j][k];
-else pr = (long long)rng();
-if(cj==-1 || pr > cp){ cp = pr; cj = j; }
-}
-}
-if(cj == -1){
-for(int j=0;j<J;++j) if(jp[j]<M && m_of[j][jp[j]]==cm){ cj=j; break; }
-}
-int k = jp[cj], m = m_of[cj][k];
-long long s = max(jr[cj], mf[m]);
-long long f = s + p_of[cj][k];
-seq[m].push_back(cj);
-jr[cj] = f; mf[m] = f; wrem[cj] -= p_of[cj][k];
-jp[cj]++; remaining--;
-}
-return seq;
-}
-struct Mv { int m, b, e, i; bool front; };
-static vector<Mv> gmoves;
-static vector<pair<long long,int>> gcand;
-static vector<int> gord;
-static vector<long long> gestC;
-static vector<int> tabuTB;
-static inline int opOf(int job, int m){ return job*M + posF[job*M + m]; }
-static void genMoves(const vector<vector<int>>& cur){
-gmoves.clear();
-const long long* __restrict ds = dist_.data();
-const long long* __restrict tl = tail_.data();
-const long long* __restrict pn = pnode.data();
-const long long C = gCmax;
-#define ISCRIT_(u) (ds[u] + tl[u] - pn[u] == C)
-for(int m=0;m<M;++m){
-const auto& s = cur[m];
-int i = 0;
-while(i < J){
-if(!ISCRIT_(opOf(s[i], m))){ i++; continue; }
-int b = i;
-while(i+1 < J && ISCRIT_(opOf(s[i+1], m))) i++;
-int e = i; i++;
-if(e == b) continue;
-for(int t=b+1; t<=e; ++t) gmoves.push_back({m,b,e,t,true});
-for(int t=b; t<e; ++t)
-if(!(t==b && e==b+1))
-gmoves.push_back({m,b,e,t,false});
-}
-}
-#undef ISCRIT_
-}
-static long long estMove(const vector<vector<int>>& cur, const Mv& mv){
-const auto& s = cur[mv.m];
-int lo, hi;
-if(mv.front){
-lo = mv.b; hi = mv.i;
-gord[0] = s[mv.i];
-for(int t=lo; t<hi; ++t) gord[t-lo+1] = s[t];
-} else {
-lo = mv.i; hi = mv.e;
-for(int t=lo+1; t<=hi; ++t) gord[t-lo-1] = s[t];
-gord[hi-lo] = s[mv.i];
-}
-int L = hi - lo + 1;
-long long prevC = 0;
-if(lo > 0) prevC = dist_[opOf(s[lo-1], mv.m)];
-for(int t=0; t<L; ++t){
-int v = gord[t]; int u = opOf(v, mv.m); int k = pos[v][mv.m];
-long long jp = (k>0) ? dist_[u-1] : 0;
-long long st = prevC > jp ? prevC : jp;
-gestC[t] = st + pnode[u];
-prevC = gestC[t];
-}
-long long prevT = 0;
-if(hi+1 < J) prevT = tail_[opOf(s[hi+1], mv.m)];
-long long bestLen = 0;
-for(int t=L-1; t>=0; --t){
-int v = gord[t]; int u = opOf(v, mv.m); int k = pos[v][mv.m];
-long long js = (k<M-1) ? tail_[u+1] : 0;
-long long tl = pnode[u] + (prevT > js ? prevT : js);
-long long len = gestC[t] - pnode[u] + tl;
-if(len > bestLen) bestLen = len;
-prevT = tl;
-}
-return bestLen;
-}
-static inline void applyMove(vector<vector<int>>& cur, const Mv& mv){
-auto& s = cur[mv.m];
-if(mv.front) rotate(s.begin()+mv.b, s.begin()+mv.i, s.begin()+mv.i+1);
-else         rotate(s.begin()+mv.i, s.begin()+mv.i+1, s.begin()+mv.e+1);
-}
-static inline void undoMove(vector<vector<int>>& cur, const Mv& mv){
-auto& s = cur[mv.m];
-if(mv.front) rotate(s.begin()+mv.b, s.begin()+mv.b+1, s.begin()+mv.i+1);
-else         rotate(s.begin()+mv.i, s.begin()+mv.e,   s.begin()+mv.e+1);
-}
-static vector<int> gwl;
-static vector<char> ginq;
-static long long incAfterMove(const vector<vector<int>>& cur, const Mv& mv){
-const int m = mv.m;
-const auto& s = cur[m];
-const int lo = mv.front ? mv.b : mv.i;
-const int hi = mv.front ? mv.i : mv.e;
-{
-int from = lo>0 ? lo-1 : 0;
-int to   = hi<J-1 ? hi+1 : J-1;
-for(int i=from;i<=to;++i){
-int u = opOf(s[i], m);
-msucc[u] = (i<J-1) ? opOf(s[i+1], m) : -1;
-mpred[u] = (i>0)   ? opOf(s[i-1], m) : -1;
-}
-}
-const int cap = 16*N;
-long long* __restrict ds = dist_.data();
-long long* __restrict tl = tail_.data();
-const long long* __restrict pn = pnode.data();
-gwl.clear();
-auto pushH = [&](int v){ if(v>=0 && !ginq[v]){ ginq[v]=1; gwl.push_back(v); } };
-int hiH = hi < J-1 ? hi+1 : hi;
-for(int i=lo;i<=hiH;++i) pushH(opOf(s[i], m));
-int wh = 0, pops = 0;
-while(wh < (int)gwl.size()){
-int v = gwl[wh++]; ginq[v] = 0;
-if(++pops > cap){
-for(int t=wh;t<(int)gwl.size();++t) ginq[gwl[t]] = 0;
-return -2;
-}
-long long b = 0;
-if(jpre[v] && ds[v-1] > b) b = ds[v-1];
-int mp = mpred[v];
-if(mp >= 0 && ds[mp] > b) b = ds[mp];
-long long nd = pn[v] + b;
-if(nd != ds[v]){ ds[v] = nd; pushH(jsuc[v]); pushH(msucc[v]); }
-}
-gwl.clear();
-int loT = lo > 0 ? lo-1 : lo;
-for(int i=hi;i>=loT;--i){ int v = opOf(s[i], m); if(!ginq[v]){ ginq[v]=1; gwl.push_back(v); } }
-int headPops = pops;
-wh = 0; pops = 0;
-while(wh < (int)gwl.size()){
-int v = gwl[wh++]; ginq[v] = 0;
-if(++pops > cap){
-for(int t=wh;t<(int)gwl.size();++t) ginq[gwl[t]] = 0;
-return -2;
-}
-long long b = 0;
-int js = jsuc[v];
-if(js >= 0 && tl[js] > b) b = tl[js];
-int ms = msucc[v];
-if(ms >= 0 && tl[ms] > b) b = tl[ms];
-long long nt = pn[v] + b;
-if(nt != tl[v]){
-tl[v] = nt;
-if(jpre[v] && !ginq[v-1]){ ginq[v-1]=1; gwl.push_back(v-1); }
-int mp = mpred[v];
-if(mp >= 0 && !ginq[mp]){ ginq[mp]=1; gwl.push_back(mp); }
-}
-}
-long long C = 0;
-for(int mm=0;mm<M;++mm){
-int u = opOf(cur[mm][J-1], mm);
-if(ds[u] > C) C = ds[u];
-}
-gCmax = C;
-#ifdef DIAG
-extern long long g_pops, g_calls;
-g_pops += pops + headPops; g_calls++;
-#endif
-return C;
-}
-#ifdef DIAG
-long long g_pops = 0, g_calls = 0;
-#endif
-static bool isTabu(const vector<vector<int>>& cur, const Mv& mv, int iter){
-const auto& s = cur[mv.m];
-int uj = s[mv.i];
-if(mv.front){
-for(int t=mv.b; t<mv.i; ++t){
-int xop = opOf(s[t], mv.m);
-if(tabuTB[(size_t)xop*J + uj] > iter) return true;
-}
-} else {
-int uop = opOf(uj, mv.m);
-for(int t=mv.i+1; t<=mv.e; ++t)
-if(tabuTB[(size_t)uop*J + s[t]] > iter) return true;
-}
-return false;
-}
-static vector<size_t> gpend;
-static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
-gpend.clear();
-const auto& s = cur[mv.m];
-int uj = s[mv.i];
-int uop = opOf(uj, mv.m);
-if(mv.front){
-for(int t=mv.b; t<mv.i; ++t) gpend.push_back((size_t)uop*J + s[t]);
-} else {
-for(int t=mv.i+1; t<=mv.e; ++t)
-gpend.push_back((size_t)opOf(s[t], mv.m)*J + uj);
-}
-}
-static long long evalReduced(int mExcl, const vector<vector<int>>& seq){
-const int n = N;
-int* __restrict ind = indeg.data();
-int* __restrict msu = msucc.data();
-const int* __restrict jsu = jsuc.data();
-const char* __restrict jpr = jpre.data();
-const long long* __restrict pn = pnode.data();
-long long* __restrict ds = dist_.data();
-for(int u=0;u<n;++u) ind[u] = jpr[u];
-for(int m=0;m<M;++m){
-if(m == mExcl){
-for(int j=0;j<J;++j){ int u = j*M + posF[j*M + m]; msu[u] = -1; mpred[u] = -1; }
-continue;
-}
-const int* s = seq[m].data();
-int prev = s[0]*M + posF[s[0]*M + m];
-mpred[prev] = -1;
-for(int i=1;i<J;++i){
-int v = s[i]*M + posF[s[i]*M + m];
-msu[prev] = v; mpred[v] = prev; ind[v]++; prev = v;
-}
-msu[prev] = -1;
-}
-fill(dist_.begin(), dist_.begin()+n, 0);
-qbuf.clear();
-int qh=0;
-for(int u=0;u<n;++u) if(ind[u]==0){ ds[u]=pn[u]; qbuf.push_back(u); }
-while(qh < (int)qbuf.size()){
-int u = qbuf[qh++];
-long long du = ds[u];
-int v = jsu[u];
-if(v >= 0){
-long long nd = du + pn[v];
-if(nd > ds[v]) ds[v] = nd;
-if(--ind[v]==0) qbuf.push_back(v);
-}
-v = msu[u];
-if(v >= 0){
-long long nd = du + pn[v];
-if(nd > ds[v]) ds[v] = nd;
-if(--ind[v]==0) qbuf.push_back(v);
-}
-}
-if(qh != n) return -1;
-long long C = 0;
-for(int u=0;u<n;++u) if(ds[u] > C) C = ds[u];
-{
-long long* __restrict tl = tail_.data();
-const int* __restrict qb = qbuf.data();
-for(int idx=n-1; idx>=0; --idx){
-int u = qb[idx];
-long long mx = 0;
-int v = jsu[u];
-if(v >= 0 && tl[v] > mx) mx = tl[v];
-v = msu[u];
-if(v >= 0 && tl[v] > mx) mx = tl[v];
-tl[u] = pn[u] + mx;
-}
-}
-return C;
-}
-static long long carBestC;
-static vector<int> carBestSeq;
-static int carNodes, carNodeCap;
-static chrono::steady_clock::time_point carDeadline;
-static vector<long long> carR, carQ, carP;
-#ifdef DIAG
-long long g_roAtt = 0, g_roAcc = 0, g_roCyc = 0, g_roUs = 0;
-#endif
-static long long schrage1(int n, const long long* r, const long long* q, const long long* p, int* seqOut){
-static vector<char> done; done.assign(n, 0);
-long long t = 0, C = 0;
-for(int i=0;i<n;++i){
-long long rmin = LLONG_MAX;
-for(int j=0;j<n;++j) if(!done[j] && r[j] < rmin) rmin = r[j];
-if(t < rmin) t = rmin;
-int b = -1;
-for(int j=0;j<n;++j){
-if(done[j] || r[j] > t) continue;
-if(b < 0 || q[j] > q[b] || (q[j] == q[b] && p[j] > p[b])) b = j;
-}
-done[b] = 1; seqOut[i] = b;
-t += p[b];
-if(t + q[b] > C) C = t + q[b];
-}
-return C;
-}
-static void carlier(int n, long long* r, long long* q, const long long* p, int depth){
-if(carNodes >= carNodeCap || depth > 400) return;
-if((carNodes & 63) == 0 && chrono::steady_clock::now() >= carDeadline){ carNodes = carNodeCap; return; }
-carNodes++;
-int seq[64];
-long long C = schrage1(n, r, q, p, seq);
-if(C < carBestC){
-carBestC = C;
-for(int i=0;i<n;++i) carBestSeq[i] = seq[i];
-}
-int bpos = -1;
-{
-long long t = 0;
-for(int i=0;i<n;++i){
-int j = seq[i];
-if(t < r[j]) t = r[j];
-t += p[j];
-if(t + q[j] == C) bpos = i;
-}
-}
-if(bpos < 0) return;
-int apos = -1;
-{
-long long sum = 0;
-long long qb = q[seq[bpos]];
-for(int i=bpos;i>=0;--i){
-sum += p[seq[i]];
-if(r[seq[i]] + sum + qb == C) apos = i;
-}
-}
-if(apos < 0) return;
-int cpos = -1;
-for(int i=apos;i<bpos;++i) if(q[seq[i]] < q[seq[bpos]]) cpos = i;
-if(cpos < 0) return;
-int c = seq[cpos];
-long long sump = 0, rmin = LLONG_MAX, qmin = LLONG_MAX;
-for(int i=cpos+1;i<=bpos;++i){
-int j = seq[i];
-sump += p[j];
-if(r[j] < rmin) rmin = r[j];
-if(q[j] < qmin) qmin = q[j];
-}
-long long hJ = rmin + sump + qmin;
-long long hJc = (rmin < r[c] ? rmin : r[c]) + sump + p[c] + (qmin < q[c] ? qmin : q[c]);
-long long LB = hJ > hJc ? hJ : hJc;
-if(LB >= carBestC) return;
-{
-long long old = q[c];
-long long nq = sump + qmin;
-if(nq > old){
-q[c] = nq;
-carlier(n, r, q, p, depth+1);
-q[c] = old;
-} else carlier(n, r, q, p, depth+1);
-}
-if(carNodes >= carNodeCap) return;
-{
-long long old = r[c];
-long long nr = rmin + sump;
-if(nr > old){
-r[c] = nr;
-carlier(n, r, q, p, depth+1);
-r[c] = old;
-}
-}
-}
-static vector<int> roOld;
-static int g_carNodeCap = 3000;
-static int g_carMsLim = 15;
-static bool reoptMachine(int m, vector<vector<int>>& cur, long long& curC, long long& bestC,
-vector<vector<int>>& best, chrono::steady_clock::time_point T_end, chrono::steady_clock::time_point& lastImpT){
-#ifdef DIAG
-g_roAtt++;
-auto diagT0 = chrono::steady_clock::now();
-struct RoTimer { chrono::steady_clock::time_point t0; ~RoTimer(){ g_roUs += chrono::duration_cast<chrono::microseconds>(chrono::steady_clock::now() - t0).count(); } } roTimer{diagT0};
-#endif
-long long Cr = evalReduced(m, cur);
-if(Cr < 0){ evalSeq(cur, true); return false; }
-carR.resize(J); carQ.resize(J); carP.resize(J);
-for(int j=0;j<J;++j){
-int u = j*M + posF[j*M + m];
-carP[j] = pnode[u];
-carR[j] = dist_[u] - pnode[u];
-carQ[j] = tail_[u] - pnode[u];
-}
-carBestC = LLONG_MAX;
-carNodes = 0; carNodeCap = g_carNodeCap;
-carBestSeq.assign(J, 0);
-auto nowT = chrono::steady_clock::now();
-carDeadline = nowT + chrono::milliseconds(g_carMsLim);
-if(carDeadline > T_end) carDeadline = T_end;
-carlier(J, carR.data(), carQ.data(), carP.data(), 0);
-if(carBestC >= curC || carBestSeq == cur[m]){
-long long cc = evalSeq(cur, true);
-if(cc >= 0) curC = cc;
-return false;
-}
-roOld = cur[m];
-cur[m] = carBestSeq;
-long long nc = evalSeq(cur, true);
-if(nc >= 0 && nc < curC){
-curC = nc;
-if(nc < bestC){ best = cur; bestC = nc; }
-lastImpT = chrono::steady_clock::now();
-#ifdef DIAG
-g_roAcc++;
-#endif
-return true;
-}
-#ifdef DIAG
-if(nc < 0) g_roCyc++;
-#endif
-cur[m] = roOld;
-long long cc = evalSeq(cur, true);
-if(cc >= 0) curC = cc;
-return false;
-}
-namespace HECD { int solveParsed(int, int, const vector<vector<int>>&, const vector<vector<long long>>&); void setSeed(unsigned long long); }
-namespace H08 { int solveParsed(int, int, const vector<vector<int>>&, const vector<vector<long long>>&); }
-namespace Alt { int solve(); }
-long long signatureEarliestStartParsed(){
-auto calc = [&](bool lpt)->long long{
-vector<int> jp(J,0);
-vector<long long> jr(J,0), mf(M,0);
-int rem = J*M;
-while(rem--){
-long long bs = LLONG_MAX;
-for(int j=0;j<J;++j) if(jp[j]<M){
-int k=jp[j], m=m_of[j][k];
-long long st=max(jr[j], mf[m]);
-if(st<bs) bs=st;
-}
-int cj=-1; long long cp=0;
-for(int j=0;j<J;++j) if(jp[j]<M){
-int k=jp[j], m=m_of[j][k];
-long long st=max(jr[j], mf[m]);
-if(st!=bs) continue;
-long long pr = lpt ? p_of[j][k] : -p_of[j][k];
-if(cj<0 || pr>cp){ cp=pr; cj=j; }
-}
-int k=jp[cj], m=m_of[cj][k];
-long long f=max(jr[cj], mf[m]) + p_of[cj][k];
-jr[cj]=f; mf[m]=f; jp[cj]++;
-}
-long long C=0; for(long long x:jr) C=max(C,x); return C;
-};
-return min(calc(false), calc(true));
-}
-#ifndef NO_NEH
-static long long evalPerm(const vector<int>& pi, int L){
-static vector<long long> nmf; nmf.assign(M, 0);
-long long mk = 0;
-for(int i=0;i<L;++i){
-int j = pi[i]; long long t = 0;
-const int* mo = m_of[j].data();
-const long long* po = p_of[j].data();
-for(int k=0;k<M;++k){
-int m = mo[k];
-long long s = t > nmf[m] ? t : nmf[m];
-t = s + po[k]; nmf[m] = t;
-}
-if(t > mk) mk = t;
-}
-return mk;
-}
-static vector<int> nehBuild(const vector<int>& order){
-vector<int> pi; pi.reserve(J);
-vector<int> cand; cand.reserve(J);
-for(int idx=0; idx<(int)order.size(); ++idx){
-int j = order[idx];
-int L = (int)pi.size();
-int bp = 0; long long bc = LLONG_MAX;
-for(int p=0;p<=L;++p){
-cand.clear();
-for(int t=0;t<p;++t) cand.push_back(pi[t]);
-cand.push_back(j);
-for(int t=p;t<L;++t) cand.push_back(pi[t]);
-long long c = evalPerm(cand, L+1);
-if(c < bc){ bc = c; bp = p; }
-}
-pi.insert(pi.begin()+bp, j);
-}
-return pi;
-}
-#endif
 
-static void pathRelink(const vector<vector<int>>& src, const vector<vector<int>>& dst,
-long long& bestC, vector<vector<int>>& best, mt19937& rng,
-chrono::steady_clock::time_point T_end, int maxSteps){
-vector<vector<int>> cur=src; long long curC=evalSeq(cur,true); if(curC<0) return;
-static vector<int> posT; posT.resize(J);
-for(int step=0;step<maxSteps;++step){
-if(chrono::steady_clock::now()>=T_end) break;
-struct Cand{long long est;int m,i;}; vector<Cand> cands; cands.reserve(M*J/2);
-for(int m=0;m<M;++m){
-for(int i=0;i<J;++i) posT[dst[m][i]]=i;
-const auto& s=cur[m];
-for(int i=0;i+1<J;++i) if(posT[s[i]]>posT[s[i+1]]){
-Mv mv{m,i,i+1,i+1,true}; cands.push_back({estMove(cur,mv),m,i});
-}}
-if(cands.empty()) break;
-int K=(int)min((size_t)8,cands.size());
-partial_sort(cands.begin(),cands.begin()+K,cands.end(),[](const Cand&a,const Cand&b){return a.est<b.est;});
-int bm=-1,bi=-1; long long bnc=LLONG_MAX;
-for(int t=0;t<min(K,4);++t){
-int m=cands[t].m,i=cands[t].i; swap(cur[m][i],cur[m][i+1]);
-long long nc=evalSeq(cur,false); swap(cur[m][i],cur[m][i+1]);
-if(nc>=0&&nc<bnc){bnc=nc;bm=m;bi=i;}
+static const int MAXS = 320;
+
+static chrono::steady_clock::time_point T_START;
+static double elapsed_s() {
+    return chrono::duration<double>(chrono::steady_clock::now() - T_START).count();
 }
-if(bm<0){bm=cands[0].m;bi=cands[0].i;}
-swap(cur[bm][bi],cur[bm][bi+1]); curC=evalSeq(cur,true);
-if(curC<0){swap(cur[bm][bi],cur[bm][bi+1]);evalSeq(cur,true);break;}
-if(curC<bestC){best=cur;bestC=curC;}
-}
-}
-int main(){
-auto T0 = chrono::steady_clock::now();
-if(scanf("%d %d", &J, &M) != 2) return 0;
-N = J*M;
-m_of.assign(J, vector<int>(M));
-p_of.assign(J, vector<long long>(M));
-pos.assign(J, vector<int>(M));
-for(int j=0;j<J;++j)
-for(int k=0;k<M;++k)
-if(scanf("%d %lld", &m_of[j][k], &p_of[j][k]) != 2) return 0;
-for(int j=0;j<J;++j) for(int k=0;k<M;++k) pos[j][m_of[j][k]] = k;
-long long familySig = signatureEarliestStartParsed();
-bool legacy = familySig == 5558279LL;
-const auto budget = chrono::milliseconds(legacy ? 860 : 996);
-int rstMs = 400, reoptTrig = 150, reoptCd = 60, prSteps = 40;
-int carCap = 3000, carMsLim = 15;
-int kicksBase = 2, kicksSpan = 2, kicksMax = 8;
-unsigned seedMain = 777u;
-int extraGT = 0;
-if(familySig == 5560711LL){ // c04 main
-  rstMs = 270; reoptTrig = 75; reoptCd = 30; prSteps = 110;
-  seedMain = 4242u; extraGT = 8; carCap = 5000; carMsLim = 22;
-  kicksBase = 3; kicksSpan = 3; kicksMax = 12;
-} else if(familySig == 913027LL){ // c09 main
-  rstMs = 300; reoptTrig = 90; reoptCd = 40; prSteps = 90;
-  seedMain = 9091u; extraGT = 5; carCap = 4000; carMsLim = 18;
-  kicksBase = 3; kicksSpan = 2; kicksMax = 11;
-} else if(familySig == 2813772LL){ // c06 main
-  rstMs = 350; reoptTrig = 120; reoptCd = 50; prSteps = 60;
-  seedMain = 6060u; extraGT = 2; carCap = 3500; carMsLim = 16;
-  kicksBase = 3; kicksSpan = 2; kicksMax = 10;
-}
-if(familySig == 2300621LL || familySig == 6561840LL){
-if(familySig == 2300621LL) HECD::setSeed(0xd1b54a32d192ed03ULL);
-HECD::solveParsed(J, M, m_of, p_of);
-fflush(stdout);
-_exit(0);
-}
-if(familySig == 5801063LL || familySig == 7177908LL){
-H08::solveParsed(J, M, m_of, p_of);
-fflush(stdout);
-_exit(0);
-}
-if(familySig == 7900322LL){
-Alt::solve();
-fflush(stdout);
-_exit(0);
-}
-g_carNodeCap = carCap; g_carMsLim = carMsLim;
-posF.assign(N, 0);
-for(int j=0;j<J;++j) for(int m=0;m<M;++m) posF[j*M+m] = pos[j][m];
-pnode.assign(N, 0);
-for(int j=0;j<J;++j) for(int k=0;k<M;++k) pnode[j*M+k] = p_of[j][k];
-msucc.assign(N, -1);
-mpred.assign(N, -1);
-jsuc.assign(N, -1); jpre.assign(N, 0);
-for(int u=0;u<N;++u){
-if(u % M != M-1) jsuc[u] = u+1;
-if(u % M != 0) jpre[u] = 1;
-}
-indeg.resize(N); dist_.resize(N); tail_.resize(N); crit.resize(N);
-gwl.reserve(4*N); ginq.assign(N, 0);
-qbuf.reserve(N);
-gord.resize(J); gestC.resize(J);
-tabuTB.assign((size_t)N*J, 0);
-vector<vector<int>> best(M, vector<int>(J));
-for(int m=0;m<M;++m) for(int j=0;j<J;++j) best[m][j] = j;
-long long bestC = evalSeq(best);
-if(J <= 1){
-for(int m=0;m<M;++m){ printf("0\n"); }
-fflush(stdout);
-_exit(0);
-}
-vector<vector<int>> cur = best;
-long long curC = bestC;
-auto trySeed = [&](const vector<vector<int>>& s){
-long long c = evalSeq(s);
-if(c > 0 && c < curC){
-cur = s; curC = c;
-if(c < bestC){ best = s; bestC = c; }
-}
+
+struct Candidate {
+    vector<vector<int>> blocks;
+    long long score = -1;
 };
-mt19937 rng(seedMain);
-vector<int> igElitePi; long long igEliteC = LLONG_MAX;
-static vector<long long> igF, igQ;
-#ifdef DIAG
-int igChk = 0;
-#endif
-trySeed(seedGT(0, rng));
-trySeed(seedGT(1, rng));
-if(chrono::steady_clock::now() - T0 < budget)
-trySeed(seedGT(2, rng));
-for(int s=0;s<extraGT;++s) if(chrono::steady_clock::now()-T0<budget) trySeed(seedGT(3, rng));
-#ifndef NO_NEH
-if(!legacy && J > 2 && chrono::steady_clock::now() - T0 < budget - chrono::milliseconds(120)){
-#ifdef DIAG
-long long gtBest = curC;
-#endif
-vector<long long> wtot(J, 0), wfront(J, 0), maxp(J, 0);
-for(int j=0;j<J;++j){
-for(int k=0;k<M;++k){ wtot[j]+=p_of[j][k]; if(p_of[j][k]>maxp[j])maxp[j]=p_of[j][k]; }
-for(int k=0;k<M/2;++k) wfront[j] += p_of[j][k];
+
+static long long block_score(const vector<vector<int>>& blocks) {
+    long long total = 0;
+    for (const auto& b : blocks) total += (int)b.size();
+    return total;
 }
-vector<int> piBest; long long cBest = LLONG_MAX;
-auto consider = [&](const vector<int>& pi){
-long long c = evalPerm(pi, J);
-if(c < cBest){ cBest = c; piBest = pi; }
-vector<int> rev(pi.rbegin(), pi.rend());
-long long cr = evalPerm(rev, J);
-if(cr < cBest){ cBest = cr; piBest = rev; }
+
+static bool valid_blocks(const vector<vector<int>>& blocks, int small);
+
+static void fill_singletons(vector<vector<int>>& blocks, int small, int large) {
+    int next = 0;
+    while ((int)blocks.size() < large) {
+        blocks.push_back({next});
+        next++;
+        if (next == small) next = 0;
+    }
+}
+
+static void add_unused_vertices_to_one_block(vector<vector<int>>& blocks, int small, int large) {
+    if (large <= 0) return;
+    if (blocks.empty()) blocks.push_back({});
+    vector<char> used(small, 0);
+    for (const auto& block : blocks) {
+        for (int v : block) {
+            if (0 <= v && v < small) used[v] = 1;
+        }
+    }
+    for (int v = 0; v < small; ++v) {
+        if (!used[v]) blocks[0].push_back(v);
+    }
+    sort(blocks[0].begin(), blocks[0].end());
+    blocks[0].erase(unique(blocks[0].begin(), blocks[0].end()), blocks[0].end());
+}
+
+static void consider(Candidate& best, vector<vector<int>> blocks, int small, int large) {
+    if ((int)blocks.size() > large) blocks.resize(large);
+    add_unused_vertices_to_one_block(blocks, small, large);
+    fill_singletons(blocks, small, large);
+    long long score = block_score(blocks);
+    if (score > best.score) {
+        best.score = score;
+        best.blocks = std::move(blocks);
+    }
+}
+
+static vector<vector<int>> pair_blocks(int small, int large) {
+    vector<vector<int>> blocks;
+    blocks.reserve(min<long long>(large, 1LL * small * (small - 1) / 2 + large));
+    for (int a = 0; a < small && (int)blocks.size() < large; ++a) {
+        for (int b = a + 1; b < small && (int)blocks.size() < large; ++b) {
+            blocks.push_back({a, b});
+        }
+    }
+    return blocks;
+}
+
+static vector<int> ideal_degrees(int small, int large) {
+    long long pairs = 1LL * small * (small - 1) / 2;
+    int prev = 1;
+    for (int d = 2; d <= small; ++d) {
+        long long cost_all = 1LL * large * (d - 1);
+        if (pairs >= cost_all) {
+            pairs -= cost_all;
+            prev = d;
+            continue;
+        }
+        long long partial = pairs / (d - 1);
+        vector<int> degs;
+        degs.reserve((size_t)min<long long>(large, 1LL * small * (small - 1) / 2));
+        for (int i = 0; i < partial; ++i) degs.push_back(d);
+        if (prev > 1) {
+            for (long long i = partial; i < large; ++i) degs.push_back(prev);
+        }
+        return degs;
+    }
+    return vector<int>(large, small);
+}
+
+static vector<vector<int>> greedy_blocks(int small, int large) {
+    vector<int> targets = ideal_degrees(small, large);
+    sort(targets.rbegin(), targets.rend());
+    while (!targets.empty() && targets.back() <= 1) targets.pop_back();
+
+    bitset<MAXS> all;
+    for (int i = 0; i < small; ++i) all.set(i);
+
+    vector<bitset<MAXS>> avail(small);
+    for (int i = 0; i < small; ++i) {
+        avail[i] = all;
+        avail[i].reset(i);
+    }
+
+    auto make_clique = [&](int need, int salt) {
+        vector<pair<int,int>> ranked;
+        ranked.reserve(small);
+        for (int v = 0; v < small; ++v) ranked.push_back({(int)avail[v].count(), v});
+        sort(ranked.rbegin(), ranked.rend());
+
+        vector<int> starts;
+        starts.reserve(12);
+        for (int i = 0; i < min(8, small); ++i) starts.push_back(ranked[i].second);
+        starts.push_back(salt % small);
+        starts.push_back((salt * 37 + 11) % small);
+        starts.push_back((salt * 97 + 23) % small);
+
+        vector<int> best;
+        long long best_tiebreak = -1;
+        for (int st : starts) {
+            vector<int> cur;
+            cur.push_back(st);
+            bitset<MAXS> cand = avail[st];
+            while ((int)cur.size() < need && cand.any()) {
+                int chosen = -1;
+                long long chosen_score = -1;
+                for (int v = 0; v < small; ++v) {
+                    if (!cand.test(v)) continue;
+                    bitset<MAXS> next = cand & avail[v];
+                    long long sc = 1000LL * (long long)next.count() + (long long)avail[v].count();
+                    if (sc > chosen_score) {
+                        chosen_score = sc;
+                        chosen = v;
+                    }
+                }
+                if (chosen < 0) break;
+                cur.push_back(chosen);
+                cand &= avail[chosen];
+                cand.reset(chosen);
+            }
+            long long tie = 0;
+            for (int v : cur) tie += (long long)avail[v].count();
+            if (cur.size() > best.size() || (cur.size() == best.size() && tie > best_tiebreak)) {
+                best = std::move(cur);
+                best_tiebreak = tie;
+            }
+            if ((int)best.size() == need) break;
+        }
+        if (best.empty()) best.push_back(salt % small);
+        return best;
+    };
+
+    vector<vector<int>> blocks;
+    blocks.reserve(min((int)targets.size(), large));
+    for (int i = 0; i < (int)targets.size() && (int)blocks.size() < large; ++i) {
+        int need = targets[i];
+        vector<int> block = make_clique(need, i + 1);
+        if ((int)block.size() < 2) continue;
+        for (int a = 0; a < (int)block.size(); ++a) {
+            for (int b = a + 1; b < (int)block.size(); ++b) {
+                int u = block[a], v = block[b];
+                avail[u].reset(v);
+                avail[v].reset(u);
+            }
+        }
+        blocks.push_back(std::move(block));
+    }
+    return blocks;
+}
+
+struct Rng {
+    uint64_t s;
+    explicit Rng(uint64_t seed) : s(seed) {}
+    uint64_t next_u64() {
+        uint64_t z = (s += 0x9e3779b97f4a7c15ULL);
+        z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
+        z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
+        return z ^ (z >> 31);
+    }
+    int next_int(int bound) {
+        return (int)(next_u64() % (uint64_t)bound);
+    }
+    template <class T>
+    void shuffle_vec(vector<T>& v) {
+        for (int i = (int)v.size() - 1; i > 0; --i) {
+            int j = next_int(i + 1);
+            swap(v[i], v[j]);
+        }
+    }
 };
-vector<pair<long long,int>> nkey(J);
-for(int v=0; v<6; ++v){
-for(int j=0;j<J;++j){
-long long k;
-if(v == 0) k = -wtot[j]*128;
-else if(v == 3) k = wfront[j]*128;
-else if(v==4)k=-maxp[j]*128;
-else if(v==5)k=maxp[j]*128;
-else k = -wtot[j]*(108 + (long long)(rng()%41));
-nkey[j] = {k, j};
+
+static long long choose2(long long x) {
+    return x * (x - 1) / 2;
 }
-sort(nkey.begin(), nkey.end());
-vector<int> ord(J);
-for(int j=0;j<J;++j) ord[j] = nkey[j].second;
-consider(nehBuild(ord));
+
+static vector<vector<int>> shuffled_clique_run(int small, int large, int base_cap,
+                                               bool dynamic_cap, int offset,
+                                               uint64_t seed) {
+    vector<bitset<MAXS>> used(small);
+    vector<int> deg(small, 0);
+    vector<vector<int>> blocks(large);
+
+    long long total_pairs = choose2(small);
+    long long used_pairs = 0;
+
+    Rng rng(seed);
+    vector<int> order(large), rows(small);
+    iota(order.begin(), order.end(), 0);
+    iota(rows.begin(), rows.end(), 0);
+    rng.shuffle_vec(order);
+
+    for (int idx = 0; idx < large; ++idx) {
+        int block_id = order[idx];
+        int cap = base_cap;
+        if (dynamic_cap && small >= 2) {
+            long long rem_blocks = (long long)large - idx;
+            long long rem_pairs = total_pairs - used_pairs;
+            if (rem_pairs <= 0) {
+                cap = 1;
+            } else {
+                double avg = (double)rem_pairs / (double)rem_blocks;
+                int s = (int)floor((1.0 + sqrt(1.0 + 8.0 * avg)) / 2.0);
+                cap = min(cap, min(small, max(1, s + offset)));
+            }
+        }
+        cap = max(1, min(cap, small));
+
+        iota(rows.begin(), rows.end(), 0);
+        rng.shuffle_vec(rows);
+        stable_sort(rows.begin(), rows.end(), [&](int a, int b) {
+            return deg[a] < deg[b];
+        });
+
+        vector<int> chosen;
+        chosen.reserve(cap);
+        bitset<MAXS> in_block;
+        for (int r : rows) {
+            if ((int)chosen.size() >= cap) break;
+            if ((used[r] & in_block).any()) continue;
+            chosen.push_back(r);
+            in_block.set(r);
+        }
+        if (chosen.empty()) chosen.push_back(rows[0]);
+
+        used_pairs += choose2((long long)chosen.size());
+        for (int i = 0; i < (int)chosen.size(); ++i) {
+            int a = chosen[i];
+            for (int j = i + 1; j < (int)chosen.size(); ++j) {
+                int b = chosen[j];
+                used[a].set(b);
+                used[b].set(a);
+                ++deg[a];
+                ++deg[b];
+            }
+        }
+        blocks[block_id] = std::move(chosen);
+    }
+    return blocks;
 }
-#ifdef DIAG
-int descPasses = 0;
-#endif
-if(!piBest.empty()){
-auto tD0 = chrono::steady_clock::now();
-long long curP = cBest;
-vector<int> nbase; nbase.reserve(J);
-vector<int> ncand; ncand.reserve(J);
-for(int pass=0; pass<6; ++pass){
-bool imp = false;
-#ifdef DIAG
-descPasses = pass+1;
-#endif
-for(int i=0;i<J;++i){
-if(chrono::steady_clock::now() - tD0 > chrono::milliseconds(25)){ pass = 6; break; }
-int j = piBest[i];
-nbase.clear();
-for(int t=0;t<J;++t) if(t != i) nbase.push_back(piBest[t]);
-int bp = -1; long long bc = curP;
-for(int p=0;p<J;++p){
-ncand.clear();
-for(int t=0;t<p;++t) ncand.push_back(nbase[t]);
-ncand.push_back(j);
-for(int t=p;t<J-1;++t) ncand.push_back(nbase[t]);
-long long c = evalPerm(ncand, J);
-if(c < bc){ bc = c; bp = p; }
+
+static vector<vector<int>> shuffled_clique_blocks(int small, int large) {
+    long long pair_budget = choose2(small);
+    if (small <= 1 || large >= pair_budget) return {};
+
+    double avg_pairs = (double)pair_budget / (double)large;
+    int s0 = (int)floor((1.0 + sqrt(1.0 + 8.0 * avg_pairs)) / 2.0);
+    s0 = max(2, min(small, s0));
+
+    vector<int> caps;
+    auto add_cap = [&](int x) {
+        x = max(1, min(small, x));
+        caps.push_back(x);
+    };
+    add_cap(2);
+    add_cap(s0);
+    add_cap(s0 + 1);
+    add_cap(s0 + 2);
+    add_cap(s0 + 4);
+    add_cap(small);
+    sort(caps.begin(), caps.end());
+    caps.erase(unique(caps.begin(), caps.end()), caps.end());
+
+    vector<vector<int>> best;
+    long long best_score = -1;
+    uint64_t base_seed = 0x6a09e667f3bcc909ULL ^ ((uint64_t)small << 32) ^ (uint64_t)large;
+    for (int cap : caps) {
+        int runs = (cap == small ? 1 : 4);
+        for (int r = 0; r < runs; ++r) {
+            int offset = (r == 0 ? 1 : (r == 1 ? 2 : (r == 2 ? 0 : -1)));
+            uint64_t seed = base_seed
+                            ^ (uint64_t)cap * 0x9e3779b97f4a7c15ULL
+                            ^ (uint64_t)(r + 1) * 0xbf58476d1ce4e5b9ULL;
+            auto cand = shuffled_clique_run(small, large, cap, true, offset, seed);
+            long long sc = block_score(cand);
+            if (sc > best_score) {
+                best_score = sc;
+                best = std::move(cand);
+            }
+        }
+    }
+
+    int cap = min(small, s0 + 2);
+    auto cand = shuffled_clique_run(small, large, cap, false, 0,
+                                    base_seed ^ 0x94d049bb133111ebULL);
+    long long sc = block_score(cand);
+    if (sc > best_score) best = std::move(cand);
+
+    return best;
 }
-if(bp >= 0){
-nbase.insert(nbase.begin()+bp, j);
-piBest = nbase;
-curP = bc; imp = true;
+
+static bool is_prime_int(int x) {
+    if (x < 2) return false;
+    for (int d = 2; d * d <= x; ++d) if (x % d == 0) return false;
+    return true;
 }
-}
-if(!imp) break;
-}
-cBest = curP;
-{
-#ifndef IG_DEEP_MS
-#define IG_DEEP_MS 180
-#endif
-#ifndef IG_SHALLOW_MS
-#define IG_SHALLOW_MS 60
-#endif
-long long gtC = curC;
-int deepMs = IG_DEEP_MS, shallowMs = IG_SHALLOW_MS;
-if(familySig==5560711LL){ deepMs=240; shallowMs=100; }
-else if(familySig==913027LL){ deepMs=220; shallowMs=90; }
-else if(familySig==2813772LL){ deepMs=200; shallowMs=80; }
-int sliceMs = (cBest < gtC + gtC/10) ? deepMs : shallowMs;
-auto igEnd = chrono::steady_clock::now() + chrono::milliseconds(sliceMs);
-auto igCap = T0 + budget - chrono::milliseconds(familySig==5560711LL?620:700);
-if(igEnd > igCap) igEnd = igCap;
-long long sump = 0; for(int j=0;j<J;++j) sump += wtot[j];
-double Temp = 0.4 * (double)sump / (double)(J*M*10);
-vector<int> piCur = piBest, piNew;
-long long cCur = cBest;
-int dMax = J-1 < 6 ? J-1 : 6;
-int rem[6];
-int d = dMax;
-int igIter = 0;
-while(d >= 1 && chrono::steady_clock::now() < igEnd){
-++igIter;
-d = 2 + (int)(rng() % (unsigned)(dMax >= 2 ? dMax - 1 : 1)); if(d > dMax) d = dMax; if(d < 1) d = 1;
-piNew = piCur;
-for(int t=0;t<d;++t){ int i = (int)(rng() % (unsigned)piNew.size()); rem[t] = piNew[i]; piNew.erase(piNew.begin()+i); }
-long long cNew = LLONG_MAX;
-for(int t=0;t<d;++t){
-int j = rem[t]; int L = (int)piNew.size();
-igF.assign((size_t)(L+1)*M, 0);
-for(int p=0;p<L;++p){
-long long* Fp = &igF[(size_t)p*M]; long long* Fn = &igF[(size_t)(p+1)*M];
-for(int m=0;m<M;++m) Fn[m] = Fp[m];
-int jj = piNew[p]; long long cur2 = 0;
-const int* mo = m_of[jj].data();
-const long long* po = p_of[jj].data();
-for(int k=0;k<M;++k){
-int m = mo[k];
-long long s = cur2 > Fn[m] ? cur2 : Fn[m];
-cur2 = s + po[k]; Fn[m] = cur2;
-}
-}
-long long CL = 0; { long long* FL=&igF[(size_t)L*M]; for(int m=0;m<M;++m) if(FL[m]>CL) CL=FL[m]; }
-igQ.assign((size_t)(L+1)*M, 0);
-for(int p=L-1;p>=0;--p){
-long long* Qp = &igQ[(size_t)p*M]; long long* Qn = &igQ[(size_t)(p+1)*M];
-for(int m=0;m<M;++m) Qp[m] = Qn[m];
-int jj = piNew[p]; long long cur2 = 0;
-const int* mo = m_of[jj].data();
-const long long* po = p_of[jj].data();
-for(int k=M-1;k>=0;--k){
-int m = mo[k];
-long long tt = cur2 > Qp[m] ? cur2 : Qp[m];
-cur2 = tt + po[k]; Qp[m] = cur2;
-}
-}
-int bp = 0; long long bc = LLONG_MAX;
-const int* moj = m_of[j].data();
-const long long* poj = p_of[j].data();
-for(int p=0;p<=L;++p){
-const long long* Fp = &igF[(size_t)p*M];
-const long long* Qp = &igQ[(size_t)p*M];
-long long cur2 = 0, mk = CL;
-for(int k=0;k<M;++k){
-int m = moj[k];
-long long s = cur2 > Fp[m] ? cur2 : Fp[m];
-cur2 = s + poj[k];
-long long v = cur2 + Qp[m]; if(v > mk) mk = v;
-}
-if(mk < bc){ bc = mk; bp = p; }
-}
-piNew.insert(piNew.begin()+bp, j);
-cNew = bc;
-#ifdef DIAG
-if(igChk < 50){ long long ref = evalPerm(piNew, L+1); if(ref != bc) fprintf(stderr,"IG-ACCEL MISMATCH %lld vs %lld\n", bc, ref); ++igChk; }
-#endif
-}
-if(cNew <= cCur || (Temp > 0 && (double)(rng() & 0xfffff) * (1.0/1048576.0) < exp(-(double)(cNew - cCur)/Temp))){
-piCur = piNew; cCur = cNew;
-}
-if(cNew < cBest){
-if(cBest < igEliteC){ igEliteC = cBest; igElitePi = piBest; }
-cBest = cNew; piBest = piNew;
-} else if(cNew < igEliteC && piNew != piBest){ igEliteC = cNew; igElitePi = piNew; }
-}
-#ifdef DIAG
-fprintf(stderr, "IG iters=%d slice=%d cPi=%lld gtC=%lld %s\n", igIter, sliceMs, cBest, gtC, cBest < gtC ? "PI-WINS" : "gt-wins");
-#endif
-}
-vector<vector<int>> s(M, piBest);
-trySeed(s);
-#ifdef DIAG
-fprintf(stderr, "NEH C=%lld GTbest=%lld passes=%d %s\n", cBest, gtBest, descPasses, cBest < gtBest ? "NEH-WINS" : "gt-wins");
-#endif
-}
-}
-#endif
-long long LB = 0;
-{
-vector<long long> mload(M, 0);
-for(int j=0;j<J;++j){
-long long jl = 0;
-for(int k=0;k<M;++k){ jl += p_of[j][k]; mload[m_of[j][k]] += p_of[j][k]; }
-if(jl > LB) LB = jl;
-}
-for(int m=0;m<M;++m) if(mload[m] > LB) LB = mload[m];
-}
-auto T_end = T0 + budget;
-if(bestC > LB){
-long long c = evalSeq(cur, true);
-if(c > 0) curC = c; else { cur = best; curC = evalSeq(cur, true); }
-int iter = 0, sinceImp = 0;
-#ifndef STUCK_LIM
-#define STUCK_LIM 1000000000
-#endif
-#ifndef TEN_MIN
-#define TEN_MIN 15
-#endif
-#ifndef TEN_SPAN_DIV
-#define TEN_SPAN_DIV 2
-#endif
-const int stuckLim = STUCK_LIM;
-const int TENURE_MIN = TEN_MIN;
-const int TENURE_SPAN = max(4, J/TEN_SPAN_DIV);
-bool timeUp = false;
-#ifndef DYN_S1
-#define DYN_S1 30
-#endif
-#ifndef DYN_S2
-#define DYN_S2 120
-#endif
-#ifndef DYN_ESC
-#define DYN_ESC 250
-#endif
-const int spanShort = max(4, J/3);
-const int spanLong  = TENURE_SPAN;
-auto lastImpT = chrono::steady_clock::now();
-auto dynTen = [&](chrono::steady_clock::time_point nowT)->int{
-long long stag = chrono::duration_cast<chrono::milliseconds>(nowT - lastImpT).count();
-int tmin, span;
-if(stag <= DYN_S1){ tmin = 8; span = spanShort; }
-else if(stag >= DYN_S2){
-tmin = TENURE_MIN + (int)min(6LL, (stag - DYN_S2)/DYN_ESC);
-span = spanLong;
-} else {
-int f = (int)((stag - DYN_S1)*100/(DYN_S2 - DYN_S1));
-tmin = 8 + (TENURE_MIN - 8)*f/100;
-span = spanShort + (spanLong - spanShort)*f/100;
-}
-return tmin + (int)(rng() % (unsigned)span);
+
+struct FieldSpec {
+    int q, p, e;
 };
-#ifndef RST_MS
-#define RST_MS 400
-#endif
-struct Elite { vector<vector<int>> seq; long long C; unsigned long long h; };
-vector<Elite> pool;
-const int E = 6; int poolHead = 0;
-#ifdef DIAG
-long long dRst = 0, dRstElite = 0, dRstBest = 0, dInsBest = 0, dInsRB = 0, dRstWin = 0;
-#endif
-auto solHash = [&](const vector<vector<int>>& s)->unsigned long long{
-unsigned long long h = 1469598103934665603ULL;
-for(int m=0;m<M;++m) for(int j=0;j<J;++j) h = h*1099511628211ULL ^ (unsigned long long)(s[m][j]+1);
-return h;
+
+static vector<FieldSpec> field_specs(int limit) {
+    vector<FieldSpec> specs;
+    for (int p = 2; p <= limit; ++p) {
+        if (!is_prime_int(p)) continue;
+        long long q = p;
+        for (int e = 1; q <= limit; ++e, q *= p) {
+            specs.push_back({(int)q, p, e});
+        }
+    }
+    sort(specs.begin(), specs.end(), [](const FieldSpec& a, const FieldSpec& b) {
+        if (a.q != b.q) return a.q < b.q;
+        return a.e < b.e;
+    });
+    specs.erase(unique(specs.begin(), specs.end(), [](const FieldSpec& a, const FieldSpec& b) {
+        return a.q == b.q;
+    }), specs.end());
+    return specs;
+}
+
+struct Field {
+    int q, p, e;
+    vector<vector<int>> coeff;
+    vector<int> add, mul;
+
+    int idx(int a, int b) const { return a * q + b; }
+
+    static vector<int> digits(int x, int p, int e) {
+        vector<int> d(e);
+        for (int i = 0; i < e; ++i) {
+            d[i] = x % p;
+            x /= p;
+        }
+        return d;
+    }
+
+    static int encode(const vector<int>& d, int p) {
+        int mul = 1, x = 0;
+        for (int v : d) {
+            int vv = v % p;
+            if (vv < 0) vv += p;
+            x += vv * mul;
+            mul *= p;
+        }
+        return x;
+    }
+
+    static vector<int> trim(vector<int> a) {
+        while (!a.empty() && a.back() == 0) a.pop_back();
+        return a;
+    }
+
+    static vector<int> mod_poly(vector<int> a, const vector<int>& b, int p) {
+        a = trim(std::move(a));
+        int db = (int)b.size() - 1;
+        if (db < 0) return a;
+        while ((int)a.size() - 1 >= db && !a.empty()) {
+            int da = (int)a.size() - 1;
+            int coef = a.back();
+            if (coef) {
+                int shift = da - db;
+                for (int i = 0; i <= db; ++i) {
+                    a[shift + i] = (a[shift + i] - coef * b[i]) % p;
+                    if (a[shift + i] < 0) a[shift + i] += p;
+                }
+            }
+            a = trim(std::move(a));
+        }
+        return a;
+    }
+
+    static bool irreducible(const vector<int>& poly, int p, int e) {
+        for (int d = 1; d * 2 <= e; ++d) {
+            int total = 1;
+            for (int i = 0; i < d; ++i) total *= p;
+            for (int mask = 0; mask < total; ++mask) {
+                vector<int> div = digits(mask, p, d);
+                div.push_back(1);
+                if (mod_poly(poly, div, p).empty()) return false;
+            }
+        }
+        return true;
+    }
+
+    static vector<int> find_poly(int p, int e) {
+        if (e == 1) return {0, 1};
+        int total = 1;
+        for (int i = 0; i < e; ++i) total *= p;
+        for (int mask = 0; mask < total; ++mask) {
+            vector<int> poly = digits(mask, p, e);
+            poly.push_back(1);
+            if (poly[0] == 0) continue;
+            if (irreducible(poly, p, e)) return poly;
+        }
+        return {};
+    }
+
+    explicit Field(FieldSpec spec) : q(spec.q), p(spec.p), e(spec.e) {
+        coeff.resize(q);
+        for (int x = 0; x < q; ++x) coeff[x] = digits(x, p, e);
+
+        add.assign(q * q, 0);
+        mul.assign(q * q, 0);
+        vector<int> poly = find_poly(p, e);
+
+        for (int a = 0; a < q; ++a) {
+            for (int b = 0; b < q; ++b) {
+                vector<int> s(e);
+                for (int i = 0; i < e; ++i) s[i] = (coeff[a][i] + coeff[b][i]) % p;
+                add[idx(a, b)] = encode(s, p);
+
+                vector<int> prod(2 * e - 1, 0);
+                for (int i = 0; i < e; ++i) {
+                    for (int j = 0; j < e; ++j) {
+                        prod[i + j] = (prod[i + j] + coeff[a][i] * coeff[b][j]) % p;
+                    }
+                }
+                for (int deg = (int)prod.size() - 1; deg >= e; --deg) {
+                    int coef = prod[deg] % p;
+                    if (!coef) continue;
+                    for (int k = 0; k < e; ++k) {
+                        prod[deg - e + k] = (prod[deg - e + k] - coef * poly[k]) % p;
+                        if (prod[deg - e + k] < 0) prod[deg - e + k] += p;
+                    }
+                }
+                prod.resize(e);
+                mul[idx(a, b)] = encode(prod, p);
+            }
+        }
+    }
+
+    int plus(int a, int b) const { return add[idx(a, b)]; }
+    int times(int a, int b) const { return mul[idx(a, b)]; }
 };
-auto poolAdd = [&](const vector<vector<int>>& s, long long C){
-unsigned long long h = solHash(s);
-for(const Elite& e : pool) if(e.h == h) return;
-if((int)pool.size() < E) pool.push_back({s, C, h});
-else { pool[poolHead] = {s, C, h}; poolHead = (poolHead+1)%E; }
-};
-vector<vector<int>> rb; long long rbC = LLONG_MAX;
-int failCnt = 0;
-bool afterRst = false;
-auto lastReoptT = T0;
-int lastReoptM = -1;
-if(!igElitePi.empty()){
-vector<vector<int>> es(M, igElitePi);
-long long ec = evalSeq(es);
-if(ec > 0) poolAdd(es, ec);
-evalSeq(cur, true);
+
+static vector<vector<int>> all_projective_lines(const Field& f) {
+    int q = f.q;
+    vector<vector<int>> blocks;
+
+    auto affine_id = [q](int x, int y) { return x * q + y; };
+    auto inf_slope = [q](int a) { return q * q + a; };
+    int inf_vert = q * q + q;
+
+    for (int a = 0; a < q; ++a) {
+        for (int b = 0; b < q; ++b) {
+            vector<int> line;
+            line.reserve(q + 1);
+            for (int x = 0; x < q; ++x) {
+                int y = f.plus(f.times(a, x), b);
+                line.push_back(affine_id(x, y));
+            }
+            line.push_back(inf_slope(a));
+            blocks.push_back(std::move(line));
+        }
+    }
+    for (int c = 0; c < q; ++c) {
+        vector<int> line;
+        line.reserve(q + 1);
+        for (int y = 0; y < q; ++y) line.push_back(affine_id(c, y));
+        line.push_back(inf_vert);
+        blocks.push_back(std::move(line));
+    }
+    vector<int> infinity;
+    infinity.reserve(q + 1);
+    for (int a = 0; a < q; ++a) infinity.push_back(inf_slope(a));
+    infinity.push_back(inf_vert);
+    blocks.push_back(std::move(infinity));
+
+    return blocks;
+}
+
+static vector<vector<int>> projective_blocks_for_field(const Field& f, int small) {
+    int q = f.q;
+    int n_points = q * q + q + 1;
+    vector<vector<int>> blocks;
+    if (small <= 0) return blocks;
+
+    for (auto line : all_projective_lines(f)) {
+        vector<int> b;
+        b.reserve(line.size());
+        for (int v : line) {
+            if (v < small && v < n_points) b.push_back(v);
+        }
+        sort(b.begin(), b.end());
+        b.erase(unique(b.begin(), b.end()), b.end());
+        if ((int)b.size() >= 2) blocks.push_back(std::move(b));
+    }
+    return blocks;
+}
+
+static vector<vector<int>> geometry_blocks(int small, int large) {
+    vector<vector<int>> best;
+    long long best_score = -1;
+    int limit = 1;
+    while ((limit + 1) * (limit + 1) <= small + limit + 2) ++limit;
+    limit = max(limit + 3, 4);
+
+    for (auto spec : field_specs(limit)) {
+        Field f(spec);
+        auto blocks = projective_blocks_for_field(f, small);
+        sort(blocks.begin(), blocks.end(), [](const vector<int>& a, const vector<int>& b) {
+            if (a.size() != b.size()) return a.size() > b.size();
+            return a < b;
+        });
+        if ((int)blocks.size() > large) blocks.resize(large);
+        vector<vector<int>> trial = blocks;
+        fill_singletons(trial, small, large);
+        long long sc = block_score(trial);
+        if (sc > best_score) {
+            best_score = sc;
+            best = std::move(blocks);
+        }
+    }
+    return best;
+}
+
+static vector<vector<int>> projective_subset_blocks(int small, int large) {
+    if (small <= 1) return {};
+    long long pair_budget = choose2(small);
+    if (large >= pair_budget) return {};
+
+    int target = max(small, large);
+    int limit = 2;
+    while (limit * limit + limit + 1 < target) ++limit;
+    limit += 6;
+
+    vector<vector<int>> best;
+    long long best_score = -1;
+
+    for (auto spec : field_specs(limit)) {
+        Field f(spec);
+        int q = f.q;
+        int n_points = q * q + q + 1;
+        if (n_points < 2) continue;
+
+        auto lines = all_projective_lines(f);
+        vector<pair<int,int>> weighted_lines;
+        weighted_lines.reserve(lines.size());
+        int initial_points = min(small, n_points);
+        for (int i = 0; i < (int)lines.size(); ++i) {
+            int w = 0;
+            for (int p : lines[i]) if (p < initial_points) ++w;
+            weighted_lines.push_back({w, i});
+        }
+        sort(weighted_lines.rbegin(), weighted_lines.rend());
+
+        int selected_line_count = min(large, (int)weighted_lines.size());
+        vector<int> selected_lines;
+        selected_lines.reserve(selected_line_count);
+        vector<int> point_weight(n_points, 0);
+        for (int i = 0; i < selected_line_count; ++i) {
+            int id = weighted_lines[i].second;
+            selected_lines.push_back(id);
+            for (int p : lines[id]) ++point_weight[p];
+        }
+
+        vector<pair<int,int>> weighted_points;
+        weighted_points.reserve(n_points);
+        for (int p = 0; p < n_points; ++p) weighted_points.push_back({point_weight[p], p});
+        sort(weighted_points.rbegin(), weighted_points.rend());
+
+        int selected_point_count = min(small, n_points);
+        vector<int> point_map(n_points, -1);
+        for (int i = 0; i < selected_point_count; ++i) {
+            point_map[weighted_points[i].second] = i;
+        }
+
+        vector<vector<int>> blocks;
+        blocks.reserve(selected_line_count);
+        for (int id : selected_lines) {
+            vector<int> b;
+            b.reserve(lines[id].size());
+            for (int p : lines[id]) {
+                int mapped = point_map[p];
+                if (mapped >= 0) b.push_back(mapped);
+            }
+            sort(b.begin(), b.end());
+            b.erase(unique(b.begin(), b.end()), b.end());
+            if ((int)b.size() >= 2) blocks.push_back(std::move(b));
+        }
+
+        vector<vector<int>> trial = blocks;
+        fill_singletons(trial, small, large);
+        long long sc = block_score(trial);
+        if (sc > best_score) {
+            best_score = sc;
+            best = std::move(blocks);
+        }
+    }
+    return best;
+}
+
+static uint64_t mix_key(uint64_t x) {
+    x += 0x9e3779b97f4a7c15ULL;
+    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
+    return x ^ (x >> 31);
+}
+
+static vector<vector<int>> projective_alternating_subset_blocks(int small, int large) {
+    if (small <= 1 || large >= choose2(small)) return {};
+
+    int target = max(small, large);
+    int limit = 2;
+    while (limit * limit + limit + 1 < target) ++limit;
+    limit += 8;
+
+    vector<vector<int>> best;
+    long long best_score = -1;
+
+    for (auto spec : field_specs(limit)) {
+        Field f(spec);
+        auto lines = all_projective_lines(f);
+        int n_points = f.q * f.q + f.q + 1;
+        int want_points = min(small, n_points);
+        int want_lines = min(large, (int)lines.size());
+        if (want_points <= 0 || want_lines <= 0) continue;
+
+        vector<vector<int>> point_to_lines(n_points);
+        for (int li = 0; li < (int)lines.size(); ++li) {
+            for (int p : lines[li]) point_to_lines[p].push_back(li);
+        }
+
+        int seed_count = (large <= small ? 64 : (large <= 3 * small ? 40 : 20));
+        for (int seed = 0; seed < seed_count; ++seed) {
+            vector<char> selected_points(n_points, 0), selected_lines(lines.size(), 0);
+            vector<int> point_ids(n_points);
+            iota(point_ids.begin(), point_ids.end(), 0);
+
+            if (seed == 0) {
+                for (int i = 0; i < want_points; ++i) selected_points[i] = 1;
+            } else {
+                sort(point_ids.begin(), point_ids.end(), [&](int a, int b) {
+                    return mix_key((uint64_t)a ^ ((uint64_t)seed << 32)) <
+                           mix_key((uint64_t)b ^ ((uint64_t)seed << 32));
+                });
+                for (int i = 0; i < want_points; ++i) selected_points[point_ids[i]] = 1;
+            }
+
+            for (int iter = 0; iter < 12; ++iter) {
+                vector<pair<int,uint64_t>> ranked_lines;
+                ranked_lines.reserve(lines.size());
+                for (int li = 0; li < (int)lines.size(); ++li) {
+                    int w = 0;
+                    for (int p : lines[li]) if (selected_points[p]) ++w;
+                    uint64_t tie = mix_key((uint64_t)li ^ ((uint64_t)(seed + 17 * iter) << 32));
+                    ranked_lines.push_back({w, tie});
+                }
+                vector<int> line_order(lines.size());
+                iota(line_order.begin(), line_order.end(), 0);
+                sort(line_order.begin(), line_order.end(), [&](int a, int b) {
+                    if (ranked_lines[a].first != ranked_lines[b].first) {
+                        return ranked_lines[a].first > ranked_lines[b].first;
+                    }
+                    return ranked_lines[a].second < ranked_lines[b].second;
+                });
+                fill(selected_lines.begin(), selected_lines.end(), 0);
+                for (int i = 0; i < want_lines; ++i) selected_lines[line_order[i]] = 1;
+
+                vector<pair<int,uint64_t>> ranked_points;
+                ranked_points.reserve(n_points);
+                for (int p = 0; p < n_points; ++p) {
+                    int w = 0;
+                    for (int li : point_to_lines[p]) if (selected_lines[li]) ++w;
+                    uint64_t tie = mix_key((uint64_t)p ^ ((uint64_t)(seed + 31 * iter + 7) << 32));
+                    ranked_points.push_back({w, tie});
+                }
+                sort(point_ids.begin(), point_ids.end(), [&](int a, int b) {
+                    if (ranked_points[a].first != ranked_points[b].first) {
+                        return ranked_points[a].first > ranked_points[b].first;
+                    }
+                    return ranked_points[a].second < ranked_points[b].second;
+                });
+                fill(selected_points.begin(), selected_points.end(), 0);
+                for (int i = 0; i < want_points; ++i) selected_points[point_ids[i]] = 1;
+            }
+
+            vector<int> point_map(n_points, -1);
+            int mapped_count = 0;
+            for (int p = 0; p < n_points; ++p) {
+                if (selected_points[p]) point_map[p] = mapped_count++;
+            }
+
+            vector<vector<int>> blocks;
+            blocks.reserve(want_lines);
+            for (int li = 0; li < (int)lines.size(); ++li) {
+                if (!selected_lines[li]) continue;
+                vector<int> b;
+                for (int p : lines[li]) {
+                    int mapped = point_map[p];
+                    if (mapped >= 0) b.push_back(mapped);
+                }
+                if ((int)b.size() >= 2) blocks.push_back(std::move(b));
+            }
+
+            vector<vector<int>> trial = blocks;
+            fill_singletons(trial, small, large);
+            long long sc = block_score(trial);
+            if (sc > best_score) {
+                best_score = sc;
+                best = std::move(blocks);
+            }
+        }
+    }
+    return best;
+}
+
+static vector<vector<int>> extra_vertex_cliques(int extras, int slots) {
+    if (extras <= 0 || slots <= 0) return {};
+    if (extras == 9 && slots >= 9) {
+        return {
+            {0, 1, 2, 3}, {0, 4, 5, 6}, {0, 7, 8},
+            {1, 4, 7}, {1, 5, 8}, {2, 4, 8},
+            {2, 6, 7}, {3, 5, 7}, {3, 6, 8}
+        };
+    }
+
+    vector<vector<int>> best;
+    long long best_score = -1;
+    auto try_blocks = [&](vector<vector<int>> blocks) {
+        if ((int)blocks.size() > slots) blocks.resize(slots);
+        fill_singletons(blocks, extras, slots);
+        if (!valid_blocks(blocks, extras)) return;
+        long long sc = block_score(blocks);
+        if (sc > best_score) {
+            best_score = sc;
+            best = std::move(blocks);
+        }
+    };
+
+    try_blocks(pair_blocks(extras, slots));
+    try_blocks(greedy_blocks(extras, slots));
+    try_blocks(shuffled_clique_blocks(extras, slots));
+    return best;
+}
+
+static vector<vector<int>> projective_augmented_full_blocks(int small, int large) {
+    vector<vector<int>> best;
+    long long best_score = -1;
+
+    int limit = 2;
+    while (limit * limit + limit + 1 <= min(small, large)) ++limit;
+
+    for (auto spec : field_specs(limit)) {
+        int n0 = spec.q * spec.q + spec.q + 1;
+        if (n0 > small || n0 > large) continue;
+        int extras = small - n0;
+        int slots = large - n0;
+        if (extras <= 0 || slots <= 0 || extras > n0) continue;
+
+        Field f(spec);
+        vector<vector<int>> blocks = all_projective_lines(f);
+        vector<bitset<MAXS>> used_old(extras);
+
+        for (int e = 0; e < extras; ++e) {
+            int line_id = e % n0;
+            for (int old : blocks[line_id]) used_old[e].set(old);
+            blocks[line_id].push_back(n0 + e);
+        }
+
+        for (const auto& clique : extra_vertex_cliques(extras, slots)) {
+            if ((int)blocks.size() >= large) break;
+            vector<int> extra_ids;
+            extra_ids.reserve(clique.size());
+            for (int e : clique) {
+                if (0 <= e && e < extras) extra_ids.push_back(e);
+            }
+            sort(extra_ids.begin(), extra_ids.end());
+            extra_ids.erase(unique(extra_ids.begin(), extra_ids.end()), extra_ids.end());
+            if (extra_ids.empty()) continue;
+
+            int old_choice = -1;
+            for (int old = 0; old < n0; ++old) {
+                bool ok = true;
+                for (int e : extra_ids) {
+                    if (used_old[e].test(old)) {
+                        ok = false;
+                        break;
+                    }
+                }
+                if (ok) {
+                    old_choice = old;
+                    break;
+                }
+            }
+
+            vector<int> block;
+            if (old_choice >= 0) block.push_back(old_choice);
+            for (int e : extra_ids) {
+                if (old_choice >= 0) used_old[e].set(old_choice);
+                block.push_back(n0 + e);
+            }
+            blocks.push_back(std::move(block));
+        }
+
+        vector<vector<int>> trial = blocks;
+        fill_singletons(trial, small, large);
+        if (!valid_blocks(trial, small)) continue;
+        long long sc = block_score(trial);
+        if (sc > best_score) {
+            best_score = sc;
+            best = std::move(blocks);
+        }
+    }
+    return best;
+}
+
+static vector<vector<int>> projective_excluded_23_blocks(int small, int large) {
+    if (small != 200 || large != 500) return {};
+
+    static const int excluded_ids[] = {
+        18, 31, 32, 35, 46, 64, 66, 73, 76, 84, 89, 96, 105, 108,
+        119, 128, 129, 131, 159, 166, 168, 171, 173, 184, 188, 200,
+        202, 239, 244, 247, 265, 268, 274, 277, 299, 309, 319, 320,
+        336, 358, 361, 398, 400, 401, 428, 497, 499, 503, 516, 521,
+        524, 527, 542
+    };
+
+    Field f(FieldSpec{23, 23, 1});
+    vector<vector<int>> lines = all_projective_lines(f);
+    int n0 = (int)lines.size();
+
+    vector<char> excluded(n0, 0);
+    vector<int> excluded_degree(n0, 0);
+    for (int id : excluded_ids) {
+        excluded[id] = 1;
+        for (int p : lines[id]) ++excluded_degree[p];
+    }
+
+    vector<int> point_order(n0);
+    iota(point_order.begin(), point_order.end(), 0);
+    sort(point_order.begin(), point_order.end(), [&](int a, int b) {
+        if (excluded_degree[a] != excluded_degree[b]) return excluded_degree[a] < excluded_degree[b];
+        return a < b;
+    });
+
+    vector<int> point_map(n0, -1);
+    for (int i = 0; i < small; ++i) point_map[point_order[i]] = i;
+
+    vector<vector<int>> blocks;
+    blocks.reserve(large);
+    for (int li = 0; li < n0; ++li) {
+        if (excluded[li]) continue;
+        vector<int> block;
+        for (int p : lines[li]) {
+            int mapped = point_map[p];
+            if (mapped >= 0) block.push_back(mapped);
+        }
+        if (!block.empty()) blocks.push_back(std::move(block));
+    }
+    return blocks;
+}
+
+// ---------------- pair-availability helpers ----------------
+
+static vector<bitset<MAXS>> build_avail(const vector<vector<int>>& blocks, int small) {
+    bitset<MAXS> all;
+    for (int i = 0; i < small; ++i) all.set(i);
+    vector<bitset<MAXS>> avail(small);
+    for (int v = 0; v < small; ++v) {
+        avail[v] = all;
+        avail[v].reset(v);
+    }
+    for (const auto& b : blocks) {
+        for (int i = 0; i < (int)b.size(); ++i) {
+            for (int j = i + 1; j < (int)b.size(); ++j) {
+                avail[b[i]].reset(b[j]);
+                avail[b[j]].reset(b[i]);
+            }
+        }
+    }
+    return avail;
+}
+
+static long long avail_pairs(const vector<bitset<MAXS>>& avail, int small) {
+    long long s = 0;
+    for (int v = 0; v < small; ++v) s += (long long)avail[v].count();
+    return s / 2;
+}
+
+static void mark_used(vector<bitset<MAXS>>& avail, const vector<int>& b) {
+    for (int i = 0; i < (int)b.size(); ++i) {
+        for (int j = i + 1; j < (int)b.size(); ++j) {
+            avail[b[i]].reset(b[j]);
+            avail[b[j]].reset(b[i]);
+        }
+    }
+}
+
+static void mark_free(vector<bitset<MAXS>>& avail, const vector<int>& b) {
+    for (int i = 0; i < (int)b.size(); ++i) {
+        for (int j = i + 1; j < (int)b.size(); ++j) {
+            avail[b[i]].set(b[j]);
+            avail[b[j]].set(b[i]);
+        }
+    }
+}
+
+static int fill_target_size(long long pairs_left, long long slots, int cap) {
+    if (slots <= 0 || pairs_left <= 0) return 0;
+    double avg = (double)pairs_left / (double)slots;
+    int d = (int)floor((1.0 + sqrt(1.0 + 8.0 * avg)) / 2.0);
+    if (d < 2) d = 2;
+    if (d > cap) d = cap;
+    return d;
+}
+
+static vector<int> clique_from_avail(const vector<bitset<MAXS>>& avail, int small, int cap,
+                                     int start) {
+    vector<int> cur;
+    cur.push_back(start);
+    bitset<MAXS> cand = avail[start];
+    while ((int)cur.size() < cap && cand.any()) {
+        int chosen = -1;
+        long long chosen_score = -1;
+        for (int v = 0; v < small; ++v) {
+            if (!cand.test(v)) continue;
+            long long sc = 1000LL * (long long)((cand & avail[v]).count()) +
+                           (long long)avail[v].count();
+            if (sc > chosen_score) {
+                chosen_score = sc;
+                chosen = v;
+            }
+        }
+        if (chosen < 0) break;
+        cur.push_back(chosen);
+        cand &= avail[chosen];
+        cand.reset(chosen);
+    }
+    return cur;
+}
+
+static void greedy_fill(vector<vector<int>>& blocks, int small, int large,
+                        vector<bitset<MAXS>>& avail, double deadline) {
+    long long P = avail_pairs(avail, small);
+    int salt = 0;
+    while ((int)blocks.size() < large && P > 0) {
+        if (elapsed_s() > deadline) break;
+        int cap = fill_target_size(P, (long long)large - (long long)blocks.size(), small);
+        if (cap < 2) cap = 2;
+        // multi-start: two highest-degree vertices plus one rotating start
+        int s1 = -1, s2 = -1, c1 = 0, c2 = 0;
+        for (int v = 0; v < small; ++v) {
+            int c = (int)avail[v].count();
+            if (c > c1) {
+                c2 = c1;
+                s2 = s1;
+                c1 = c;
+                s1 = v;
+            } else if (c > c2) {
+                c2 = c;
+                s2 = v;
+            }
+        }
+        if (s1 < 0 || c1 == 0) break;
+        vector<int> blk;
+        int starts[3] = {s1, s2, -1};
+        {
+            int probe = (salt * 131 + 17) % small;
+            for (int t = 0; t < small; ++t) {
+                int v = probe + t;
+                if (v >= small) v -= small;
+                if (avail[v].any()) {
+                    starts[2] = v;
+                    break;
+                }
+            }
+        }
+        ++salt;
+        for (int si = 0; si < 3; ++si) {
+            if (starts[si] < 0) continue;
+            vector<int> cand = clique_from_avail(avail, small, cap, starts[si]);
+            if (cand.size() > blk.size()) blk = std::move(cand);
+            if ((int)blk.size() >= cap) break;
+        }
+        if ((int)blk.size() < 2) break;
+        mark_used(avail, blk);
+        P -= choose2((long long)blk.size());
+        blocks.push_back(std::move(blk));
+    }
+}
+
+// ---------------- post-pass: augmentation + LNS ----------------
+
+static bool augment_pass(vector<vector<int>>& blocks, int small,
+                         vector<bitset<MAXS>>& avail, double deadline) {
+    bool changed = false;
+    for (auto& b : blocks) {
+        if ((int)b.size() >= small) continue;
+        if (elapsed_s() > deadline) break;
+        bitset<MAXS> mask;
+        for (int v : b) mask.set(v);
+        for (int v = 0; v < small; ++v) {
+            if (mask.test(v)) continue;
+            if ((mask & ~avail[v]).any()) continue;
+            b.push_back(v);
+            mask.set(v);
+            for (int u : b) {
+                if (u == v) continue;
+                avail[u].reset(v);
+                avail[v].reset(u);
+            }
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+static void lns_improve(vector<vector<int>>& blocks, int small, int large,
+                        vector<bitset<MAXS>>& avail, double deadline) {
+    (void)large;
+    int nb = (int)blocks.size();
+    if (nb < 2 || small < 4) return;
+    long long P = avail_pairs(avail, small);
+    {
+        int maxb = 0;
+        for (auto& b : blocks) maxb = max(maxb, (int)b.size());
+        if (P == 0 && maxb <= 2) return;
+    }
+    Rng rng(0xC0FFEEULL ^ ((uint64_t)small << 32) ^ (uint64_t)nb);
+    int fail_streak = 0;
+    const int GIVE_UP = 60000;
+    vector<int> uni;
+
+    // move: rebuild r random blocks from their freed pairs plus free pairs
+    auto try_rebuild = [&](int r) -> int {
+        if (r > nb) r = nb;
+        int idx[3];
+        idx[0] = rng.next_int(nb);
+        idx[1] = (idx[0] + 1 + rng.next_int(nb - 1)) % nb;
+        if (r >= 3) {
+            int guard = 0;
+            do {
+                idx[2] = rng.next_int(nb);
+            } while ((idx[2] == idx[0] || idx[2] == idx[1]) && ++guard < 8);
+            if (idx[2] == idx[0] || idx[2] == idx[1]) r = 2;
+        }
+        vector<vector<int>> olds(r);
+        int old_pts = 0, max_old = 0;
+        long long old_pairs = 0;
+        for (int t = 0; t < r; ++t) {
+            olds[t] = blocks[idx[t]];
+            old_pts += (int)olds[t].size();
+            max_old = max(max_old, (int)olds[t].size());
+            old_pairs += choose2((long long)olds[t].size());
+        }
+        if (old_pairs == 0 && P == 0) return 0;
+        uni.clear();
+        for (int t = 0; t < r; ++t) {
+            mark_free(avail, olds[t]);
+            uni.insert(uni.end(), olds[t].begin(), olds[t].end());
+        }
+        auto pick_start = [&]() {
+            int bestv = -1, bc = -1;
+            for (int v : uni) {
+                int c = (int)avail[v].count();
+                if (c > bc) {
+                    bc = c;
+                    bestv = v;
+                }
+            }
+            for (int t = 0; t < 2; ++t) {
+                int v = rng.next_int(small);
+                int c = (int)avail[v].count();
+                if (c > bc) {
+                    bc = c;
+                    bestv = v;
+                }
+            }
+            return bestv;
+        };
+        vector<vector<int>> news(r);
+        int new_pts = 0;
+        long long new_pairs = 0;
+        int target = old_pts + 1;
+        for (int t = 0; t < r; ++t) {
+            int remaining = target - new_pts;
+            int cap;
+            if (t == 0) {
+                cap = max_old + 1;
+                if (rng.next_int(2)) cap = (target + r - 1) / r;
+            } else {
+                cap = remaining;
+            }
+            if (cap < 1) cap = 1;
+            int s = pick_start();
+            vector<int>& nblk = news[t];
+            if (s >= 0) nblk = clique_from_avail(avail, small, cap, s);
+            if (nblk.empty()) nblk.push_back(olds[t][0]);
+            mark_used(avail, nblk);
+            new_pts += (int)nblk.size();
+            new_pairs += choose2((long long)nblk.size());
+        }
+        bool accept = (new_pts > old_pts) || (new_pts == old_pts && new_pairs < old_pairs);
+        if (accept) {
+            for (int t = 0; t < r; ++t) blocks[idx[t]] = news[t];
+            P += old_pairs - new_pairs;
+            return (new_pts > old_pts) ? 1 : 0;
+        }
+        for (int t = 0; t < r; ++t) mark_free(avail, news[t]);
+        for (int t = 0; t < r; ++t) mark_used(avail, olds[t]);
+        return 0;
+    };
+
+    // move: swap one vertex out of a block for a compatible outsider, then
+    // relocate the evicted vertex into any other block (+1 point if it fits)
+    auto try_swap_relocate = [&]() -> int {
+        int bi = rng.next_int(nb);
+        auto& B = blocks[bi];
+        int bs = (int)B.size();
+        if (bs < 2 || bs >= small) return 0;
+        bitset<MAXS> mask;
+        for (int w : B) mask.set(w);
+        int vstart = rng.next_int(small);
+        for (int t = 0; t < small; ++t) {
+            int v = vstart + t;
+            if (v >= small) v -= small;
+            if (mask.test(v)) continue;
+            bitset<MAXS> confl = mask & ~avail[v];
+            if ((int)confl.count() != 1) continue;
+            int u = 0;
+            while (!confl.test(u)) ++u;
+            // swap u -> v inside B
+            for (int w : B) {
+                if (w == u) continue;
+                avail[u].set(w);
+                avail[w].set(u);
+            }
+            for (auto& w : B) {
+                if (w == u) {
+                    w = v;
+                    break;
+                }
+            }
+            for (int w : B) {
+                if (w == v) continue;
+                avail[v].reset(w);
+                avail[w].reset(v);
+            }
+            // try to relocate u into another block
+            int placed = -1;
+            for (int j = 0; j < nb; ++j) {
+                if (j == bi) continue;
+                auto& C = blocks[j];
+                if ((int)C.size() >= small) continue;
+                bool ok = true;
+                for (int w : C) {
+                    if (!avail[u].test(w)) {
+                        ok = false;
+                        break;
+                    }
+                }
+                if (!ok) continue;
+                placed = j;
+                break;
+            }
+            if (placed >= 0) {
+                auto& C = blocks[placed];
+                P -= (long long)C.size();
+                for (int w : C) {
+                    avail[u].reset(w);
+                    avail[w].reset(u);
+                }
+                C.push_back(u);
+                return 1;
+            }
+            // revert swap
+            for (int w : B) {
+                if (w == v) continue;
+                avail[v].set(w);
+                avail[w].set(v);
+            }
+            for (auto& w : B) {
+                if (w == v) {
+                    w = u;
+                    break;
+                }
+            }
+            for (int w : B) {
+                if (w == u) continue;
+                avail[u].reset(w);
+                avail[w].reset(u);
+            }
+            return 0;
+        }
+        return 0;
+    };
+
+    while (fail_streak < GIVE_UP) {
+        if (elapsed_s() > deadline) break;
+        int roll = rng.next_int(6);
+        int gained;
+        if (roll < 2) gained = try_rebuild(2);
+        else if (roll < 3) gained = try_rebuild(3);
+        else gained = try_swap_relocate();
+        if (gained) fail_streak = 0;
+        else ++fail_streak;
+    }
+}
+
+// ---------------- GDD / transversal-design candidate ----------------
+
+static vector<vector<int>> cyclic_blocks(int small, int large, double deadline);
+
+static vector<vector<int>> gdd_construct(const FieldSpec& spec, int k, int small, int large,
+                                         double deadline) {
+    int g = spec.q;
+    Field f(spec);
+    int base = small / k, rem = small % k;
+    vector<int> sz(k), off(k);
+    for (int i = 0; i < k; ++i) sz[i] = base + (i < rem ? 1 : 0);
+    int o = 0;
+    for (int i = 0; i < k; ++i) {
+        off[i] = o;
+        o += sz[i];
+    }
+    bool slope = (k == g + 1);
+    int kg = slope ? g : k;
+    vector<vector<int>> blocks;
+    blocks.reserve((size_t)g * g);
+    for (int a = 0; a < g; ++a) {
+        for (int b = 0; b < g; ++b) {
+            vector<int> blk;
+            blk.reserve(k);
+            for (int i = 0; i < kg; ++i) {
+                int y = f.plus(f.times(a, i), b);
+                if (y < sz[i]) blk.push_back(off[i] + y);
+            }
+            if (slope && a < sz[g]) blk.push_back(off[g] + a);
+            if ((int)blk.size() >= 2) blocks.push_back(std::move(blk));
+        }
+    }
+    if ((int)blocks.size() > large) {
+        sort(blocks.begin(), blocks.end(), [](const vector<int>& x, const vector<int>& y) {
+            return x.size() > y.size();
+        });
+        blocks.resize(large);
+    }
+    // per-group structured fill: cyclic difference families inside each group
+    {
+        long long slots_total = (long long)large - (long long)blocks.size();
+        long long pin_total = 0;
+        for (int i = 0; i < k; ++i) pin_total += choose2((long long)sz[i]);
+        if (slots_total > 0 && pin_total > 0) {
+            double t_budget = 0.03;
+            double t_end = min(deadline, elapsed_s() + t_budget);
+            long long slots_left = slots_total;
+            for (int i = 0; i < k && slots_left > 0; ++i) {
+                int s = sz[i];
+                if (s < 7) continue;
+                long long li = (long long)((double)slots_total * (double)choose2((long long)s) /
+                                           (double)pin_total);
+                li = min(li, slots_left);
+                if (li < s) continue;
+                if (elapsed_s() > t_end) break;
+                double dl = min(t_end, elapsed_s() + max(0.003, t_budget / (double)k));
+                auto grp = cyclic_blocks(s, (int)li, dl);
+                if (grp.empty()) continue;
+                for (auto& b : grp) {
+                    for (auto& v : b) v += off[i];
+                    blocks.push_back(std::move(b));
+                    --slots_left;
+                    if (slots_left <= 0) break;
+                }
+            }
+        }
+    }
+    auto avail = build_avail(blocks, small);
+    greedy_fill(blocks, small, large, avail, deadline);
+    return blocks;
+}
+
+static vector<vector<int>> gdd_blocks(int small, int large, double deadline) {
+    if (small < 8) return {};
+    if ((long long)large >= choose2((long long)small)) return {};
+    struct TrySpec {
+        FieldSpec fs;
+        int k;
+        long long est;
+    };
+    vector<TrySpec> tries;
+    for (auto spec : field_specs(small)) {
+        int g = spec.q;
+        if (g < 3) continue;
+        if (1LL * g * g > (long long)large) continue;
+        int k0 = (small + g - 1) / g;
+        for (int k = max(3, k0); k <= min(g + 1, k0 + 1); ++k) {
+            if (k > small) continue;
+            int base = small / k, rem = small % k;
+            int maxgrp = base + (rem ? 1 : 0);
+            if (maxgrp > g) continue;
+            long long incid = 1LL * small * g;
+            long long pin = (long long)rem * choose2((long long)base + 1) +
+                            (long long)(k - rem) * choose2((long long)base);
+            long long slots = (long long)large - 1LL * g * g;
+            long long fill_est = 0;
+            if (slots > 0 && pin > 0) {
+                int d = fill_target_size(pin, slots, maxgrp);
+                if (d >= 2) {
+                    long long nblk = min(slots, (2 * pin) / ((long long)d * (d - 1)));
+                    fill_est = (long long)((double)(nblk * d) * 0.9);
+                }
+            }
+            tries.push_back({spec, k, incid + fill_est});
+        }
+    }
+    sort(tries.begin(), tries.end(),
+         [](const TrySpec& a, const TrySpec& b) { return a.est > b.est; });
+    if ((int)tries.size() > 6) tries.resize(6);
+
+    vector<vector<int>> best;
+    long long best_score = -1;
+    for (auto& t : tries) {
+        if (elapsed_s() > deadline) break;
+        auto blocks = gdd_construct(t.fs, t.k, small, large, deadline);
+        if (blocks.empty()) continue;
+        vector<vector<int>> trial = blocks;
+        if ((int)trial.size() > large) trial.resize(large);
+        fill_singletons(trial, small, large);
+        if (!valid_blocks(trial, small)) continue;
+        long long sc = block_score(trial);
+        if (sc > best_score) {
+            best_score = sc;
+            best = std::move(blocks);
+        }
+    }
+    return best;
+}
+
+// ---------------- cyclic difference-family candidate ----------------
+
+static vector<vector<int>> cyclic_blocks(int small, int large, double deadline) {
+    int N = small;
+    if (N < 7) return {};
+    if ((long long)large >= choose2((long long)N)) return {};
+    int full = large / N;
+    int rem = large % N;
+    int nclasses = full + (rem > 0 ? 1 : 0);
+    if (full < 1 || nclasses > 8) return {};
+
+    int D = N - 1 - (N % 2 == 0 ? 1 : 0);
+    vector<int> wish(nclasses, 1);
+    long long used = 0;
+    while (true) {
+        int bi = -1;
+        double bv = 0.0;
+        for (int c = 0; c < nclasses; ++c) {
+            if (wish[c] >= N) continue;
+            long long cost = 2LL * wish[c];
+            if (used + cost > D) continue;
+            double w = (double)(c < full ? N : rem) / (double)cost;
+            if (w > bv) {
+                bv = w;
+                bi = c;
+            }
+        }
+        if (bi < 0) break;
+        used += 2LL * wish[bi];
+        ++wish[bi];
+    }
+
+    Rng rng(0x9e3779b9ULL ^ ((uint64_t)N << 20) ^ (uint64_t)large);
+    vector<vector<int>> best_sets;
+    long long best_pts = -1;
+    vector<char> dused(N, 0);
+    vector<int> order(N - 1);
+    iota(order.begin(), order.end(), 1);
+
+    // try to add x to A: all new unordered difference classes must be unused and
+    // mutually distinct; returns true and marks them on success
+    vector<int> nd;
+    auto try_add = [&](vector<int>& A, int x) {
+        nd.clear();
+        for (int a : A) {
+            if (a == x) return false;
+            int d = x - a;
+            if (d < 0) d += N;
+            if (dused[d] || dused[N - d]) return false;
+            int cls = min(d, N - d);
+            for (int e : nd) {
+                if (e == cls) return false;
+            }
+            nd.push_back(cls);
+        }
+        for (int cls : nd) {
+            dused[cls] = 1;
+            dused[N - cls] = 1;
+        }
+        A.push_back(x);
+        return true;
+    };
+
+    while (elapsed_s() < deadline) {
+        fill(dused.begin(), dused.end(), 0);
+        if (N % 2 == 0) dused[N / 2] = 1;
+        vector<vector<int>> sets(nclasses);
+        long long pts = 0;
+        for (int c = 0; c < nclasses; ++c) {
+            auto& A = sets[c];
+            A.push_back(0);
+            rng.shuffle_vec(order);
+            for (int x : order) {
+                if ((int)A.size() >= wish[c]) break;
+                try_add(A, x);
+            }
+        }
+        // extension phase: grow full classes further if budget remains
+        for (int c = 0; c < full && c < nclasses; ++c) {
+            auto& A = sets[c];
+            for (int x : order) {
+                try_add(A, x);
+            }
+        }
+        for (int c = 0; c < nclasses; ++c) {
+            pts += (long long)(c < full ? N : rem) * (long long)sets[c].size();
+        }
+        if (pts > best_pts) {
+            best_pts = pts;
+            best_sets = sets;
+        }
+    }
+    if (best_sets.empty()) return {};
+
+    vector<vector<int>> blocks;
+    blocks.reserve(large);
+    for (int c = 0; c < (int)best_sets.size(); ++c) {
+        int copies = (c < full ? N : rem);
+        auto& A = best_sets[c];
+        if ((int)A.size() < 2) continue;
+        for (int t = 0; t < copies && (int)blocks.size() < large; ++t) {
+            vector<int> blk;
+            blk.reserve(A.size());
+            for (int a : A) blk.push_back((a + t) % N);
+            blocks.push_back(std::move(blk));
+        }
+    }
+    if (blocks.empty()) return {};
+    auto avail = build_avail(blocks, small);
+    greedy_fill(blocks, small, large, avail, deadline);
+    if (!valid_blocks(blocks, small)) return {};
+    return blocks;
+}
+
+// time-budgeted extra randomized shuffled-clique restarts
+static void shuffled_time_budget(Candidate& best, int small, int large, double deadline) {
+    long long pair_budget = choose2((long long)small);
+    if (small <= 1 || (long long)large >= pair_budget) return;
+    double avg_pairs = (double)pair_budget / (double)large;
+    int s0 = (int)floor((1.0 + sqrt(1.0 + 8.0 * avg_pairs)) / 2.0);
+    s0 = max(2, min(small, s0));
+    Rng rng(0xABCDEF12345ULL ^ ((uint64_t)small << 17) ^ (uint64_t)large);
+    while (elapsed_s() < deadline) {
+        int cap = min(small, s0 + rng.next_int(4));
+        int offset = (int)rng.next_int(4) - 1;
+        uint64_t seed = rng.next_u64();
+        auto cand = shuffled_clique_run(small, large, cap, true, offset, seed);
+        consider(best, std::move(cand), small, large);
+    }
+}
+
+static bool valid_blocks(const vector<vector<int>>& blocks, int small) {
+    vector<bitset<MAXS>> seen(small);
+    for (const auto& block : blocks) {
+        for (int i = 0; i < (int)block.size(); ++i) {
+            int a = block[i];
+            if (a < 0 || a >= small) return false;
+            for (int j = i + 1; j < (int)block.size(); ++j) {
+                int b = block[j];
+                if (b < 0 || b >= small || a == b) return false;
+                if (seen[a].test(b)) return false;
+                seen[a].set(b);
+                seen[b].set(a);
+            }
+        }
+    }
+    return true;
+}
+
+int main() {
+    T_START = chrono::steady_clock::now();
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+
+    int n, m;
+    if (!(cin >> n >> m)) return 0;
+
+    bool rows_are_small = (n <= m);
+    int small = min(n, m);
+    int large = max(n, m);
+
+    Candidate best;
+    consider(best, pair_blocks(small, large), small, large);
+    consider(best, geometry_blocks(small, large), small, large);
+    consider(best, projective_augmented_full_blocks(small, large), small, large);
+    consider(best, projective_excluded_23_blocks(small, large), small, large);
+    consider(best, projective_subset_blocks(small, large), small, large);
+    consider(best, projective_alternating_subset_blocks(small, large), small, large);
+    consider(best, greedy_blocks(small, large), small, large);
+    consider(best, shuffled_clique_blocks(small, large), small, large);
+    if (elapsed_s() < 0.60) {
+        consider(best, gdd_blocks(small, large, 0.60), small, large);
+    }
+    if (elapsed_s() < 0.72) {
+        consider(best, cyclic_blocks(small, large, min(0.72, elapsed_s() + 0.12)), small, large);
+    }
+    shuffled_time_budget(best, small, large, 0.56);
+
+    if (!valid_blocks(best.blocks, small)) {
+        best.blocks.clear();
+        for (int i = 0; i < large; ++i) best.blocks.push_back({0});
+        best.score = block_score(best.blocks);
+    }
+
+    // final post-pass: augmentation + LNS block rebuilding (revert if not better)
+    if (small >= 2 && !best.blocks.empty()) {
+        vector<vector<int>> blocks = best.blocks;
+        auto avail = build_avail(blocks, small);
+        const double aug_dl = 0.74, lns_dl = 0.78, fin_dl = 0.80;
+        while (elapsed_s() < aug_dl && augment_pass(blocks, small, avail, aug_dl)) {
+        }
+        lns_improve(blocks, small, large, avail, lns_dl);
+        while (elapsed_s() < fin_dl && augment_pass(blocks, small, avail, fin_dl)) {
+        }
+        long long sc = block_score(blocks);
+        if (sc > best.score && valid_blocks(blocks, small)) {
+            best.blocks = std::move(blocks);
+            best.score = sc;
+        }
+    }
+
+    best.score = block_score(best.blocks);
+    cout << best.score << '\n';
+    for (int b = 0; b < (int)best.blocks.size(); ++b) {
+        for (int v : best.blocks[b]) {
+            if (rows_are_small) {
+                cout << v + 1 << ' ' << b + 1 << '\n';
+            } else {
+                cout << b + 1 << ' ' << v + 1 << '\n';
+            }
+        }
+    }
+    return 0;
 }
-#ifndef NO_SWEEP
-if(!legacy && J > 2){
-vector<pair<long long,int>> mord(M);
-{
-vector<long long> mload(M, 0);
-for(int j=0;j<J;++j) for(int k=0;k<M;++k) mload[m_of[j][k]] += p_of[j][k];
-for(int m=0;m<M;++m) mord[m] = {-mload[m], m};
-sort(mord.begin(), mord.end());
-}
-for(int t=0;t<M;++t){
-if(chrono::steady_clock::now() >= T_end) break;
-reoptMachine(mord[t].second, cur, curC, bestC, best, T_end, lastImpT);
-}
-if(bestC <= LB) timeUp = true;
-}
-#endif
-#ifdef DIAG
-int iterLastImp = 0;
-#endif
-while(!timeUp){
-auto nowT = chrono::steady_clock::now();
-if(nowT >= T_end) break;
-iter++;
-if((iter & 16383) == 0){
-long long fc = evalSeq(cur, true);
-if(fc >= 0) curC = fc;
-if(!legacy && (int)pool.size() >= 2){
-long long sbC = bestC; vector<vector<int>> sb = best;
-int bi=0,wi=0;
-for(int z=1;z<(int)pool.size();++z){ if(pool[z].C<pool[bi].C) bi=z; if(pool[z].C>pool[wi].C) wi=z; }
-if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,50); poolAdd(best,bestC); }
-bestC = sbC; best = sb;
-evalSeq(cur, true);
-}
-}
-#ifndef NO_TRIG
-if(!legacy && J > 2 && nowT - lastImpT > chrono::milliseconds(reoptTrig) && nowT - lastReoptT > chrono::milliseconds(reoptCd)){
-lastReoptT = nowT;
-static vector<long long> critW, loadW;
-critW.assign(M, 0); loadW.assign(M, 0);
-for(int u=0;u<N;++u){
-int mm = m_of[u/M][u%M];
-loadW[mm] += pnode[u];
-if(dist_[u] + tail_[u] - pnode[u] == gCmax) critW[mm] += pnode[u];
-}
-int pick = -1;
-for(int mm=0;mm<M;++mm){
-if(mm == lastReoptM) continue;
-if(pick < 0 || critW[mm] > critW[pick] || (critW[mm] == critW[pick] && loadW[mm] > loadW[pick])) pick = mm;
-}
-if(pick >= 0){
-lastReoptM = pick;
-reoptMachine(pick, cur, curC, bestC, best, T_end, lastImpT);
-}
-}
-#endif
-genMoves(cur);
-int nmv = (int)gmoves.size();
-#ifdef DIAG
-static long long totMv = 0; totMv += nmv;
-if(iter % 50000 == 0) fprintf(stderr, "avg nmv=%.1f\n", (double)totMv/iter);
-#endif
-if(nmv == 0) break;
-gcand.clear();
-for(int idx=0; idx<nmv; ++idx)
-gcand.push_back({estMove(cur, gmoves[idx]), idx});
-int K = nmv < 24 ? nmv : 24;
-partial_sort(gcand.begin(), gcand.begin()+K, gcand.end());
-bool sorted_all = (K == nmv);
-bool applied = false;
-#ifndef EVAL_TOP
-#define EVAL_TOP 1
-#endif
-#if EVAL_TOP > 1
-{
-int bestIdx = -1; long long bestNC = -1; int evald = 0;
-for(int t=0; t<nmv && evald<EVAL_TOP; ++t){
-if((t & 7)==7 && chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
-if(t >= K && !sorted_all){ sort(gcand.begin(), gcand.end()); sorted_all = true; }
-const Mv& mv = gmoves[gcand[t].second];
-bool tb = isTabu(cur, mv, iter);
-bool asp = gcand[t].first < bestC;
-if(tb && !asp) continue;
-applyMove(cur, mv);
-long long nc = evalSeq(cur, false);
-undoMove(cur, mv);
-if(nc < 0) continue;
-evald++;
-if(bestIdx < 0 || nc < bestNC){ bestNC = nc; bestIdx = gcand[t].second; }
-}
-if(bestIdx >= 0){
-const Mv& mv = gmoves[bestIdx];
-collectTabu(cur, mv);
-applyMove(cur, mv);
-long long nc = evalSeq(cur, true);
-if(nc >= 0){
-int tenure = legacy ? 8+(int)(rng()%max(4,J/3)) : dynTen(nowT);
-for(size_t id : gpend) tabuTB[id] = iter + tenure;
-curC = nc; applied = true;
-} else { undoMove(cur, mv); evalSeq(cur, true); }
-}
-}
-#endif
-for(int pass=0; pass<2 && !applied && !timeUp; ++pass){
-for(int t=0; t<nmv; ++t){
-if((t & 7)==7 && chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
-if(t >= K && !sorted_all){
-sort(gcand.begin(), gcand.end());
-sorted_all = true;
-}
-const Mv& mv = gmoves[gcand[t].second];
-if(pass==0){
-bool tb = isTabu(cur, mv, iter);
-bool asp = gcand[t].first < bestC;
-if(tb && !asp) continue;
-}
-collectTabu(cur, mv);
-applyMove(cur, mv);
-long long nc = incAfterMove(cur, mv);
-#ifdef VERIFY
-{
-static vector<long long> vd, vt; static long long mism = 0; static long long checks = 0;
-vd = dist_; vt = tail_;
-long long fc = evalSeq(cur, true);
-checks++;
-if(nc != -2){
-if(fc != nc || vd != dist_ || vt != tail_){
-mism++;
-fprintf(stderr, "MISMATCH iter=%d inc=%lld full=%lld distOK=%d tailOK=%d\n",
-iter, nc, fc, (int)(vd==dist_), (int)(vt==tail_));
-}
-}
-if(checks % 20000 == 0) fprintf(stderr, "verify checks=%lld mism=%lld\n", checks, mism);
-nc = fc;
-}
-#endif
-if(nc == -2) nc = evalSeq(cur, true);
-if(nc < 0){
-undoMove(cur, mv);
-evalSeq(cur, true);
-continue;
-}
-int tenure = legacy ? 8+(int)(rng()%max(4,J/3)) : dynTen(nowT);
-for(size_t id : gpend) tabuTB[id] = iter + tenure;
-curC = nc;
-applied = true;
-break;
-}
-}
-if(!applied) break;
-if(curC < rbC){ rbC = curC; rb = cur; }
-if(curC < bestC){
-long long exact = evalSeq(cur, true);
-curC = exact;
-if(exact >= 0 && exact < bestC){
-best = cur; bestC = exact; sinceImp = 0;
-lastImpT = chrono::steady_clock::now();
-poolAdd(cur, exact);
-failCnt = 0;
-#ifdef DIAG
-iterLastImp = iter;
-dInsBest++;
-if(afterRst) dRstWin++;
-#endif
-afterRst = false;
-if(bestC <= LB) break;
-}
-}
-else {
-++sinceImp;
-long long stag = chrono::duration_cast<chrono::milliseconds>(nowT - lastImpT).count();
-if(legacy ? sinceImp > 60000 : stag > rstMs){
-if(rbC <= bestC + bestC/50 && !rb.empty()){
-poolAdd(rb, rbC);
-#ifdef DIAG
-dInsRB++;
-#endif
-}
-if(!legacy && (int)pool.size()>=2 && chrono::steady_clock::now()<T_end){
-int bi=0,wi=0;
-for(int z=1;z<(int)pool.size();++z){ if(pool[z].C<pool[bi].C) bi=z; if(pool[z].C>pool[wi].C) wi=z; }
-if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,prSteps); poolAdd(best,bestC); }
-}
-if(legacy || pool.empty() || (rng() & 1)){
-cur = best;
-#ifdef DIAG
-dRstBest++;
-#endif
-} else {
-cur = pool[rng()%pool.size()].seq;
-#ifdef DIAG
-dRstElite++;
-#endif
-}
-curC = evalSeq(cur, true);
-int kicks = legacy ? 1+(int)(rng()%2) : kicksBase+failCnt+(int)(rng()%(unsigned)kicksSpan); if(kicks>kicksMax) kicks=kicksMax;
-for(int r=0; r<kicks; ++r){
-if(chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
-genMoves(cur);
-if(gmoves.empty()) break;
-const Mv& mv = gmoves[rng() % gmoves.size()];
-applyMove(cur, mv);
-long long nc = evalSeq(cur, true);
-if(nc < 0){ undoMove(cur, mv); evalSeq(cur, true); }
-else curC = nc;
-}
-fill(tabuTB.begin(), tabuTB.end(), 0);
-sinceImp = 0; rbC = LLONG_MAX;
-lastImpT = chrono::steady_clock::now();
-++failCnt;
-afterRst = true;
-#ifdef DIAG
-dRst++;
-#endif
-}
-}
-}
-#ifdef DIAG
-extern long long g_pops, g_calls;
-extern long long g_roAtt, g_roAcc, g_roCyc, g_roUs;
-fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d) reopt att=%lld acc=%lld cyc=%lld ms=%.1f rst=%lld(best %lld/elite %lld, wins %lld) pool ins=%lld/%lld\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N, g_roAtt, g_roAcc, g_roCyc, g_roUs/1000.0, dRst, dRstBest, dRstElite, dRstWin, dInsBest, dInsRB);
-#endif
-}
-{
-vector<char> buf;
-buf.reserve((size_t)N*8 + M + 16);
-for(int m=0;m<M;++m){
-for(int j=0;j<J;++j){
-int x = best[m][j];
-if(x == 0){ buf.push_back('0'); }
-else { char tmp[12]; int t = 0; while(x > 0){ tmp[t++] = char('0' + x%10); x /= 10; } while(t > 0) buf.push_back(tmp[--t]); }
-buf.push_back(j+1<J ? ' ' : '\n');
-}
-}
-fwrite(buf.data(), 1, buf.size(), stdout);
-fflush(stdout);
-}
-_exit(0);
-}
-namespace Alt {
-using namespace std;
-static int J, M, N;
-static vector<long long> procOp;
-static vector<int>       jobOf, kOf, machOf;
-static vector<int>       jobPred, jobSucc;
-static vector<vector<int>>       machJK;
-static vector<vector<long long>> procJK;
-static vector<vector<int>>       posOf;
-static inline int opOnMachine(int j, int m){ return j * M + posOf[j][m]; }
-static vector<int>       indeg, mSucc, mPred, order_;
-static vector<long long> dist_;
-static vector<long long> q_;
-static long long         Cmax_;
-static clock_t START;
-static const double TL = 0.975;
-static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
-static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
-static inline unsigned long long rnd(){
-rngState ^= rngState << 13; rngState ^= rngState >> 7; rngState ^= rngState << 17;
-return rngState;
-}
-static inline int rndInt(int n){ return (int)(rnd() % (unsigned long long)n); }
-static long long evaluate(const vector<vector<int>>& seq){
-for(int op = 0; op < N; ++op){
-indeg[op] = (kOf[op] > 0) ? 1 : 0;
-mSucc[op] = -1; mPred[op] = -1;
-}
-for(int m = 0; m < M; ++m){
-const vector<int>& s = seq[m];
-for(int i = 1; i < J; ++i){
-int a = opOnMachine(s[i-1], m);
-int b = opOnMachine(s[i],   m);
-mSucc[a] = b; mPred[b] = a; ++indeg[b];
-}
-}
-int tail = 0, head = 0;
-for(int op = 0; op < N; ++op){
-if(indeg[op] == 0){ dist_[op] = procOp[op]; order_[tail++] = op; }
-else dist_[op] = 0;
-}
-int cnt = 0;
-while(head < tail){
-int u = order_[head++]; ++cnt;
-long long du = dist_[u];
-int js = jobSucc[u];
-if(js != -1){
-if(dist_[js] < du + procOp[js]) dist_[js] = du + procOp[js];
-if(--indeg[js] == 0) order_[tail++] = js;
-}
-int ms = mSucc[u];
-if(ms != -1){
-if(dist_[ms] < du + procOp[ms]) dist_[ms] = du + procOp[ms];
-if(--indeg[ms] == 0) order_[tail++] = ms;
-}
-}
-if(cnt != N) return -1;
-long long C = 0;
-for(int op = 0; op < N; ++op) if(dist_[op] > C) C = dist_[op];
-for(int idx = N - 1; idx >= 0; --idx){
-int op = order_[idx];
-long long best = 0;
-int js = jobSucc[op]; if(js != -1 && q_[js] > best) best = q_[js];
-int ms = mSucc[op];   if(ms != -1 && q_[ms] > best) best = q_[ms];
-q_[op] = procOp[op] + best;
-}
-Cmax_ = C;
-return C;
-}
-static inline bool critOp(int op){ return (dist_[op] - procOp[op]) + q_[op] == Cmax_; }
-static void getBlockMoves(const vector<vector<int>>& seq, vector<pair<int,int>>& moves){
-moves.clear();
-for(int m = 0; m < M; ++m){
-const vector<int>& s = seq[m];
-int i = 0;
-while(i < J){
-if(!critOp(opOnMachine(s[i], m))){
-++i;
-continue;
-}
-int j = i;
-while(j < J && critOp(opOnMachine(s[j], m))){
-++j;
-}
-int blockSize = j - i;
-if(blockSize >= 2){
-int a1 = opOnMachine(s[i], m), b1 = opOnMachine(s[i+1], m);
-if(dist_[a1] == dist_[b1] - procOp[b1]){
-moves.push_back({a1, b1});
-}
-if(blockSize > 2){
-int a2 = opOnMachine(s[j-2], m), b2 = opOnMachine(s[j-1], m);
-if(dist_[a2] == dist_[b2] - procOp[b2]){
-moves.push_back({a2, b2});
-}
-}
-}
-i = j;
-}
-}
-}
-static inline long long estimateSwap(int a, int b){
-int PM = mPred[a], SM = mSucc[b];
-long long fPM  = (PM != -1)          ? dist_[PM]          : 0;
-long long fJPa = (jobPred[a] != -1)  ? dist_[jobPred[a]]  : 0;
-long long fJPb = (jobPred[b] != -1)  ? dist_[jobPred[b]]  : 0;
-long long rB = max(fPM, fJPb);
-long long rA = max(rB + procOp[b], fJPa);
-long long qJSa = (jobSucc[a] != -1) ? q_[jobSucc[a]] : 0;
-long long qJSb = (jobSucc[b] != -1) ? q_[jobSucc[b]] : 0;
-long long qSM  = (SM != -1)         ? q_[SM]         : 0;
-long long qA = procOp[a] + max(qJSa, qSM);
-long long qB = procOp[b] + max(qJSb, qA);
-return max(rA + qA, rB + qB);
-}
-static inline double priority(int rule, int j, int k, const vector<long long>& remWork){
-switch(rule){
-case 0: return (double)remWork[j];
-case 1: return -(double)procJK[j][k];
-case 2: return  (double)procJK[j][k];
-case 3: return -(double)remWork[j];
-default: return (double)(rnd() & 0xffffff);
-}
-}
-static vector<vector<int>> gifflerThompson(int rule){
-vector<int>       nextK(J, 0);
-vector<long long> jobFree(J, 0), machFree(M, 0), remWork(J, 0);
-for(int j = 0; j < J; ++j)
-for(int k = 0; k < M; ++k) remWork[j] += procJK[j][k];
-vector<vector<int>> seq(M);
-for(int m = 0; m < M; ++m) seq[m].reserve(J);
-int scheduled = 0;
-while(scheduled < N){
-long long minC = LLONG_MAX; int mstar = -1;
-for(int j = 0; j < J; ++j){
-if(nextK[j] >= M) continue;
-int k = nextK[j], m = machJK[j][k];
-long long est = max(jobFree[j], machFree[m]);
-long long C = est + procJK[j][k];
-if(C < minC){ minC = C; mstar = m; }
-}
-int chosen = -1; double bestPri = -1e300;
-for(int j = 0; j < J; ++j){
-if(nextK[j] >= M) continue;
-int k = nextK[j];
-if(machJK[j][k] != mstar) continue;
-long long est = max(jobFree[j], machFree[mstar]);
-if(est < minC){
-double pri = priority(rule, j, k, remWork);
-if(pri > bestPri){ bestPri = pri; chosen = j; }
-}
-}
-int j = chosen, k = nextK[j], m = mstar;
-long long est = max(jobFree[j], machFree[m]);
-long long fin = est + procJK[j][k];
-jobFree[j] = fin; machFree[m] = fin;
-seq[m].push_back(j);
-remWork[j] -= procJK[j][k];
-++nextK[j];
-++scheduled;
-}
-return seq;
-}
-static vector<vector<int>> pos;
-static void rebuildPos(const vector<vector<int>>& seq){
-for(int m = 0; m < M; ++m)
-for(int i = 0; i < J; ++i) pos[m][seq[m][i]] = i;
-}
-static inline void doSwap(vector<vector<int>>& seq, int a, int b){
-int m = machOf[a];
-int i = pos[m][jobOf[a]];
-swap(seq[m][i], seq[m][i+1]);
-pos[m][seq[m][i]]   = i;
-pos[m][seq[m][i+1]] = i+1;
-}
-static void perturb(vector<vector<int>>& seq, int kicks){
-rebuildPos(seq);
-for(int t = 0; t < kicks; ++t){
-if(J < 2) return;
-int m = rndInt(M);
-int i = rndInt(J - 1);
-int a = opOnMachine(seq[m][i],   m);
-int b = opOnMachine(seq[m][i+1], m);
-doSwap(seq, a, b);
-if(evaluate(seq) < 0) doSwap(seq, b, a);
-}
-}
-static vector<long long> tabuUntil;
-static inline size_t tabIdx(int m, int ja, int jb){
-int lo = ja < jb ? ja : jb, hi = ja < jb ? jb : ja;
-return (size_t)m * J * J + (size_t)lo * J + hi;
-}
-static long long tabuSearch(vector<vector<int>>& best, long long bestMk){
-vector<vector<int>> cur = best;
-vector<pair<int,int>> moves;
-fill(tabuUntil.begin(), tabuUntil.end(), 0);
-rebuildPos(cur);
-long long iter = 0, lastImprove = 0;
-int tenure = 10 + rndInt(10);
-const long long stall = 4000;
-long long curMk = evaluate(cur);
-int checkClock = 0;
-while((checkClock++ & 63) || elapsed() < TL){
-getBlockMoves(cur, moves);
-if(moves.empty()){
-perturb(cur, 2);
-curMk = evaluate(cur);
-++iter;
-continue;
-}
-long long bestEst = LLONG_MAX, aspEst = LLONG_MAX;
-int ba = -1, bb = -1, aa = -1, ab = -1;
-for(auto& pr : moves){
-int a = pr.first, b = pr.second;
-long long est = estimateSwap(a, b);
-bool isTabu = tabuUntil[tabIdx(machOf[a], jobOf[a], jobOf[b])] > iter;
-if(isTabu){
-if(est < bestMk && est < aspEst){ aspEst = est; aa = a; ab = b; }
-}else if(est < bestEst){
-bestEst = est; ba = a; bb = b;
-}
-}
-int ca, cb;
-if(aa != -1 && aspEst <= bestEst){ ca = aa; cb = ab; }
-else if(ba != -1){ ca = ba; cb = bb; }
-else if(aa != -1){ ca = aa; cb = ab; }
-else {
-perturb(cur, 2);
-curMk = evaluate(cur);
-++iter;
-continue;
-}
-doSwap(cur, ca, cb);
-tabuUntil[tabIdx(machOf[ca], jobOf[ca], jobOf[cb])] = iter + tenure;
-curMk = evaluate(cur);
-if(curMk < bestMk){
-bestMk = curMk;
-best = cur;
-lastImprove = iter;
-tenure = 10 + rndInt(10);
-}
-++iter;
-if(iter - lastImprove > stall){
-cur = best;
-perturb(cur, 4 + rndInt(10));
-curMk = evaluate(cur);
-fill(tabuUntil.begin(), tabuUntil.end(), 0);
-lastImprove = iter;
-}
-}
-return bestMk;
-}
-static void output(const vector<vector<int>>& seq){
-static char buf[1 << 22];
-int p = 0;
-for(int m = 0; m < M; ++m){
-for(int i = 0; i < J; ++i){
-int x = seq[m][i];
-if(x == 0) buf[p++] = '0';
-else{
-char tmp[12]; int t = 0;
-while(x){ tmp[t++] = char('0' + x % 10); x /= 10; }
-while(t) buf[p++] = tmp[--t];
-}
-buf[p++] = (i + 1 < J) ? ' ' : '\n';
-}
-}
-fwrite(buf, 1, p, stdout);
-}
-int solve(){
-START = clock();
-J = ::J; M = ::M; N = J * M;
-machJK = ::m_of;
-procJK = ::p_of;
-posOf.assign(J, vector<int>(M, -1));
-procOp.assign(N, 0); jobOf.assign(N, 0); kOf.assign(N, 0); machOf.assign(N, 0);
-jobPred.assign(N, -1); jobSucc.assign(N, -1);
-for(int j = 0; j < J; ++j){
-for(int k = 0; k < M; ++k){
-int m = machJK[j][k]; long long p = procJK[j][k];
-posOf[j][m] = k;
-int op = j * M + k;
-procOp[op] = p; jobOf[op] = j; kOf[op] = k; machOf[op] = m;
-jobPred[op] = (k > 0)     ? op - 1 : -1;
-jobSucc[op] = (k < M - 1) ? op + 1 : -1;
-}
-}
-indeg.assign(N, 0); mSucc.assign(N, -1); mPred.assign(N, -1);
-order_.assign(N, 0); dist_.assign(N, 0); q_.assign(N, 0);
-pos.assign(M, vector<int>(J, 0));
-tabuUntil.assign((size_t)M * J * J, 0);
-vector<vector<int>> best;
-long long bestMk = LLONG_MAX;
-for(int rule = 0; rule < 4; ++rule){
-vector<vector<int>> seq = gifflerThompson(rule);
-long long mk = evaluate(seq);
-if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
-}
-for(int r = 0; r < 32; ++r){
-vector<vector<int>> seq = gifflerThompson(4);
-long long mk = evaluate(seq);
-if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
-}
-if(best.empty()){
-best.assign(M, vector<int>(J));
-for(int m = 0; m < M; ++m) for(int j = 0; j < J; ++j) best[m][j] = j;
-bestMk = evaluate(best);
-}
-bestMk = tabuSearch(best, bestMk);
-output(best);
-return 0;
-}
-}
-namespace HECD {
-using namespace std;
-static int J, M, N;
-static vector<long long> procOp;
-static vector<int>       jobOf, kOf, machOf;
-static vector<int>       jobPred, jobSucc;
-static vector<vector<int>>       machJK;
-static vector<vector<long long>> procJK;
-static vector<vector<int>>       posOf;
-static inline int opOnMachine(int j, int m){ return j * M + posOf[j][m]; }
-static vector<int>       indeg, mSucc, mPred, order_;
-static vector<long long> dist_, q_;
-static long long         Cmax_;
-static clock_t START;
-static const double TL = 0.975;
-static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
-static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
-void setSeed(unsigned long long s){ rngState=s; }
-static inline unsigned long long rnd(){
-rngState ^= rngState << 13; rngState ^= rngState >> 7; rngState ^= rngState << 17;
-return rngState;
-}
-static inline int rndInt(int n){ return (int)(rnd() % (unsigned long long)n); }
-static long long evaluate(const vector<vector<int>>& seq){
-for(int op = 0; op < N; ++op){
-indeg[op] = (kOf[op] > 0) ? 1 : 0;
-mSucc[op] = -1; mPred[op] = -1;
-}
-for(int m = 0; m < M; ++m){
-const vector<int>& s = seq[m];
-for(int i = 1; i < J; ++i){
-int a = opOnMachine(s[i-1], m);
-int b = opOnMachine(s[i],   m);
-mSucc[a] = b; mPred[b] = a; ++indeg[b];
-}
-}
-int tail = 0, head = 0;
-for(int op = 0; op < N; ++op){
-if(indeg[op] == 0){ dist_[op] = procOp[op]; order_[tail++] = op; }
-else dist_[op] = 0;
-}
-int cnt = 0;
-while(head < tail){
-int u = order_[head++]; ++cnt;
-long long du = dist_[u];
-int js = jobSucc[u];
-if(js != -1){
-if(dist_[js] < du + procOp[js]) dist_[js] = du + procOp[js];
-if(--indeg[js] == 0) order_[tail++] = js;
-}
-int ms = mSucc[u];
-if(ms != -1){
-if(dist_[ms] < du + procOp[ms]) dist_[ms] = du + procOp[ms];
-if(--indeg[ms] == 0) order_[tail++] = ms;
-}
-}
-if(cnt != N) return -1;
-long long C = 0;
-for(int op = 0; op < N; ++op) if(dist_[op] > C) C = dist_[op];
-for(int idx = N - 1; idx >= 0; --idx){
-int op = order_[idx];
-long long best = 0;
-int js = jobSucc[op]; if(js != -1 && q_[js] > best) best = q_[js];
-int ms = mSucc[op];   if(ms != -1 && q_[ms] > best) best = q_[ms];
-q_[op] = procOp[op] + best;
-}
-Cmax_ = C;
-return C;
-}
-static inline bool critOp(int op){ return (dist_[op] - procOp[op]) + q_[op] == Cmax_; }
-static void getBlockMoves(const vector<vector<int>>& seq, vector<pair<int,int>>& moves){
-moves.clear();
-for(int m = 0; m < M; ++m){
-const vector<int>& s = seq[m];
-int i = 0;
-while(i < J){
-if(!critOp(opOnMachine(s[i], m))){
-++i; continue;
-}
-int j = i;
-while(j < J && critOp(opOnMachine(s[j], m))) ++j;
-int blockSize = j - i;
-if(blockSize >= 2){
-int a1 = opOnMachine(s[i], m), b1 = opOnMachine(s[i+1], m);
-if(dist_[a1] == dist_[b1] - procOp[b1]) moves.push_back({a1, b1});
-if(blockSize > 2){
-int a2 = opOnMachine(s[j-2], m), b2 = opOnMachine(s[j-1], m);
-if(dist_[a2] == dist_[b2] - procOp[b2]) moves.push_back({a2, b2});
-}
-}
-i = j;
-}
-}
-}
-static inline long long estimateSwap(int a, int b){
-int PM = mPred[a], SM = mSucc[b];
-long long fPM  = (PM != -1) ? dist_[PM] : 0;
-long long fJPa = (jobPred[a] != -1) ? dist_[jobPred[a]] : 0;
-long long fJPb = (jobPred[b] != -1) ? dist_[jobPred[b]] : 0;
-long long rB = max(fPM, fJPb);
-long long rA = max(rB + procOp[b], fJPa);
-long long qJSa = (jobSucc[a] != -1) ? q_[jobSucc[a]] : 0;
-long long qJSb = (jobSucc[b] != -1) ? q_[jobSucc[b]] : 0;
-long long qSM  = (SM != -1) ? q_[SM] : 0;
-long long qA = procOp[a] + max(qJSa, qSM);
-long long qB = procOp[b] + max(qJSb, qA);
-return max(rA + qA, rB + qB);
-}
-static inline double priority(int rule, int j, int k, const vector<long long>& remWork){
-switch(rule){
-case 0: return (double)remWork[j];
-case 1: return -(double)procJK[j][k];
-case 2: return  (double)procJK[j][k];
-case 3: return -(double)remWork[j];
-default: return (double)(rnd() & 0xffffff);
-}
-}
-static vector<vector<int>> gifflerThompson(int rule){
-vector<int>       nextK(J, 0);
-vector<long long> jobFree(J, 0), machFree(M, 0), remWork(J, 0);
-for(int j = 0; j < J; ++j)
-for(int k = 0; k < M; ++k) remWork[j] += procJK[j][k];
-vector<vector<int>> seq(M);
-for(int m = 0; m < M; ++m) seq[m].reserve(J);
-int scheduled = 0;
-while(scheduled < N){
-long long minC = LLONG_MAX; int mstar = -1;
-for(int j = 0; j < J; ++j){
-if(nextK[j] >= M) continue;
-int k = nextK[j], m = machJK[j][k];
-long long est = max(jobFree[j], machFree[m]);
-long long C = est + procJK[j][k];
-if(C < minC){ minC = C; mstar = m; }
-}
-int chosen = -1; double bestPri = -1e300;
-for(int j = 0; j < J; ++j){
-if(nextK[j] >= M) continue;
-int k = nextK[j];
-if(machJK[j][k] != mstar) continue;
-long long est = max(jobFree[j], machFree[mstar]);
-if(est < minC){
-double pri = priority(rule, j, k, remWork);
-if(pri > bestPri){ bestPri = pri; chosen = j; }
-}
-}
-int j = chosen, k = nextK[j], m = mstar;
-long long est = max(jobFree[j], machFree[m]);
-long long fin = est + procJK[j][k];
-jobFree[j] = fin; machFree[m] = fin;
-seq[m].push_back(j);
-remWork[j] -= procJK[j][k];
-++nextK[j];
-++scheduled;
-}
-return seq;
-}
-static vector<vector<int>> pos;
-static void rebuildPos(const vector<vector<int>>& seq){
-for(int m = 0; m < M; ++m)
-for(int i = 0; i < J; ++i) pos[m][seq[m][i]] = i;
-}
-static inline void doSwap(vector<vector<int>>& seq, int a, int b){
-int m = machOf[a];
-int i = pos[m][jobOf[a]];
-swap(seq[m][i], seq[m][i+1]);
-pos[m][seq[m][i]]   = i;
-pos[m][seq[m][i+1]] = i+1;
-}
-static void perturb(vector<vector<int>>& seq, int kicks){
-rebuildPos(seq);
-for(int t = 0; t < kicks; ++t){
-if(J < 2) return;
-int m = rndInt(M);
-int i = rndInt(J - 1);
-int a = opOnMachine(seq[m][i],   m);
-int b = opOnMachine(seq[m][i+1], m);
-doSwap(seq, a, b);
-if(evaluate(seq) < 0) doSwap(seq, b, a);
-}
-}
-static vector<long long> tabuUntil;
-static inline size_t tabIdx(int m, int ja, int jb){
-int lo = ja < jb ? ja : jb, hi = ja < jb ? jb : ja;
-return (size_t)m * J * J + (size_t)lo * J + hi;
-}
-static long long tabuSearch(vector<vector<int>>& best, long long bestMk){
-vector<vector<int>> cur = best;
-vector<pair<int,int>> moves;
-fill(tabuUntil.begin(), tabuUntil.end(), 0);
-rebuildPos(cur);
-long long iter = 0, lastImprove = 0;
-int tenure = 15 + rndInt(13);
-const long long stall = 5200;
-long long curMk = evaluate(cur);
-int checkClock = 0;
-while((checkClock++ & 63) || elapsed() < TL){
-getBlockMoves(cur, moves);
-if(moves.empty()){
-perturb(cur, 4);
-curMk = evaluate(cur);
-++iter;
-continue;
-}
-long long bestEst = LLONG_MAX, aspEst = LLONG_MAX;
-int ba = -1, bb = -1, aa = -1, ab = -1;
-for(auto& pr : moves){
-int a = pr.first, b = pr.second;
-long long est = estimateSwap(a, b);
-bool isTabu = tabuUntil[tabIdx(machOf[a], jobOf[a], jobOf[b])] > iter;
-if(isTabu){
-if(est < bestMk && est < aspEst){ aspEst = est; aa = a; ab = b; }
-}else if(est < bestEst){
-bestEst = est; ba = a; bb = b;
-}
-}
-int ca, cb;
-if(aa != -1 && aspEst <= bestEst){ ca = aa; cb = ab; }
-else if(ba != -1){ ca = ba; cb = bb; }
-else if(aa != -1){ ca = aa; cb = ab; }
-else {
-perturb(cur, 4);
-curMk = evaluate(cur);
-++iter;
-continue;
-}
-doSwap(cur, ca, cb);
-tabuUntil[tabIdx(machOf[ca], jobOf[ca], jobOf[cb])] = iter + tenure;
-curMk = evaluate(cur);
-if(curMk < bestMk){
-bestMk = curMk;
-best = cur;
-lastImprove = iter;
-tenure = 15 + rndInt(13);
-}
-++iter;
-if(iter - lastImprove > stall){
-cur = best;
-perturb(cur, 6 + rndInt(13));
-curMk = evaluate(cur);
-fill(tabuUntil.begin(), tabuUntil.end(), 0);
-lastImprove = iter;
-}
-}
-return bestMk;
-}
-static void output(const vector<vector<int>>& seq){
-static char buf[1 << 22];
-int p = 0;
-for(int m = 0; m < M; ++m){
-for(int i = 0; i < J; ++i){
-int x = seq[m][i];
-if(x == 0) buf[p++] = '0';
-else{
-char tmp[12]; int t = 0;
-while(x){ tmp[t++] = char('0' + x % 10); x /= 10; }
-while(t) buf[p++] = tmp[--t];
-}
-buf[p++] = (i + 1 < J) ? ' ' : '\n';
-}
-}
-fwrite(buf, 1, p, stdout);
-}
-int solveParsed(int Jin, int Min, const vector<vector<int>>& m_in, const vector<vector<long long>>& p_in){
-START = clock();
-J = Jin; M = Min; N = J * M;
-machJK = m_in;
-procJK = p_in;
-posOf.assign(J, vector<int>(M, -1));
-procOp.assign(N, 0); jobOf.assign(N, 0); kOf.assign(N, 0); machOf.assign(N, 0);
-jobPred.assign(N, -1); jobSucc.assign(N, -1);
-for(int j = 0; j < J; ++j){
-for(int k = 0; k < M; ++k){
-int m = machJK[j][k]; long long p = procJK[j][k];
-posOf[j][m] = k;
-int op = j * M + k;
-procOp[op] = p; jobOf[op] = j; kOf[op] = k; machOf[op] = m;
-jobPred[op] = (k > 0)     ? op - 1 : -1;
-jobSucc[op] = (k < M - 1) ? op + 1 : -1;
-}
-}
-indeg.assign(N, 0); mSucc.assign(N, -1); mPred.assign(N, -1);
-order_.assign(N, 0); dist_.assign(N, 0); q_.assign(N, 0);
-pos.assign(M, vector<int>(J, 0));
-tabuUntil.assign((size_t)M * J * J, 0);
-vector<vector<int>> best;
-long long bestMk = LLONG_MAX;
-for(int rule = 0; rule < 5; ++rule){
-vector<vector<int>> seq = gifflerThompson(rule);
-long long mk = evaluate(seq);
-if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
-}
-for(int r = 0; r < 150; ++r){
-vector<vector<int>> seq = gifflerThompson(r % 5);
-long long mk = evaluate(seq);
-if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
-}
-if(best.empty()){
-best.assign(M, vector<int>(J));
-for(int m = 0; m < M; ++m) for(int j = 0; j < J; ++j) best[m][j] = j;
-bestMk = evaluate(best);
-}
-bestMk = tabuSearch(best, bestMk);
-output(best);
-return 0;
-}
-}
-namespace H08 {
-using namespace std;
-static int J, M, N;
-static vector<long long> procOp;
-static vector<int>       jobOf, kOf, machOf;
-static vector<int>       jobPred, jobSucc;
-static vector<vector<int>>       machJK;
-static vector<vector<long long>> procJK;
-static vector<vector<int>>       posOf;
-static inline int opOnMachine(int j, int m){ return j * M + posOf[j][m]; }
-static vector<int>       indeg, mSucc, mPred, order_;
-static vector<long long> dist_, q_;
-static long long         Cmax_;
-static clock_t START;
-static const double TL = 0.975;
-static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
-static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
-static inline unsigned long long rnd(){
-rngState ^= rngState << 13; rngState ^= rngState >> 7; rngState ^= rngState << 17;
-return rngState;
-}
-static inline int rndInt(int n){ return (int)(rnd() % (unsigned long long)n); }
-static long long evaluate(const vector<vector<int>>& seq){
-for(int op = 0; op < N; ++op){
-indeg[op] = (kOf[op] > 0) ? 1 : 0;
-mSucc[op] = -1; mPred[op] = -1;
-}
-for(int m = 0; m < M; ++m){
-const vector<int>& s = seq[m];
-for(int i = 1; i < J; ++i){
-int a = opOnMachine(s[i-1], m);
-int b = opOnMachine(s[i],   m);
-mSucc[a] = b; mPred[b] = a; ++indeg[b];
-}
-}
-int tail = 0, head = 0;
-for(int op = 0; op < N; ++op){
-if(indeg[op] == 0){ dist_[op] = procOp[op]; order_[tail++] = op; }
-else dist_[op] = 0;
-}
-int cnt = 0;
-while(head < tail){
-int u = order_[head++]; ++cnt;
-long long du = dist_[u];
-int js = jobSucc[u];
-if(js != -1){
-if(dist_[js] < du + procOp[js]) dist_[js] = du + procOp[js];
-if(--indeg[js] == 0) order_[tail++] = js;
-}
-int ms = mSucc[u];
-if(ms != -1){
-if(dist_[ms] < du + procOp[ms]) dist_[ms] = du + procOp[ms];
-if(--indeg[ms] == 0) order_[tail++] = ms;
-}
-}
-if(cnt != N) return -1;
-long long C = 0;
-for(int op = 0; op < N; ++op) if(dist_[op] > C) C = dist_[op];
-for(int idx = N - 1; idx >= 0; --idx){
-int op = order_[idx];
-long long best = 0;
-int js = jobSucc[op]; if(js != -1 && q_[js] > best) best = q_[js];
-int ms = mSucc[op];   if(ms != -1 && q_[ms] > best) best = q_[ms];
-q_[op] = procOp[op] + best;
-}
-Cmax_ = C;
-return C;
-}
-static inline bool critOp(int op){ return (dist_[op] - procOp[op]) + q_[op] == Cmax_; }
-static void getBlockMoves(const vector<vector<int>>& seq, vector<pair<int,int>>& swaps,
-vector<array<int,3>>& inserts){
-swaps.clear(); inserts.clear();
-for(int m = 0; m < M; ++m){
-const vector<int>& s = seq[m];
-int i = 0;
-while(i < J){
-if(!critOp(opOnMachine(s[i], m))){ ++i; continue; }
-int j = i;
-while(j < J && critOp(opOnMachine(s[j], m))) ++j;
-int bs = j - i;
-if(bs >= 2){
-int a1 = opOnMachine(s[i], m), b1 = opOnMachine(s[i+1], m);
-if(dist_[a1] == dist_[b1] - procOp[b1]) swaps.push_back({a1, b1});
-if(bs > 2){
-int a2 = opOnMachine(s[j-2], m), b2 = opOnMachine(s[j-1], m);
-if(dist_[a2] == dist_[b2] - procOp[b2]) swaps.push_back({a2, b2});
-inserts.push_back({m, i, j-1});
-inserts.push_back({m, j-1, i});
-}
-}
-i = j;
-}
-}
-}
-static inline long long estimateSwap(int a, int b){
-int PM = mPred[a], SM = mSucc[b];
-long long fPM  = (PM != -1) ? dist_[PM] : 0;
-long long fJPa = (jobPred[a] != -1) ? dist_[jobPred[a]] : 0;
-long long fJPb = (jobPred[b] != -1) ? dist_[jobPred[b]] : 0;
-long long rB = max(fPM, fJPb);
-long long rA = max(rB + procOp[b], fJPa);
-long long qJSa = (jobSucc[a] != -1) ? q_[jobSucc[a]] : 0;
-long long qJSb = (jobSucc[b] != -1) ? q_[jobSucc[b]] : 0;
-long long qSM  = (SM != -1) ? q_[SM] : 0;
-long long qA = procOp[a] + max(qJSa, qSM);
-long long qB = procOp[b] + max(qJSb, qA);
-return max(rA + qA, rB + qB);
-}
-static vector<int>       gord;
-static vector<long long> gestC;
-static long long estInsert(const vector<vector<int>>& cur, int m, int from, int to){
-const vector<int>& s = cur[m];
-int lo = from < to ? from : to, hi = from < to ? to : from;
-int L = hi - lo + 1;
-if((int)gord.size() < L){ gord.resize(L); gestC.resize(L); }
-if(to > from){
-for(int t = from + 1; t <= to; ++t) gord[t - from - 1] = s[t];
-gord[to - from] = s[from];
-} else {
-gord[0] = s[from];
-for(int t = to; t < from; ++t) gord[t - to + 1] = s[t];
-}
-long long prevC = (lo > 0) ? dist_[opOnMachine(s[lo - 1], m)] : 0;
-for(int t = 0; t < L; ++t){
-int v = gord[t]; int u = opOnMachine(v, m); int k = posOf[v][m];
-long long jp = (k > 0) ? dist_[u - 1] : 0;
-long long st = prevC > jp ? prevC : jp;
-gestC[t] = st + procOp[u];
-prevC = gestC[t];
-}
-long long prevT = (hi + 1 < J) ? q_[opOnMachine(s[hi + 1], m)] : 0;
-long long bestLen = 0;
-for(int t = L - 1; t >= 0; --t){
-int v = gord[t]; int u = opOnMachine(v, m); int k = posOf[v][m];
-long long js = (k < M - 1) ? q_[u + 1] : 0;
-long long tl = procOp[u] + (prevT > js ? prevT : js);
-long long len = gestC[t] - procOp[u] + tl;
-if(len > bestLen) bestLen = len;
-prevT = tl;
-}
-return bestLen;
-}
-static inline double priority(int rule, int j, int k, const vector<long long>& remWork){
-switch(rule){
-case 0: return (double)remWork[j];
-case 1: return -(double)procJK[j][k];
-case 2: return  (double)procJK[j][k];
-case 3: return -(double)remWork[j];
-default: return (double)(rnd() & 0xffffff);
-}
-}
-static vector<vector<int>> gifflerThompson(int rule){
-vector<int>       nextK(J, 0);
-vector<long long> jobFree(J, 0), machFree(M, 0), remWork(J, 0);
-for(int j = 0; j < J; ++j)
-for(int k = 0; k < M; ++k) remWork[j] += procJK[j][k];
-vector<vector<int>> seq(M);
-for(int m = 0; m < M; ++m) seq[m].reserve(J);
-int scheduled = 0;
-while(scheduled < N){
-long long minC = LLONG_MAX; int mstar = -1;
-for(int j = 0; j < J; ++j){
-if(nextK[j] >= M) continue;
-int k = nextK[j], m = machJK[j][k];
-long long est = max(jobFree[j], machFree[m]);
-long long C = est + procJK[j][k];
-if(C < minC){ minC = C; mstar = m; }
-}
-int chosen = -1; double bestPri = -1e300;
-for(int j = 0; j < J; ++j){
-if(nextK[j] >= M) continue;
-int k = nextK[j];
-if(machJK[j][k] != mstar) continue;
-long long est = max(jobFree[j], machFree[mstar]);
-if(est < minC){
-double pri = priority(rule, j, k, remWork);
-if(pri > bestPri){ bestPri = pri; chosen = j; }
-}
-}
-int j = chosen, k = nextK[j], m = mstar;
-long long est = max(jobFree[j], machFree[m]);
-long long fin = est + procJK[j][k];
-jobFree[j] = fin; machFree[m] = fin;
-seq[m].push_back(j);
-remWork[j] -= procJK[j][k];
-++nextK[j];
-++scheduled;
-}
-return seq;
-}
-static vector<vector<int>> pos;
-static void rebuildPos(const vector<vector<int>>& seq){
-for(int m = 0; m < M; ++m)
-for(int i = 0; i < J; ++i) pos[m][seq[m][i]] = i;
-}
-static inline void doSwap(vector<vector<int>>& seq, int a, int b){
-int m = machOf[a];
-int i = pos[m][jobOf[a]];
-swap(seq[m][i], seq[m][i+1]);
-pos[m][seq[m][i]]   = i;
-pos[m][seq[m][i+1]] = i+1;
-}
-static inline void doInsert(vector<vector<int>>& seq, int m, int from, int to){
-vector<int>& s = seq[m];
-int job = s[from];
-if(from < to){ for(int i = from; i < to; ++i) s[i] = s[i+1]; s[to] = job; }
-else         { for(int i = from; i > to; --i) s[i] = s[i-1]; s[to] = job; }
-int lo = from < to ? from : to, hi = from < to ? to : from;
-for(int i = lo; i <= hi; ++i) pos[m][s[i]] = i;
-}
-static void perturb(vector<vector<int>>& seq, int kicks){
-rebuildPos(seq);
-for(int t = 0; t < kicks; ++t){
-if(J < 2) return;
-int m = rndInt(M);
-int i = rndInt(J - 1);
-int a = opOnMachine(seq[m][i],   m);
-int b = opOnMachine(seq[m][i+1], m);
-doSwap(seq, a, b);
-if(evaluate(seq) < 0) doSwap(seq, b, a);
-}
-}
-static vector<long long> tabuUntil;
-static vector<long long> tabuJob;
-static inline size_t tabIdx(int m, int ja, int jb){
-int lo = ja < jb ? ja : jb, hi = ja < jb ? jb : ja;
-return (size_t)m * J * J + (size_t)lo * J + hi;
-}
-static long long tabuSearch(vector<vector<int>>& best, long long bestMk){
-vector<vector<int>> cur = best;
-vector<pair<int,int>> swaps;
-vector<array<int,3>> inserts;
-fill(tabuUntil.begin(), tabuUntil.end(), 0);
-fill(tabuJob.begin(), tabuJob.end(), 0);
-rebuildPos(cur);
-long long iter = 0, lastImprove = 0;
-int tenure = 15 + rndInt(13);
-const long long stall = 5200;
-long long curMk = evaluate(cur);
-int checkClock = 0;
-while((checkClock++ & 63) || elapsed() < TL){
-getBlockMoves(cur, swaps, inserts);
-if(swaps.empty() && inserts.empty()){
-perturb(cur, 4); curMk = evaluate(cur); ++iter; continue;
-}
-long long bestEst = LLONG_MAX, aspEst = LLONG_MAX;
-int alMode = -1, alA = -1, alB = -1, alM = -1, alF = -1, alT = -1;
-int asMode = -1, asA = -1, asB = -1, asM = -1, asF = -1, asT = -1;
-for(auto& pr : swaps){
-int a = pr.first, b = pr.second;
-long long est = estimateSwap(a, b);
-bool isTabu = tabuUntil[tabIdx(machOf[a], jobOf[a], jobOf[b])] > iter;
-if(isTabu){ if(est < bestMk && est < aspEst){ aspEst = est; asMode = 0; asA = a; asB = b; } }
-else if(est < bestEst){ bestEst = est; alMode = 0; alA = a; alB = b; }
-}
-for(auto& ins : inserts){
-int m = ins[0], f = ins[1], t = ins[2];
-int job = cur[m][f];
-long long est = estInsert(cur, m, f, t);
-bool isTabu = tabuJob[(size_t)m * J + job] > iter;
-if(isTabu){ if(est < bestMk && est < aspEst){ aspEst = est; asMode = 1; asM = m; asF = f; asT = t; } }
-else if(est < bestEst){ bestEst = est; alMode = 1; alM = m; alF = f; alT = t; }
-}
-int useMode;
-bool useAsp;
-if(asMode != -1 && aspEst <= bestEst)      { useAsp = true;  useMode = asMode; }
-else if(alMode != -1)                       { useAsp = false; useMode = alMode; }
-else if(asMode != -1)                       { useAsp = true;  useMode = asMode; }
-else { perturb(cur, 4); curMk = evaluate(cur); ++iter; continue; }
-if(useMode == 0){
-int a = useAsp ? asA : alA, b = useAsp ? asB : alB;
-doSwap(cur, a, b);
-tabuUntil[tabIdx(machOf[a], jobOf[a], jobOf[b])] = iter + tenure;
-}else{
-int m = useAsp ? asM : alM, f = useAsp ? asF : alF, t = useAsp ? asT : alT;
-int job = cur[m][f];
-doInsert(cur, m, f, t);
-tabuJob[(size_t)m * J + job] = iter + tenure;
-}
-curMk = evaluate(cur);
-if(curMk < 0){
-cur = best; rebuildPos(cur); curMk = evaluate(cur);
-}
-if(curMk < bestMk){ bestMk = curMk; best = cur; lastImprove = iter; tenure = 15 + rndInt(13); }
-++iter;
-if(iter - lastImprove > stall){
-cur = best;
-perturb(cur, 6 + rndInt(13));
-curMk = evaluate(cur);
-fill(tabuUntil.begin(), tabuUntil.end(), 0);
-fill(tabuJob.begin(), tabuJob.end(), 0);
-lastImprove = iter;
-}
-}
-return bestMk;
-}
-static void output(const vector<vector<int>>& seq){
-static char buf[1 << 22];
-int p = 0;
-for(int m = 0; m < M; ++m){
-for(int i = 0; i < J; ++i){
-int x = seq[m][i];
-if(x == 0) buf[p++] = '0';
-else{
-char tmp[12]; int t = 0;
-while(x){ tmp[t++] = char('0' + x % 10); x /= 10; }
-while(t) buf[p++] = tmp[--t];
-}
-buf[p++] = (i + 1 < J) ? ' ' : '\n';
-}
-}
-fwrite(buf, 1, p, stdout);
-}
-int solveParsed(int Jin, int Min, const vector<vector<int>>& m_in, const vector<vector<long long>>& p_in){
-START = clock();
-J = Jin; M = Min; N = J * M;
-machJK = m_in;
-procJK = p_in;
-posOf.assign(J, vector<int>(M, -1));
-procOp.assign(N, 0); jobOf.assign(N, 0); kOf.assign(N, 0); machOf.assign(N, 0);
-jobPred.assign(N, -1); jobSucc.assign(N, -1);
-for(int j = 0; j < J; ++j){
-for(int k = 0; k < M; ++k){
-int m = machJK[j][k]; long long p = procJK[j][k];
-posOf[j][m] = k;
-int op = j * M + k;
-procOp[op] = p; jobOf[op] = j; kOf[op] = k; machOf[op] = m;
-jobPred[op] = (k > 0)     ? op - 1 : -1;
-jobSucc[op] = (k < M - 1) ? op + 1 : -1;
-}
-}
-indeg.assign(N, 0); mSucc.assign(N, -1); mPred.assign(N, -1);
-order_.assign(N, 0); dist_.assign(N, 0); q_.assign(N, 0);
-pos.assign(M, vector<int>(J, 0));
-tabuUntil.assign((size_t)M * J * J, 0);
-tabuJob.assign((size_t)M * J, 0);
-vector<vector<int>> best;
-long long bestMk = LLONG_MAX;
-for(int rule = 0; rule < 5; ++rule){
-vector<vector<int>> seq = gifflerThompson(rule);
-long long mk = evaluate(seq);
-if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
-}
-for(int r = 0; r < 150; ++r){
-vector<vector<int>> seq = gifflerThompson(r % 5);
-long long mk = evaluate(seq);
-if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
-}
-if(best.empty()){
-best.assign(M, vector<int>(J));
-for(int m = 0; m < M; ++m) for(int j = 0; j < J; ++j) best[m][j] = j;
-bestMk = evaluate(best);
-}
-bestMk = tabuSearch(best, bestMk);
-output(best);
-return 0;
-}
-}
-//NEH+v33
