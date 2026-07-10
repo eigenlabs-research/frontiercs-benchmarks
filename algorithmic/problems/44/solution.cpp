@@ -352,20 +352,21 @@ int main(){
     vector<int> seq(N);
     { int z=pos[0]; for(int i=0;i<N;i++) seq[i]= bestDir==0? order[(z+i)%N] : order[(z-i+N)%N]; }
 
-    // ---- endgame touch-up: swap a nearby prime into each penalized source slot (exact delta) ----
+    // ---- endgame touch-up: swap a nearby/geometric prime into each penalized source slot (exact delta) ----
     if(N>=12){
+        vector<int> spos(N); for(int i=0;i<N;i++) spos[seq[i]]=i;
         auto sAt=[&](int p)->int{ return p<N? seq[p]:0; };
         auto stepCost=[&](int t)->double{ int a=seq[t-1], b=sAt(t); double d=dist(a,b); if(t%10==0&&!pr[a]) d*=1.1; return d; };
         int w = N<=1200? N : (N<=5000?120:(N<=20000?140:80));
+        int geoCap = N>50000?10:(N>20000?14:18);
         for(int rep=0;rep<8 && el_ms()<TL_MS;rep++){
             bool ch=false;
             for(int p=9;p<N;p+=10){
                 if(el_ms()>TL_MS) break;
                 if(pr[seq[p]]) continue;
-                int lo=max(1,p-w), hi=min(N-1,p+w);
                 double bd=-1e-7; int bj=-1;
-                for(int j=lo;j<=hi;j++){
-                    if(j==p||!pr[seq[j]]) continue;
+                auto consider=[&](int j){
+                    if(j<=0||j>=N||j==p||!pr[seq[j]]) return;
                     int T[4]={p,p+1,j,j+1}, U[4], m=0;
                     for(int t2=0;t2<4;t2++){ bool dup=false; for(int u=0;u<m;u++) if(U[u]==T[t2]) dup=true; if(!dup) U[m++]=T[t2]; }
                     double bef=0, aft=0;
@@ -375,8 +376,19 @@ int main(){
                     swap(seq[p],seq[j]);
                     double dl=aft-bef;
                     if(dl<bd){ bd=dl; bj=j; }
+                };
+                int lo=max(1,p-w), hi=min(N-1,p+w);
+                for(int j=lo;j<=hi;j++) consider(j);
+                int anchors[3]={seq[p-1],seq[p],sAt(p+1)};
+                for(int ai=0;ai<3;ai++){
+                    int a=anchors[ai]; if(a<0||a>=N) continue;
+                    int cap=min(K,geoCap);
+                    for(int t=0;t<cap;t++){
+                        int city=nbr[(size_t)a*K+t]; if(city<0) break;
+                        if(pr[city]) consider(spos[city]);
+                    }
                 }
-                if(bj>=0){ swap(seq[p],seq[bj]); ch=true; }
+                if(bj>=0){ int a=seq[p], b=seq[bj]; swap(seq[p],seq[bj]); spos[a]=bj; spos[b]=p; ch=true; }
             }
             if(!ch) break;
         }
