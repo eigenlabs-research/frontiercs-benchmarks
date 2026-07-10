@@ -42,21 +42,70 @@ int main(){
     // prime table over city ids (every 10th step costs 1.1x unless source id is prime)
     vector<char> pr((size_t)N,0);
     { vector<char> comp((size_t)N,0); for(long long i=2;i<N;i++) if(!comp[i]){ pr[i]=1; for(long long q=i*i;q<N;q+=i) comp[q]=1; } }
+
+    // Exact position-aware TSP for tiny cases. The subset size fixes the next step
+    // number, so the carrot multiplier fits directly into Held-Karp transitions.
+    if(N<=20){
+        int M=N-1, S=1<<M;
+        vector<double> dm((size_t)N*N);
+        for(int i=0;i<N;i++) for(int j=0;j<N;j++) dm[(size_t)i*N+j]=dist(i,j);
+        const double INF=numeric_limits<double>::infinity();
+        vector<double> dp((size_t)S*M,INF);
+        vector<signed char> par((size_t)S*M,-1);
+        for(int j=0;j<M;j++) dp[(size_t)(1<<j)*M+j]=dm[j+1];
+        for(int mask=1;mask<S;mask++){
+            int step=__builtin_popcount((unsigned)mask)+1;
+            int rem=(S-1)^mask;
+            for(int bits=mask;bits;bits&=bits-1){
+                int j=__builtin_ctz((unsigned)bits);
+                double cur=dp[(size_t)mask*M+j];
+                if(!isfinite(cur)) continue;
+                double mul=(step%10==0&&!pr[j+1])?1.1:1.0;
+                for(int left=rem;left;left&=left-1){
+                    int k=__builtin_ctz((unsigned)left), nm=mask|(1<<k);
+                    double nd=cur+mul*dm[(size_t)(j+1)*N+(k+1)];
+                    size_t at=(size_t)nm*M+k;
+                    if(nd<dp[at]){ dp[at]=nd; par[at]=(signed char)j; }
+                }
+            }
+        }
+        int full=S-1,best=-1; double bestCost=INF;
+        for(int j=0;j<M;j++){
+            double mul=(N%10==0&&!pr[j+1])?1.1:1.0;
+            double v=dp[(size_t)full*M+j]+mul*dm[(size_t)(j+1)*N];
+            if(v<bestCost){ bestCost=v; best=j; }
+        }
+        vector<int> path(M);
+        int mask=full;
+        for(int p=M-1;p>=0;p--){
+            path[p]=best+1;
+            int prev=par[(size_t)mask*M+best];
+            mask^=1<<best; best=prev;
+        }
+        string out; out.reserve((size_t)N*4+16);
+        out+=to_string(N+1); out+="\n0\n";
+        for(int v:path){ out+=to_string(v); out+='\n'; }
+        out+="0\n";
+        fwrite(out.data(),1,out.size(),stdout);
+        return 0;
+    }
     if(N>100000) TL_MS -= 20.0;
     double RESERVE = N>150000?220.0:(N>50000?90.0:(N>5000?50.0:40.0));
     TL_MS -= RESERVE; // reserve tail for endgame touch-up
 
-    // ---- spatial grid (~2 pts/cell) ----
+    // ---- spatial grid (~2 pts/cell, near-square cells in coordinate space) ----
     double minx=X[0],maxx=X[0],miny=Y[0],maxy=Y[0];
     for(int i=1;i<N;i++){ minx=min(minx,X[i]);maxx=max(maxx,X[i]);miny=min(miny,Y[i]);maxy=max(maxy,Y[i]); }
     double w=max(1.0,maxx-minx), h=max(1.0,maxy-miny);
-    int G=max(1,(int)floor(sqrt((double)N/2.0)));
-    double cw=w/G, ch=h/G;
-    auto gx=[&](double x){ int c=(int)((x-minx)/cw); return c<0?0:(c>=G?G-1:c); };
-    auto gy=[&](double y){ int c=(int)((y-miny)/ch); return c<0?0:(c>=G?G-1:c); };
-    vector<int> cellOf(N), cnt(G*G+1,0);
-    for(int i=0;i<N;i++){ int c=gx(X[i])*G+gy(Y[i]); cellOf[i]=c; cnt[c+1]++; }
-    for(int i=0;i<G*G;i++) cnt[i+1]+=cnt[i];
+    int cells=max(1,N/2);
+    int GX=max(1,min(cells,(int)llround(sqrt((double)cells*w/h))));
+    int GY=max(1,cells/GX);
+    double cw=w/GX, ch=h/GY;
+    auto gx=[&](double x){ int c=(int)((x-minx)/cw); return c<0?0:(c>=GX?GX-1:c); };
+    auto gy=[&](double y){ int c=(int)((y-miny)/ch); return c<0?0:(c>=GY?GY-1:c); };
+    vector<int> cellOf(N), cnt(GX*GY+1,0);
+    for(int i=0;i<N;i++){ int c=gx(X[i])*GY+gy(Y[i]); cellOf[i]=c; cnt[c+1]++; }
+    for(int i=0;i<GX*GY;i++) cnt[i+1]+=cnt[i];
     vector<int> bucket(N); { vector<int> tmp=cnt; for(int i=0;i<N;i++) bucket[tmp[cellOf[i]]++]=i; }
 
     // ---- k nearest neighbors per city ----
@@ -79,14 +128,14 @@ int main(){
             int cx=gx(X[i]),cy=gy(Y[i]); cand.clear();
             int ring=0, extra=1;
             while(true){
-                int x0=max(0,cx-ring),x1=min(G-1,cx+ring),y0=max(0,cy-ring),y1=min(G-1,cy+ring);
+                int x0=max(0,cx-ring),x1=min(GX-1,cx+ring),y0=max(0,cy-ring),y1=min(GY-1,cy+ring);
                 for(int xx=x0;xx<=x1;xx++) for(int yy=y0;yy<=y1;yy++){
-                    if(ring>0 && xx>x0 && xx<x1 && yy>y0 && yy<y1) continue;
-                    int c=xx*G+yy;
+                    if(max(abs(xx-cx),abs(yy-cy))!=ring) continue;
+                    int c=xx*GY+yy;
                     for(int b=cnt[c];b<cnt[c+1];b++){ int j=bucket[b]; if(j!=i) cand.push_back({dist(i,j),j}); }
                 }
                 if((int)cand.size()>=K){ if(extra--<=0) break; }
-                if(x0==0&&y0==0&&x1==G-1&&y1==G-1) break;
+                if(x0==0&&y0==0&&x1==GX-1&&y1==GY-1) break;
                 ring++;
             }
             int kk=min((int)cand.size(),K);
@@ -104,18 +153,18 @@ int main(){
             for(int t=0;t<K;t++){ int j=nbr[(size_t)cur*K+t]; if(j>=0&&!used[j]){ best=j; break; } }
             if(best<0){
                 int cx=gx(X[cur]),cy=gy(Y[cur]);
-                for(int ring=0; ring<2*G && best<0; ring++){
-                    int x0=max(0,cx-ring),x1=min(G-1,cx+ring),y0=max(0,cy-ring),y1=min(G-1,cy+ring);
+                for(int ring=0; ring<2*max(GX,GY) && best<0; ring++){
+                    int x0=max(0,cx-ring),x1=min(GX-1,cx+ring),y0=max(0,cy-ring),y1=min(GY-1,cy+ring);
                     for(int xx=x0;xx<=x1;xx++) for(int yy=y0;yy<=y1;yy++){
-                        if(ring>0 && xx>x0 && xx<x1 && yy>y0 && yy<y1) continue;
-                        int c=xx*G+yy;
+                        if(max(abs(xx-cx),abs(yy-cy))!=ring) continue;
+                        int c=xx*GY+yy;
                         for(int b=cnt[c];b<cnt[c+1];b++){ int j=bucket[b]; if(!used[j]){ double d=dist(cur,j); if(d<bd){bd=d;best=j;} } }
                     }
                     if(best>=0){ // safety: scan one more ring for a possibly-closer point
-                        int r2=ring+1,a0=max(0,cx-r2),a1=min(G-1,cx+r2),b0=max(0,cy-r2),b1=min(G-1,cy+r2);
+                        int r2=ring+1,a0=max(0,cx-r2),a1=min(GX-1,cx+r2),b0=max(0,cy-r2),b1=min(GY-1,cy+r2);
                         for(int xx=a0;xx<=a1;xx++) for(int yy=b0;yy<=b1;yy++){
-                            if(xx>a0&&xx<a1&&yy>b0&&yy<b1) continue;
-                            int c=xx*G+yy;
+                            if(max(abs(xx-cx),abs(yy-cy))!=r2) continue;
+                            int c=xx*GY+yy;
                             for(int bb=cnt[c];bb<cnt[c+1];bb++){ int j=bucket[bb]; if(!used[j]){ double d=dist(cur,j); if(d<bd){bd=d;best=j;} } }
                         }
                         break;
