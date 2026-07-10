@@ -1142,6 +1142,63 @@ static void outputResult(const PackResult& res){
     fputc('\n', stdout);
 }
 
+
+// Cold-path multi-heuristic gap fill + light LNS (end-game only; hot path untouched).
+static bool mrFindBestH(const MaxRects& mr,int rw,int rh,int&ox,int&oy,int&oi,int heur){
+    if(rw<=0||rh<=0) return false;
+    int bs=INT32_MAX,bl=INT32_MAX; long long ba=(long long)4e18;
+    int by=INT32_MAX,bx=INT32_MAX,bc=-1; oi=-1;
+    for(size_t i=0;i<mr.fx.size();++i) if(mr.fw[i]>=rw&&mr.fh[i]>=rh){
+        int lw=mr.fw[i]-rw,lh=mr.fh[i]-rh,s=lw<lh?lw:lh,l=lw<lh?lh:lw,upd=0;
+        if(heur==1){long long a=(long long)lw*lh; if(a<ba||(a==ba&&(s<bs||(s==bs&&l<bl))))upd=1;}
+        else if(heur==2){if(mr.fy[i]<by||(mr.fy[i]==by&&mr.fx[i]<bx))upd=1;}
+        else{int c=(mr.fx[i]==0?rh:0)+(mr.fy[i]==0?rw:0)+(mr.fx[i]+rw==mr.W?rh:0)+(mr.fy[i]+rh==mr.H?rw:0); if(c>bc||(c==bc&&(s<bs||(s==bs&&l<bl))))upd=1;}
+        if(upd){bs=s;bl=l;ox=mr.fx[i];oy=mr.fy[i];oi=(int)i; if(heur==1)ba=(long long)lw*lh; else if(heur==2){by=mr.fy[i];bx=mr.fx[i];}else{int c=(mr.fx[i]==0?rh:0)+(mr.fy[i]==0?rw:0)+(mr.fx[i]+rw==mr.W?rh:0)+(mr.fy[i]+rh==mr.H?rw:0);bc=c;}}
+    }
+    return oi>=0;
+}
+static PackResult mrGreedyFillH(const PackResult& base,const vector<int>& order,bool allowRotate,int heur){
+    PackResult res=base; MaxRects mr; mr.init(g_bin.W,g_bin.H);
+    for(const Placed&p:base.placements){const ItemType&it=g_items[p.typeId];int rw=p.rot?it.h:it.w,rh=p.rot?it.w:it.h;mr.place(p.x,p.y,rw,rh);}
+    vector<int> rem(g_items.size()); for(size_t i=0;i<g_items.size();++i) rem[i]=g_items[i].limit-res.used[i];
+    bool prog=true; while(prog){prog=false;for(int t:order){if(rem[t]<=0)continue;const ItemType&it=g_items[t];
+        int x0,y0,i0,x1,y1,i1; bool f0=false,f1=false;
+        if(it.w<=mr.W&&it.h<=mr.H) f0=mrFindBestH(mr,it.w,it.h,x0,y0,i0,heur);
+        if(allowRotate&&it.h<=mr.W&&it.w<=mr.H) f1=mrFindBestH(mr,it.h,it.w,x1,y1,i1,heur);
+        int cr=-1,ox=0,oy=0,rw=0,rh=0;
+        if(f0&&f1){if(y0<y1||(y0==y1&&x0<=x1)){cr=0;ox=x0;oy=y0;rw=it.w;rh=it.h;}else{cr=1;ox=x1;oy=y1;rw=it.h;rh=it.w;}}
+        else if(f0){cr=0;ox=x0;oy=y0;rw=it.w;rh=it.h;}
+        else if(f1){cr=1;ox=x1;oy=y1;rw=it.h;rh=it.w;}
+        if(cr>=0){Placed p;p.typeId=t;p.x=ox;p.y=oy;p.rot=cr;res.placements.push_back(p);res.totalValue+=it.v;res.used[t]++;rem[t]--;mr.place(ox,oy,rw,rh);prog=true;}}}
+    return res;
+}
+// Multi-heuristic residual filler; early-stop when h=0 places nothing (thin-sliver cases).
+static PackResult enhancedFillGaps(const PackResult& base,const vector<int>& order,bool allowRotate){
+    PackResult best=fillGaps(base,order,allowRotate,allowRotate);
+    if(best.placements.size()<=base.placements.size()) return best;
+    int HH[3]={1,2,3};
+    for(int h:HH){ if(elapsed()>TIME_LIMIT) break; PackResult f=mrGreedyFillH(base,order,allowRotate,h); if(f.totalValue>best.totalValue) best=std::move(f); }
+    return best;
+}
+// Light LNS: drop a batch of placed items, re-fill freed footprint. Bounded by tlim.
+static PackResult lnsEnd(const PackResult& base,bool allowRotate,const vector<int>& ord,double tlim){
+    PackResult bestR=base; int n=(int)base.placements.size(),M=(int)g_items.size();
+    if(n<=4) return bestR;
+    mt19937 rng(20240710u+(uint32_t)n);
+    vector<int> idx(n); for(int i=0;i<n;++i) idx[i]=i;
+    sort(idx.begin(),idx.end(),[&](int a,int b){const ItemType&A=g_items[base.placements[a].typeId],&B=g_items[base.placements[b].typeId];if(A.density!=B.density)return A.density<B.density;return A.area>B.area;});
+    vector<char> dr(n,0); int cs[4]={max(1,n/10),max(1,n/7),max(1,n/5),min(n-1,max(1,n/4))};
+    for(int c:cs){ if(elapsed()>=tlim) break; for(int mode=0;mode<2&&elapsed()<tlim;++mode){
+        for(int i=0;i<n;++i) dr[i]=0;
+        if(mode==0){ for(int i=0;i<c;++i) dr[idx[i]]=1; } else { std::shuffle(idx.begin(),idx.end(),rng); for(int i=0;i<c;++i) dr[idx[i]]=1; }
+        PackResult r; r.totalValue=0; r.used.assign(M,0);
+        for(int i=0;i<n;++i) if(!dr[i]){ const Placed&p=base.placements[i]; r.placements.push_back(p); r.totalValue+=g_items[p.typeId].v; r.used[p.typeId]++; }
+        PackResult cand=enhancedFillGaps(r,ord,allowRotate);
+        if(cand.totalValue>bestR.totalValue) bestR=std::move(cand);
+    }}
+    return bestR;
+}
+
 int main(){
     T_START = chrono::steady_clock::now();
     string input;
@@ -1511,72 +1568,20 @@ int main(){
         if(elapsed() > TIME_LIMIT * 0.6) break;
     }
 
-    #ifdef DIAG
-    g_label="random";
-#endif
-    mt19937 rng(987654321u);
-    int seed = 0;
-    double iterCost = 0.0; // adaptive margin: last iteration's duration
-    while(elapsed() + 2.0 * iterCost < TIME_LIMIT - 0.04){
-        double t0 = elapsed();
-        vector<int> ord = orderByDensity();
-        int mode = seed % 8;
-        if(mode == 0){
-            shuffle(ord.begin(), ord.end(), rng);
-        } else if(mode == 1){
-            int i = rng() % M, j = rng() % M;
-            swap(ord[i], ord[j]);
-        } else if(mode == 2){
-            sort(ord.begin(), ord.end(), [](int a, int b){
-                double da = g_items[a].v / (double)g_items[a].h;
-                double db = g_items[b].v / (double)g_items[b].h;
-                return da > db;
-            });
-        } else if(mode == 3){
-            sort(ord.begin(), ord.end(), [](int a, int b){
-                double da = g_items[a].v / (double)g_items[a].w;
-                double db = g_items[b].v / (double)g_items[b].w;
-                return da > db;
-            });
-        } else if(mode == 4){
-            sort(ord.begin(), ord.end(), [](int a, int b){
-                int ma = min(g_items[a].w, g_items[a].h);
-                int mb = min(g_items[b].w, g_items[b].h);
-                if(ma != mb) return ma < mb;
-                return g_items[a].density > g_items[b].density;
-            });
-        } else if(mode == 5){
-            sort(ord.begin(), ord.end(), [](int a, int b){
-                return g_items[a].density > g_items[b].density;
-            });
-            stable_sort(ord.begin(), ord.end(), [](int a, int b){
-                int ma = min(g_items[a].w, g_items[a].h);
-                int mb = min(g_items[b].w, g_items[b].h);
-                return ma < mb;
-            });
-        } else if(mode == 6){
-            sort(ord.begin(), ord.end(), [](int a, int b){
-                return g_items[a].density > g_items[b].density;
-            });
-        } else {
-            shuffle(ord.begin(), ord.end(), rng);
-            sort(ord.begin(), ord.end(), [](int a, int b){
-                return g_items[a].density > g_items[b].density;
-            });
-            for(int s=0;s<2;++s){ int i=rng()%M,j=rng()%M; swap(ord[i],ord[j]); }
+    // Final end-game (replaces weak random-restart loop + final gapFill). consider()-protected.
+    if(elapsed() < TIME_LIMIT - 0.07){
+        mt19937 rng(987654321u);
+        vector<int> od = orderByDensity();
+        consider(greedyFillMaxRects(od, allowRot, allowRot));           // (a) stabilizer
+        for(int s=0; s<3 && elapsed()<TIME_LIMIT-0.05; ++s){ vector<int> ord=od; std::shuffle(ord.begin(),ord.end(),rng); consider(greedyFillMaxRects(ord, allowRot, allowRot)); }
+        if(elapsed() < TIME_LIMIT - 0.22){                            // (b) shelf structure recovery (spare time only)
+            int Ww=g_bin.W; int strips[4]={0,Ww/4,Ww/2,3*Ww/4}; int seeds[3]={7,13,21};
+            for(int si=0;si<4&&elapsed()<TIME_LIMIT-0.05;++si) for(int sd=0;sd<3&&elapsed()<TIME_LIMIT-0.05;++sd) for(int tr=0;tr<2;++tr) consider(polish(mixedShelfPlan(allowRot,seeds[sd],strips[si],tr)));
         }
-        bool tryBoth = allowRot ? ((seed & 1) == 0) : false;
-        if(mode == 6) tryBoth = true; // force both
-        consider(greedyFill(ord, allowRot, tryBoth));
-        // Also try MaxRects with this ordering for additional diversity
-        if(seed % 4 == 0) consider(greedyFillMaxRects(ord, allowRot, tryBoth));
-        iterCost = elapsed() - t0;
-        ++seed;
-        if(seed > 2000000) break;
+        for(auto* op : gapOrders){ if(elapsed() > TIME_LIMIT - 0.05) break; consider(enhancedFillGaps(best, *op, allowRot)); } // (c)
+        if(elapsed() < TIME_LIMIT - 0.05) consider(lnsEnd(best, allowRot, g_densOrd, TIME_LIMIT - 0.05));                        // (d)
     }
-
-    if(elapsed() < TIME_LIMIT - 0.04) gapFill();
-    if(best.totalValue < 0){
+        if(best.totalValue < 0){
         best.totalValue = 0;
         best.placements.clear();
     }
