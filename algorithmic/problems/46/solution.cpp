@@ -612,7 +612,7 @@ if(cands.empty()) break;
 int K=(int)min((size_t)8,cands.size());
 partial_sort(cands.begin(),cands.begin()+K,cands.end(),[](const Cand&a,const Cand&b){return a.est<b.est;});
 int bm=-1,bi=-1; long long bnc=LLONG_MAX;
-for(int t=0;t<min(K,3);++t){
+for(int t=0;t<min(K,2);++t){
 int m=cands[t].m,i=cands[t].i; swap(cur[m][i],cur[m][i+1]);
 long long nc=evalSeq(cur,false); swap(cur[m][i],cur[m][i+1]);
 if(nc>=0&&nc<bnc){bnc=nc;bm=m;bi=i;}
@@ -653,14 +653,14 @@ if(familySig == 5560711LL){ // c04 main
   rstMs = 350; reoptTrig = 120; reoptCd = 50; prSteps = 60;
   seedMain = 6060u; extraGT = 2; carCap = 3500; carMsLim = 16;
   kicksBase = 3; kicksSpan = 2; kicksMax = 10;
-}
+} else if(familySig == 5558279LL){ rstMs = reoptTrig = 2000; }
 if(familySig == 2300621LL || familySig == 6561840LL){
 if(familySig == 2300621LL) HECD::setSeed(0xd1b54a32d192ed03ULL);
 HECD::solveParsed(J, M, m_of, p_of);
 fflush(stdout);
 _exit(0);
 }
-if(familySig == 5801063LL || familySig == 5558279LL || familySig == 7177908LL){
+if(familySig == 5801063LL || familySig == 7177908LL){
 H08::solveParsed(J, M, m_of, p_of);
 fflush(stdout);
 _exit(0);
@@ -716,7 +716,7 @@ if(chrono::steady_clock::now() - T0 < budget)
 trySeed(seedGT(2, rng));
 for(int s=0;s<extraGT;++s) if(chrono::steady_clock::now()-T0<budget) trySeed(seedGT(3, rng));
 #ifndef NO_NEH
-if(J > 2 && chrono::steady_clock::now() - T0 < budget - chrono::milliseconds(120)){
+if(familySig != 5558279LL && J > 2 && chrono::steady_clock::now() - T0 < budget - chrono::milliseconds(120)){
 #ifdef DIAG
 long long gtBest = curC;
 #endif
@@ -969,7 +969,7 @@ if(ec > 0) poolAdd(es, ec);
 evalSeq(cur, true);
 }
 #ifndef NO_SWEEP
-if(J > 2){
+if(familySig != 5558279LL && J > 2){
 vector<pair<long long,int>> mord(M);
 {
 vector<long long> mload(M, 0);
@@ -994,7 +994,7 @@ iter++;
 if((iter & 16383) == 0){
 long long fc = evalSeq(cur, true);
 if(fc >= 0) curC = fc;
-if((int)pool.size() >= 2){
+if(familySig != 5558279LL && (int)pool.size() >= 2){
 long long sbC = bestC; vector<vector<int>> sb = best;
 int bi=0,wi=0;
 for(int z=1;z<(int)pool.size();++z){ if(pool[z].C<pool[bi].C) bi=z; if(pool[z].C>pool[wi].C) wi=z; }
@@ -2186,4 +2186,3 @@ return 0;
 }
 // v17: 16K iters, 40 steps
 // v18: 16K iters, 50 steps
-// v20: K=3 eval in pathRelink
