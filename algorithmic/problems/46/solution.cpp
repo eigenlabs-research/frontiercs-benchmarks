@@ -993,7 +993,7 @@ while(!timeUp){
 auto nowT = chrono::steady_clock::now();
 if(nowT >= T_end) break;
 iter++;
-if((iter & 16383) == 0){
+if((iter & 8191) == 0){
 long long fc = evalSeq(cur, true);
 if(fc >= 0) curC = fc;
 if(!legacy && (int)pool.size() >= 2){
@@ -2186,3 +2186,4 @@ output(best);
 return 0;
 }
 }
+// v28: 8K freq, 50 steps
