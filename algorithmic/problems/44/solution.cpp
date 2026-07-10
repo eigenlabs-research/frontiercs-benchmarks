@@ -432,6 +432,36 @@ int main(){
         }
     }
 
+    // ---- short penalty-aware reversal polish around bad carrot slots (exact delta) ----
+    if(N>=12 && el_ms()<TL_MS){
+        auto sAt2=[&](int p)->int{ return p<N? seq[p]:0; };
+        auto stepCost2=[&](int t)->double{ int a=seq[t-1], b=sAt2(t); double d=dist(a,b); if(t%10==0&&!pr[a]) d*=1.1; return d; };
+        auto winCost=[&](int l,int r)->double{ double v=0; int a=max(1,l), b=min(N,r+1); for(int t=a;t<=b;t++) v+=stepCost2(t); return v; };
+        int maxLen = N>50000?4:(N>20000?5:6);
+        for(int rep=0; rep<2 && el_ms()<TL_MS; rep++){
+            bool ch=false;
+            for(int p=9; p<N; p+=10){
+                if(el_ms()>TL_MS) break;
+                if(pr[seq[p]]) continue;
+                int L0=max(1,p-maxLen+1), R0=min(N-1,p+maxLen-1);
+                double bd=-1e-7; int bl=-1, br=-1;
+                for(int l=L0; l<=p; l++){
+                    int maxr=min(R0,l+maxLen-1);
+                    for(int r=max(p,l+1); r<=maxr; r++){
+                        double bef=winCost(l,r);
+                        reverse(seq.begin()+l, seq.begin()+r+1);
+                        double aft=winCost(l,r);
+                        reverse(seq.begin()+l, seq.begin()+r+1);
+                        double dl=aft-bef;
+                        if(dl<bd){ bd=dl; bl=l; br=r; }
+                    }
+                }
+                if(bl>=0){ reverse(seq.begin()+bl, seq.begin()+br+1); ch=true; }
+            }
+            if(!ch) break;
+        }
+    }
+
     string out; out.reserve((size_t)N*7+16);
     out+=to_string(N+1); out+='\n';
     for(int i=0;i<N;i++){ out+=to_string(seq[i]); out+='\n'; }
