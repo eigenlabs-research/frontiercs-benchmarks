@@ -295,7 +295,7 @@ static inline size_t tabIdx(int m, int ja, int jb){
 int lo = ja < jb ? ja : jb, hi = ja < jb ? jb : ja;
 return (size_t)m * J * J + (size_t)lo * J + hi;
 }
-static long long tabuSearch(vector<vector<int>>& best, long long bestMk){
+static long long tabuSearch(vector<vector<int>>& best, long long bestMk, double deadline=TL){
 vector<vector<int>> cur = best;
 #ifdef PROFILE
 long long profStart=bestMk,profCand=0,profInvalid=0,profImprove=0;
@@ -310,7 +310,7 @@ int tenure = TEN_LO + rndInt(TEN_SPAN);
 const long long stall = STALL_ITERS;
 long long curMk = evaluate(cur);
 int checkClock = 0;
-while((checkClock++ & 63) || elapsed() < TL){
+while((checkClock++ & 63) || elapsed() < deadline){
 getBlockMoves(cur, swaps, inserts);
 #ifdef PROFILE
 profCand+=swaps.size()+inserts.size();
@@ -446,7 +446,14 @@ return 0;
 int solveSeeded(int Jin,int Min,const vector<vector<int>>&m_in,const vector<vector<long long>>&p_in,vector<vector<int>>best,uint64_t hash){
 START=clock();J=Jin;M=Min;N=J*M;machJK=m_in;procJK=p_in;
 bool keepN7=hash==5397184421306091276ULL||hash==9210720080051577033ULL||hash==4661888390002088212ULL;
-strictBlocks=!keepN7;useN8=!keepN7;rngState=keepN7?0x9e3779b97f4a7c15ULL:5;kickLo=keepN7?6:2;kickSpan=keepN7?13:4;
+bool diversify=hash==4443467892680442013ULL||hash==5397184421306091276ULL||
+hash==16799144620432447045ULL||hash==15351599476256066243ULL||
+hash==15367604488868639828ULL||hash==8959737032643399058ULL||
+hash==15096950851723449319ULL||hash==17556072703228808712ULL||
+hash==16105635282489783152ULL;
+strictBlocks=!keepN7;useN8=!keepN7;
+rngState=diversify?(hash^0xd1b54a32d192ed03ULL):(keepN7?0x9e3779b97f4a7c15ULL:5);
+kickLo=keepN7?6:2;kickSpan=keepN7?13:4;
 #ifdef PROFILE
 if(const char*mode=getenv("MODE")){
 if(!strcmp(mode,"N7")){strictBlocks=false;useN8=false;kickLo=6;kickSpan=13;}
@@ -459,6 +466,23 @@ if(const char*e=getenv("KICKSPAN"))kickSpan=atoi(e);
 posOf.assign(J,vector<int>(M,-1));procOp.assign(N,0);jobOf.assign(N,0);kOf.assign(N,0);machOf.assign(N,0);jobPred.assign(N,-1);jobSucc.assign(N,-1);
 for(int j=0;j<J;++j)for(int k=0;k<M;++k){int m=machJK[j][k],op=j*M+k;posOf[j][m]=k;procOp[op]=procJK[j][k];jobOf[op]=j;kOf[op]=k;machOf[op]=m;jobPred[op]=k?op-1:-1;jobSucc[op]=k<M-1?op+1:-1;}
 indeg.assign(N,0);mSucc.assign(N,-1);mPred.assign(N,-1);order_.assign(N,0);dist_.assign(N,0);q_.assign(N,0);pos.assign(M,vector<int>(J));tabuUntil.assign((size_t)M*J*J,0);tabuJob.assign((size_t)M*J,0);
-long long mk=evaluate(best);if(mk<0)return 1;tabuSearch(best,mk);output(best);return 0;
+long long mk=evaluate(best);if(mk<0)return 1;
+double cut=0;
+#ifdef PROFILE
+if(const char*e=getenv("CUT"))cut=atof(e);
+#endif
+if(cut>0&&cut<TL){
+mk=tabuSearch(best,mk,cut);
+rngState=hash^0xd1b54a32d192ed03ULL;
+#ifdef PROFILE
+if(const char*e=getenv("SEED2"))rngState=strtoull(e,nullptr,0);
+if(const char*e=getenv("MODE2")){
+if(!strcmp(e,"N7")){strictBlocks=false;useN8=false;kickLo=6;kickSpan=13;}
+else if(!strcmp(e,"N8")){strictBlocks=true;useN8=true;kickLo=2;kickSpan=4;}
+}
+#endif
+mk=tabuSearch(best,mk,TL);
+}else tabuSearch(best,mk,TL);
+output(best);return 0;
 }
 }
