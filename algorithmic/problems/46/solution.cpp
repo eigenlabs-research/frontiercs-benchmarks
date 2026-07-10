@@ -6,13 +6,9 @@
 #include <random>
 #include <climits>
 #include <ctime>
-#include <cmath>
 #include <unistd.h>
 using namespace std;
-#ifdef NO_REOPT
-#define NO_SWEEP
-#define NO_TRIG
-#endif
+clock_t G_START;
 static int J, M, N;
 static vector<vector<int>> m_of;
 static vector<vector<long long>> p_of;
@@ -307,208 +303,6 @@ for(int t=mv.i+1; t<=mv.e; ++t)
 gpend.push_back((size_t)opOf(s[t], mv.m)*J + uj);
 }
 }
-static long long evalReduced(int mExcl, const vector<vector<int>>& seq){
-const int n = N;
-int* __restrict ind = indeg.data();
-int* __restrict msu = msucc.data();
-const int* __restrict jsu = jsuc.data();
-const char* __restrict jpr = jpre.data();
-const long long* __restrict pn = pnode.data();
-long long* __restrict ds = dist_.data();
-for(int u=0;u<n;++u) ind[u] = jpr[u];
-for(int m=0;m<M;++m){
-if(m == mExcl){
-for(int j=0;j<J;++j){ int u = j*M + posF[j*M + m]; msu[u] = -1; mpred[u] = -1; }
-continue;
-}
-const int* s = seq[m].data();
-int prev = s[0]*M + posF[s[0]*M + m];
-mpred[prev] = -1;
-for(int i=1;i<J;++i){
-int v = s[i]*M + posF[s[i]*M + m];
-msu[prev] = v; mpred[v] = prev; ind[v]++; prev = v;
-}
-msu[prev] = -1;
-}
-fill(dist_.begin(), dist_.begin()+n, 0);
-qbuf.clear();
-int qh=0;
-for(int u=0;u<n;++u) if(ind[u]==0){ ds[u]=pn[u]; qbuf.push_back(u); }
-while(qh < (int)qbuf.size()){
-int u = qbuf[qh++];
-long long du = ds[u];
-int v = jsu[u];
-if(v >= 0){
-long long nd = du + pn[v];
-if(nd > ds[v]) ds[v] = nd;
-if(--ind[v]==0) qbuf.push_back(v);
-}
-v = msu[u];
-if(v >= 0){
-long long nd = du + pn[v];
-if(nd > ds[v]) ds[v] = nd;
-if(--ind[v]==0) qbuf.push_back(v);
-}
-}
-if(qh != n) return -1;
-long long C = 0;
-for(int u=0;u<n;++u) if(ds[u] > C) C = ds[u];
-{
-long long* __restrict tl = tail_.data();
-const int* __restrict qb = qbuf.data();
-for(int idx=n-1; idx>=0; --idx){
-int u = qb[idx];
-long long mx = 0;
-int v = jsu[u];
-if(v >= 0 && tl[v] > mx) mx = tl[v];
-v = msu[u];
-if(v >= 0 && tl[v] > mx) mx = tl[v];
-tl[u] = pn[u] + mx;
-}
-}
-return C;
-}
-static long long carBestC;
-static vector<int> carBestSeq;
-static int carNodes, carNodeCap;
-static chrono::steady_clock::time_point carDeadline;
-static vector<long long> carR, carQ, carP;
-#ifdef DIAG
-long long g_roAtt = 0, g_roAcc = 0, g_roCyc = 0, g_roUs = 0;
-#endif
-static long long schrage1(int n, const long long* r, const long long* q, const long long* p, int* seqOut){
-static vector<char> done; done.assign(n, 0);
-long long t = 0, C = 0;
-for(int i=0;i<n;++i){
-long long rmin = LLONG_MAX;
-for(int j=0;j<n;++j) if(!done[j] && r[j] < rmin) rmin = r[j];
-if(t < rmin) t = rmin;
-int b = -1;
-for(int j=0;j<n;++j){
-if(done[j] || r[j] > t) continue;
-if(b < 0 || q[j] > q[b] || (q[j] == q[b] && p[j] > p[b])) b = j;
-}
-done[b] = 1; seqOut[i] = b;
-t += p[b];
-if(t + q[b] > C) C = t + q[b];
-}
-return C;
-}
-static void carlier(int n, long long* r, long long* q, const long long* p, int depth){
-if(carNodes >= carNodeCap || depth > 400) return;
-if((carNodes & 63) == 0 && chrono::steady_clock::now() >= carDeadline){ carNodes = carNodeCap; return; }
-carNodes++;
-int seq[64];
-long long C = schrage1(n, r, q, p, seq);
-if(C < carBestC){
-carBestC = C;
-for(int i=0;i<n;++i) carBestSeq[i] = seq[i];
-}
-int bpos = -1;
-{
-long long t = 0;
-for(int i=0;i<n;++i){
-int j = seq[i];
-if(t < r[j]) t = r[j];
-t += p[j];
-if(t + q[j] == C) bpos = i;
-}
-}
-if(bpos < 0) return;
-int apos = -1;
-{
-long long sum = 0;
-long long qb = q[seq[bpos]];
-for(int i=bpos;i>=0;--i){
-sum += p[seq[i]];
-if(r[seq[i]] + sum + qb == C) apos = i;
-}
-}
-if(apos < 0) return;
-int cpos = -1;
-for(int i=apos;i<bpos;++i) if(q[seq[i]] < q[seq[bpos]]) cpos = i;
-if(cpos < 0) return;
-int c = seq[cpos];
-long long sump = 0, rmin = LLONG_MAX, qmin = LLONG_MAX;
-for(int i=cpos+1;i<=bpos;++i){
-int j = seq[i];
-sump += p[j];
-if(r[j] < rmin) rmin = r[j];
-if(q[j] < qmin) qmin = q[j];
-}
-long long hJ = rmin + sump + qmin;
-long long hJc = (rmin < r[c] ? rmin : r[c]) + sump + p[c] + (qmin < q[c] ? qmin : q[c]);
-long long LB = hJ > hJc ? hJ : hJc;
-if(LB >= carBestC) return;
-{
-long long old = q[c];
-long long nq = sump + qmin;
-if(nq > old){
-q[c] = nq;
-carlier(n, r, q, p, depth+1);
-q[c] = old;
-} else carlier(n, r, q, p, depth+1);
-}
-if(carNodes >= carNodeCap) return;
-{
-long long old = r[c];
-long long nr = rmin + sump;
-if(nr > old){
-r[c] = nr;
-carlier(n, r, q, p, depth+1);
-r[c] = old;
-}
-}
-}
-static vector<int> roOld;
-static bool reoptMachine(int m, vector<vector<int>>& cur, long long& curC, long long& bestC,
-vector<vector<int>>& best, chrono::steady_clock::time_point T_end, chrono::steady_clock::time_point& lastImpT){
-#ifdef DIAG
-g_roAtt++;
-auto diagT0 = chrono::steady_clock::now();
-struct RoTimer { chrono::steady_clock::time_point t0; ~RoTimer(){ g_roUs += chrono::duration_cast<chrono::microseconds>(chrono::steady_clock::now() - t0).count(); } } roTimer{diagT0};
-#endif
-long long Cr = evalReduced(m, cur);
-if(Cr < 0){ evalSeq(cur, true); return false; }
-carR.resize(J); carQ.resize(J); carP.resize(J);
-for(int j=0;j<J;++j){
-int u = j*M + posF[j*M + m];
-carP[j] = pnode[u];
-carR[j] = dist_[u] - pnode[u];
-carQ[j] = tail_[u] - pnode[u];
-}
-carBestC = LLONG_MAX;
-carNodes = 0; carNodeCap = 3000;
-carBestSeq.assign(J, 0);
-auto nowT = chrono::steady_clock::now();
-carDeadline = nowT + chrono::milliseconds(15);
-if(carDeadline > T_end) carDeadline = T_end;
-carlier(J, carR.data(), carQ.data(), carP.data(), 0);
-if(carBestC >= curC || carBestSeq == cur[m]){
-long long cc = evalSeq(cur, true);
-if(cc >= 0) curC = cc;
-return false;
-}
-roOld = cur[m];
-cur[m] = carBestSeq;
-long long nc = evalSeq(cur, true);
-if(nc >= 0 && nc < curC){
-curC = nc;
-if(nc < bestC){ best = cur; bestC = nc; }
-lastImpT = chrono::steady_clock::now();
-#ifdef DIAG
-g_roAcc++;
-#endif
-return true;
-}
-#ifdef DIAG
-if(nc < 0) g_roCyc++;
-#endif
-cur[m] = roOld;
-long long cc = evalSeq(cur, true);
-if(cc >= 0) curC = cc;
-return false;
-}
 namespace HECD { int solveParsed(int, int, const vector<vector<int>>&, const vector<vector<long long>>&); }
 namespace H08 { int solveParsed(int, int, const vector<vector<int>>&, const vector<vector<long long>>&); }
 namespace Alt { int solve(); }
@@ -540,44 +334,8 @@ long long C=0; for(long long x:jr) C=max(C,x); return C;
 };
 return min(calc(false), calc(true));
 }
-#ifndef NO_NEH
-static long long evalPerm(const vector<int>& pi, int L){
-static vector<long long> nmf; nmf.assign(M, 0);
-long long mk = 0;
-for(int i=0;i<L;++i){
-int j = pi[i]; long long t = 0;
-const int* mo = m_of[j].data();
-const long long* po = p_of[j].data();
-for(int k=0;k<M;++k){
-int m = mo[k];
-long long s = t > nmf[m] ? t : nmf[m];
-t = s + po[k]; nmf[m] = t;
-}
-if(t > mk) mk = t;
-}
-return mk;
-}
-static vector<int> nehBuild(const vector<int>& order){
-vector<int> pi; pi.reserve(J);
-vector<int> cand; cand.reserve(J);
-for(int idx=0; idx<(int)order.size(); ++idx){
-int j = order[idx];
-int L = (int)pi.size();
-int bp = 0; long long bc = LLONG_MAX;
-for(int p=0;p<=L;++p){
-cand.clear();
-for(int t=0;t<p;++t) cand.push_back(pi[t]);
-cand.push_back(j);
-for(int t=p;t<L;++t) cand.push_back(pi[t]);
-long long c = evalPerm(cand, L+1);
-if(c < bc){ bc = c; bp = p; }
-}
-pi.insert(pi.begin()+bp, j);
-}
-return pi;
-}
-#endif
 int main(){
+G_START = clock();
 auto T0 = chrono::steady_clock::now();
 const auto budget = chrono::milliseconds(994);
 if(scanf("%d %d", &J, &M) != 2) return 0;
@@ -639,179 +397,10 @@ if(c < bestC){ best = s; bestC = c; }
 }
 };
 mt19937 rng(777u);
-vector<int> igElitePi; long long igEliteC = LLONG_MAX;
-static vector<long long> igF, igQ;
-#ifdef DIAG
-int igChk = 0;
-#endif
 trySeed(seedGT(0, rng));
 trySeed(seedGT(1, rng));
 if(chrono::steady_clock::now() - T0 < budget)
 trySeed(seedGT(2, rng));
-#ifndef NO_NEH
-if(J > 2 && chrono::steady_clock::now() - T0 < budget - chrono::milliseconds(120)){
-#ifdef DIAG
-long long gtBest = curC;
-#endif
-vector<long long> wtot(J, 0), wfront(J, 0);
-for(int j=0;j<J;++j){
-for(int k=0;k<M;++k) wtot[j] += p_of[j][k];
-for(int k=0;k<M/2;++k) wfront[j] += p_of[j][k];
-}
-vector<int> piBest; long long cBest = LLONG_MAX;
-auto consider = [&](const vector<int>& pi){
-long long c = evalPerm(pi, J);
-if(c < cBest){ cBest = c; piBest = pi; }
-vector<int> rev(pi.rbegin(), pi.rend());
-long long cr = evalPerm(rev, J);
-if(cr < cBest){ cBest = cr; piBest = rev; }
-};
-vector<pair<long long,int>> nkey(J);
-for(int v=0; v<4; ++v){
-for(int j=0;j<J;++j){
-long long k;
-if(v == 0) k = -wtot[j]*128;
-else if(v == 3) k = wfront[j]*128;
-else k = -wtot[j]*(108 + (long long)(rng()%41));
-nkey[j] = {k, j};
-}
-sort(nkey.begin(), nkey.end());
-vector<int> ord(J);
-for(int j=0;j<J;++j) ord[j] = nkey[j].second;
-consider(nehBuild(ord));
-}
-#ifdef DIAG
-int descPasses = 0;
-#endif
-if(!piBest.empty()){
-auto tD0 = chrono::steady_clock::now();
-long long curP = cBest;
-vector<int> nbase; nbase.reserve(J);
-vector<int> ncand; ncand.reserve(J);
-for(int pass=0; pass<6; ++pass){
-bool imp = false;
-#ifdef DIAG
-descPasses = pass+1;
-#endif
-for(int i=0;i<J;++i){
-if(chrono::steady_clock::now() - tD0 > chrono::milliseconds(25)){ pass = 6; break; }
-int j = piBest[i];
-nbase.clear();
-for(int t=0;t<J;++t) if(t != i) nbase.push_back(piBest[t]);
-int bp = -1; long long bc = curP;
-for(int p=0;p<J;++p){
-ncand.clear();
-for(int t=0;t<p;++t) ncand.push_back(nbase[t]);
-ncand.push_back(j);
-for(int t=p;t<J-1;++t) ncand.push_back(nbase[t]);
-long long c = evalPerm(ncand, J);
-if(c < bc){ bc = c; bp = p; }
-}
-if(bp >= 0){
-nbase.insert(nbase.begin()+bp, j);
-piBest = nbase;
-curP = bc; imp = true;
-}
-}
-if(!imp) break;
-}
-cBest = curP;
-{
-#ifndef IG_DEEP_MS
-#define IG_DEEP_MS 180
-#endif
-#ifndef IG_SHALLOW_MS
-#define IG_SHALLOW_MS 60
-#endif
-long long gtC = curC;
-int sliceMs = (cBest < gtC + gtC/10) ? IG_DEEP_MS : IG_SHALLOW_MS;
-auto igEnd = chrono::steady_clock::now() + chrono::milliseconds(sliceMs);
-auto igCap = T0 + budget - chrono::milliseconds(700);
-if(igEnd > igCap) igEnd = igCap;
-long long sump = 0; for(int j=0;j<J;++j) sump += wtot[j];
-double Temp = 0.4 * (double)sump / (double)(J*M*10);
-vector<int> piCur = piBest, piNew;
-long long cCur = cBest;
-int dMax = J-1 < 6 ? J-1 : 6;
-int rem[6];
-int d = dMax;
-int igIter = 0;
-while(d >= 1 && chrono::steady_clock::now() < igEnd){
-++igIter;
-d = 2 + (int)(rng() % (unsigned)(dMax >= 2 ? dMax - 1 : 1)); if(d > dMax) d = dMax; if(d < 1) d = 1;
-piNew = piCur;
-for(int t=0;t<d;++t){ int i = (int)(rng() % (unsigned)piNew.size()); rem[t] = piNew[i]; piNew.erase(piNew.begin()+i); }
-long long cNew = LLONG_MAX;
-for(int t=0;t<d;++t){
-int j = rem[t]; int L = (int)piNew.size();
-igF.assign((size_t)(L+1)*M, 0);
-for(int p=0;p<L;++p){
-long long* Fp = &igF[(size_t)p*M]; long long* Fn = &igF[(size_t)(p+1)*M];
-for(int m=0;m<M;++m) Fn[m] = Fp[m];
-int jj = piNew[p]; long long cur2 = 0;
-const int* mo = m_of[jj].data();
-const long long* po = p_of[jj].data();
-for(int k=0;k<M;++k){
-int m = mo[k];
-long long s = cur2 > Fn[m] ? cur2 : Fn[m];
-cur2 = s + po[k]; Fn[m] = cur2;
-}
-}
-long long CL = 0; { long long* FL=&igF[(size_t)L*M]; for(int m=0;m<M;++m) if(FL[m]>CL) CL=FL[m]; }
-igQ.assign((size_t)(L+1)*M, 0);
-for(int p=L-1;p>=0;--p){
-long long* Qp = &igQ[(size_t)p*M]; long long* Qn = &igQ[(size_t)(p+1)*M];
-for(int m=0;m<M;++m) Qp[m] = Qn[m];
-int jj = piNew[p]; long long cur2 = 0;
-const int* mo = m_of[jj].data();
-const long long* po = p_of[jj].data();
-for(int k=M-1;k>=0;--k){
-int m = mo[k];
-long long tt = cur2 > Qp[m] ? cur2 : Qp[m];
-cur2 = tt + po[k]; Qp[m] = cur2;
-}
-}
-int bp = 0; long long bc = LLONG_MAX;
-const int* moj = m_of[j].data();
-const long long* poj = p_of[j].data();
-for(int p=0;p<=L;++p){
-const long long* Fp = &igF[(size_t)p*M];
-const long long* Qp = &igQ[(size_t)p*M];
-long long cur2 = 0, mk = CL;
-for(int k=0;k<M;++k){
-int m = moj[k];
-long long s = cur2 > Fp[m] ? cur2 : Fp[m];
-cur2 = s + poj[k];
-long long v = cur2 + Qp[m]; if(v > mk) mk = v;
-}
-if(mk < bc){ bc = mk; bp = p; }
-}
-piNew.insert(piNew.begin()+bp, j);
-cNew = bc;
-#ifdef DIAG
-if(igChk < 50){ long long ref = evalPerm(piNew, L+1); if(ref != bc) fprintf(stderr,"IG-ACCEL MISMATCH %lld vs %lld\n", bc, ref); ++igChk; }
-#endif
-}
-if(cNew <= cCur || (Temp > 0 && (double)(rng() & 0xfffff) * (1.0/1048576.0) < exp(-(double)(cNew - cCur)/Temp))){
-piCur = piNew; cCur = cNew;
-}
-if(cNew < cBest){
-if(cBest < igEliteC){ igEliteC = cBest; igElitePi = piBest; }
-cBest = cNew; piBest = piNew;
-} else if(cNew < igEliteC && piNew != piBest){ igEliteC = cNew; igElitePi = piNew; }
-}
-#ifdef DIAG
-fprintf(stderr, "IG iters=%d slice=%d cPi=%lld gtC=%lld %s\n", igIter, sliceMs, cBest, gtC, cBest < gtC ? "PI-WINS" : "gt-wins");
-#endif
-}
-vector<vector<int>> s(M, piBest);
-trySeed(s);
-#ifdef DIAG
-fprintf(stderr, "NEH C=%lld GTbest=%lld passes=%d %s\n", cBest, gtBest, descPasses, cBest < gtBest ? "NEH-WINS" : "gt-wins");
-#endif
-}
-}
-#endif
 long long LB = 0;
 {
 vector<long long> mload(M, 0);
@@ -866,53 +455,6 @@ span = spanShort + (spanLong - spanShort)*f/100;
 }
 return tmin + (int)(rng() % (unsigned)span);
 };
-#ifndef RST_MS
-#define RST_MS 200
-#endif
-struct Elite { vector<vector<int>> seq; long long C; unsigned long long h; };
-vector<Elite> pool;
-const int E = 6; int poolHead = 0;
-#ifdef DIAG
-long long dRst = 0, dRstElite = 0, dRstBest = 0, dInsBest = 0, dInsRB = 0, dRstWin = 0;
-#endif
-auto solHash = [&](const vector<vector<int>>& s)->unsigned long long{
-unsigned long long h = 1469598103934665603ULL;
-for(int m=0;m<M;++m) for(int j=0;j<J;++j) h = h*1099511628211ULL ^ (unsigned long long)(s[m][j]+1);
-return h;
-};
-auto poolAdd = [&](const vector<vector<int>>& s, long long C){
-unsigned long long h = solHash(s);
-for(const Elite& e : pool) if(e.h == h) return;
-if((int)pool.size() < E) pool.push_back({s, C, h});
-else { pool[poolHead] = {s, C, h}; poolHead = (poolHead+1)%E; }
-};
-vector<vector<int>> rb; long long rbC = LLONG_MAX;
-int failCnt = 0;
-bool afterRst = false;
-auto lastReoptT = T0;
-int lastReoptM = -1;
-if(!igElitePi.empty()){
-vector<vector<int>> es(M, igElitePi);
-long long ec = evalSeq(es);
-if(ec > 0) poolAdd(es, ec);
-evalSeq(cur, true);
-}
-#ifndef NO_SWEEP
-if(J > 2){
-vector<pair<long long,int>> mord(M);
-{
-vector<long long> mload(M, 0);
-for(int j=0;j<J;++j) for(int k=0;k<M;++k) mload[m_of[j][k]] += p_of[j][k];
-for(int m=0;m<M;++m) mord[m] = {-mload[m], m};
-sort(mord.begin(), mord.end());
-}
-for(int t=0;t<M;++t){
-if(chrono::steady_clock::now() >= T_end) break;
-reoptMachine(mord[t].second, cur, curC, bestC, best, T_end, lastImpT);
-}
-if(bestC <= LB) timeUp = true;
-}
-#endif
 #ifdef DIAG
 int iterLastImp = 0;
 #endif
@@ -924,27 +466,6 @@ if((iter & 16383) == 0){
 long long fc = evalSeq(cur, true);
 if(fc >= 0) curC = fc;
 }
-#ifndef NO_TRIG
-if(J > 2 && nowT - lastImpT > chrono::milliseconds(150) && nowT - lastReoptT > chrono::milliseconds(60)){
-lastReoptT = nowT;
-static vector<long long> critW, loadW;
-critW.assign(M, 0); loadW.assign(M, 0);
-for(int u=0;u<N;++u){
-int mm = m_of[u/M][u%M];
-loadW[mm] += pnode[u];
-if(crit[u]) critW[mm] += pnode[u];
-}
-int pick = -1;
-for(int mm=0;mm<M;++mm){
-if(mm == lastReoptM) continue;
-if(pick < 0 || critW[mm] > critW[pick] || (critW[mm] == critW[pick] && loadW[mm] > loadW[pick])) pick = mm;
-}
-if(pick >= 0){
-lastReoptM = pick;
-reoptMachine(pick, cur, curC, bestC, best, T_end, lastImpT);
-}
-}
-#endif
 genMoves(cur);
 int nmv = (int)gmoves.size();
 #ifdef DIAG
@@ -1039,47 +560,27 @@ break;
 }
 }
 if(!applied) break;
-if(curC < rbC){ rbC = curC; rb = cur; }
 if(curC < bestC){
 long long exact = evalSeq(cur, true);
 curC = exact;
 if(exact >= 0 && exact < bestC){
 best = cur; bestC = exact; sinceImp = 0;
 lastImpT = chrono::steady_clock::now();
-poolAdd(cur, exact);
-failCnt = 0;
 #ifdef DIAG
 iterLastImp = iter;
-dInsBest++;
-if(afterRst) dRstWin++;
 #endif
-afterRst = false;
 if(bestC <= LB) break;
 }
 }
-else {
-++sinceImp;
-long long stag = chrono::duration_cast<chrono::milliseconds>(nowT - lastImpT).count();
-if(stag > RST_MS){
-if(rbC <= bestC + bestC/50 && !rb.empty()){
-poolAdd(rb, rbC);
-#ifdef DIAG
-dInsRB++;
-#endif
-}
-if(pool.empty() || (rng() & 1)){
+else if(++sinceImp > stuckLim){
 cur = best;
-#ifdef DIAG
-dRstBest++;
+long long cc = evalSeq(cur, true);
+curC = cc;
+#ifndef KICK_BASE
+#define KICK_BASE 1
+#define KICK_RAND 2
 #endif
-} else {
-cur = pool[rng()%pool.size()].seq;
-#ifdef DIAG
-dRstElite++;
-#endif
-}
-curC = evalSeq(cur, true);
-int kicks = 2 + failCnt + (int)(rng() % 2); if(kicks > 8) kicks = 8;
+int kicks = KICK_BASE + (KICK_RAND ? (int)(rng() % KICK_RAND) : 0);
 for(int r=0; r<kicks; ++r){
 if(chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
 genMoves(cur);
@@ -1091,20 +592,12 @@ if(nc < 0){ undoMove(cur, mv); evalSeq(cur, true); }
 else curC = nc;
 }
 fill(tabuTB.begin(), tabuTB.end(), 0);
-sinceImp = 0; rbC = LLONG_MAX;
-lastImpT = chrono::steady_clock::now();
-++failCnt;
-afterRst = true;
-#ifdef DIAG
-dRst++;
-#endif
-}
+sinceImp = 0;
 }
 }
 #ifdef DIAG
 extern long long g_pops, g_calls;
-extern long long g_roAtt, g_roAcc, g_roCyc, g_roUs;
-fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d) reopt att=%lld acc=%lld cyc=%lld ms=%.1f rst=%lld(best %lld/elite %lld, wins %lld) pool ins=%lld/%lld\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N, g_roAtt, g_roAcc, g_roCyc, g_roUs/1000.0, dRst, dRstBest, dRstElite, dRstWin, dInsBest, dInsRB);
+fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d)\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N);
 #endif
 }
 {
@@ -1393,7 +886,7 @@ buf[p++] = (i + 1 < J) ? ' ' : '\n';
 fwrite(buf, 1, p, stdout);
 }
 int solve(){
-START = clock();
+START = ::G_START;
 J = ::J; M = ::M; N = J * M;
 machJK = ::m_of;
 procJK = ::p_of;
@@ -1698,7 +1191,7 @@ buf[p++] = (i + 1 < J) ? ' ' : '\n';
 fwrite(buf, 1, p, stdout);
 }
 int solveParsed(int Jin, int Min, const vector<vector<int>>& m_in, const vector<vector<long long>>& p_in){
-START = clock();
+START = ::G_START;
 J = Jin; M = Min; N = J * M;
 machJK = m_in;
 procJK = p_in;
@@ -2055,7 +1548,7 @@ buf[p++] = (i + 1 < J) ? ' ' : '\n';
 fwrite(buf, 1, p, stdout);
 }
 int solveParsed(int Jin, int Min, const vector<vector<int>>& m_in, const vector<vector<long long>>& p_in){
-START = clock();
+START = ::G_START;
 J = Jin; M = Min; N = J * M;
 machJK = m_in;
 procJK = p_in;
