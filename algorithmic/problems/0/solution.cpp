@@ -856,10 +856,10 @@ static R bfSolve(int minW, int base, double deadline) {
     }
     long long bestA = LLONG_MAX; int bestW = 0, bestH = 0; vector<int> bK, bO, bX, bY, tK, tO, tX, tY;
     double lastPass = 0;
-    for (int d = 0; d <= 30; d++) { // v19.5: wider W only
-        for (int sgn = (d ? -1 : 1); sgn <= 1; sgn += 2) {
-            int W = base + sgn * d; if (W < minW || W > 63) continue;
-            for (int tie = 1; tie >= 0; tie--) {   // try both tie-break directions, keep best area
+    for (int tie = 1; tie >= 0; tie--) { // cover widths before alternate tie-break
+        for (int d = 0; d <= 30; d++) {
+            for (int sgn = (d ? -1 : 1); sgn <= 1; sgn += 2) {
+                int W = base + sgn * d; if (W < minW || W > 63) continue;
                 if (elapsed_ms() + lastPass * 1.3 > deadline) goto DONE;
                 vector<int> avail = kcnt; double t0 = elapsed_ms();
                 int H = bf_pass(W, repr, idx, avail, n, tK, tO, tX, tY, tie);
