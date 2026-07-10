@@ -796,7 +796,7 @@ static void mixedShelfFillRegion(int x0, int y0, int RW, int RH, vector<int>& re
                 if(w_or > RW || h_or > Hrem) continue;
                 int kmax = Hrem / h_or;
                 if(kmax > rem[t]) kmax = rem[t];
-                if(kmax > 6) kmax = 6;
+                if(kmax > 8) kmax = 8;
                 for(int k = 1; k <= kmax; ++k) cands.push_back(k * h_or);
             }
         }
@@ -947,7 +947,7 @@ static void msCollectCands(int RW, int Hrem, const vector<int>& rem, bool allowR
             if(w_or > RW || h_or > Hrem) continue;
             int kmax = Hrem / h_or;
             if(kmax > rem[t]) kmax = rem[t];
-            int cap = allowRot ? 5 : 7;
+            int cap = allowRot ? 6 : 8;
             if(kmax > cap) kmax = cap;
             for(int k = 1; k <= kmax; ++k) cands.push_back(k * h_or);
         }
@@ -1282,22 +1282,41 @@ int main(){
         }
         g_msAlpha = 1.0;
     }
-    // Priority path: tall no-rotation split2 with alpha 0.94 early (protects c11).
+    // Priority path: tall no-rotation split2 with alpha 0.94 early (protects c11 / unlocks c9).
+    // pe caps: 80Y+80X full sweep; 48X historically misses c9, 64X+ hits it.
+    // Extra dens-weighted cuts after core 10 try for residual headroom without displacing core.
     if(!allowRot && g_bin.H * 5 > g_bin.W * 6 && elapsed() < TIME_LIMIT * 0.30){
         double oldA = g_msAlpha; g_msAlpha = 0.94;
-        auto cutsE = [&](int L){
+        auto cutsE = [&](int L, bool extended){
             vector<int> v; auto add=[&](int x){ if(x>20&&x<L-20&&find(v.begin(),v.end(),x)==v.end()) v.push_back(x); };
             add(L/3); add(L/2); add((2*L)/3); add(L/4); add((3*L)/4);
             for(int z=0; z<M && z<3; ++z){ const ItemType& it=g_items[ordDens[z]]; int d[2]={it.w,it.h};
                 for(int q=0;q<2;++q) for(int k=1;k<=3;++k){ add(d[q]*k); add(L-d[q]*k);} }
-            if((int)v.size()>10) v.resize(10); return v;
+            if(!extended){ if((int)v.size()>10) v.resize(10); return v; }
+            // extended: keep core order, append dens-heavy / fraction cuts not already present
+            add((2*L)/5); add((3*L)/5); add(L/5); add((4*L)/5); add(L/6); add((5*L)/6);
+            for(int z=0; z<M && z<6; ++z){ const ItemType& it=g_items[ordDens[z]]; int d[2]={it.w,it.h};
+                for(int q=0;q<2;++q) for(int k=1;k<=6;++k){ add(d[q]*k); add(L-d[q]*k);} }
+            if((int)v.size()>22) v.resize(22); return v;
         };
         int pe=0;
-        for(int sh:cutsE(g_bin.H))for(int mask=0;mask<8&&pe<80&&elapsed()<TIME_LIMIT*0.55;++mask,++pe)
+        for(int sh:cutsE(g_bin.H,false))for(int mask=0;mask<8&&pe<80&&elapsed()<TIME_LIMIT*0.55;++mask,++pe)
             consider(polish(splitMixedPlanY(allowRot,sh,mask,0)));
         pe=0;
-        for(int sw:cutsE(g_bin.W))for(int mask=0;mask<8&&pe<80&&elapsed()<TIME_LIMIT*0.75;++mask,++pe)
+        for(int sw:cutsE(g_bin.W,false))for(int mask=0;mask<8&&pe<80&&elapsed()<TIME_LIMIT*0.75;++mask,++pe)
             consider(polish(splitMixedPlan(allowRot,sw,mask,0)));
+        // residual extended cuts (skip first 10 already evaluated)
+        if(elapsed() < TIME_LIMIT * 0.78){
+            auto ys=cutsE(g_bin.H,true), xs=cutsE(g_bin.W,true);
+            pe=0;
+            for(size_t i=10;i<ys.size()&&pe<40&&elapsed()<TIME_LIMIT*0.78;++i)
+                for(int mask=0;mask<8&&pe<40&&elapsed()<TIME_LIMIT*0.78;++mask,++pe)
+                    consider(polish(splitMixedPlanY(allowRot,(int)ys[i],mask,0)));
+            pe=0;
+            for(size_t i=10;i<xs.size()&&pe<48&&elapsed()<TIME_LIMIT*0.82;++i)
+                for(int mask=0;mask<8&&pe<48&&elapsed()<TIME_LIMIT*0.82;++mask,++pe)
+                    consider(polish(splitMixedPlan(allowRot,(int)xs[i],mask,0)));
+        }
         g_msAlpha = oldA;
     }
 #ifdef DIAG
