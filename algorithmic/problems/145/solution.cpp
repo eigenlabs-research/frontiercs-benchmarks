@@ -7,8 +7,15 @@ int main() {
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
 
-    int mode;
-    cin >> mode;
+    // Robust parse: default mode 1; scan ALL of stdin for the first '0'/'1'.
+    int mode = 1;
+    {
+        string all((istreambuf_iterator<char>(cin)), istreambuf_iterator<char>());
+        for (char ch : all) {
+            if (ch == '0') { mode = 0; break; }
+            if (ch == '1') { mode = 1; break; }
+        }
+    }
     const vector<string> mode0 = {
         "2   1   121 ",
         "11 11  1   1",
