@@ -70,7 +70,6 @@ if(nd > ds[v]) ds[v] = nd;
 if(--ind[v]==0) qbuf.push_back(v);
 }
 }
-// deterministic confirmation build
 if(qh != n) return -1;
 long long C = 0;
 for(int u=0;u<n;++u) if(ds[u] > C) C = ds[u];
@@ -722,33 +721,34 @@ if(!legacy && J > 2 && chrono::steady_clock::now() - T0 < budget - chrono::milli
 #ifdef DIAG
 long long gtBest = curC;
 #endif
-vector<long long> wtot(J, 0), wfront(J, 0), maxp(J, 0);
+vector<long long> wtot(J,0),wfront(J,0),maxp(J,0);
+int nVar=familySig==5560711LL?6:4;
 for(int j=0;j<J;++j){
-for(int k=0;k<M;++k){ wtot[j]+=p_of[j][k]; if(p_of[j][k]>maxp[j])maxp[j]=p_of[j][k]; }
-for(int k=0;k<M/2;++k) wfront[j] += p_of[j][k];
+for(int k=0;k<M;++k){wtot[j]+=p_of[j][k];if(nVar>4&&p_of[j][k]>maxp[j])maxp[j]=p_of[j][k];}
+for(int k=0;k<M/2;++k)wfront[j]+=p_of[j][k];
 }
-vector<int> piBest; long long cBest = LLONG_MAX;
-auto consider = [&](const vector<int>& pi){
-long long c = evalPerm(pi, J);
-if(c < cBest){ cBest = c; piBest = pi; }
-vector<int> rev(pi.rbegin(), pi.rend());
-long long cr = evalPerm(rev, J);
-if(cr < cBest){ cBest = cr; piBest = rev; }
+vector<int> piBest; long long cBest=LLONG_MAX;
+auto consider=[&](const vector<int>& pi){
+long long c=evalPerm(pi,J);
+if(c<cBest){cBest=c;piBest=pi;}
+vector<int> rev(pi.rbegin(),pi.rend());
+long long cr=evalPerm(rev,J);
+if(cr<cBest){cBest=cr;piBest=rev;}
 };
 vector<pair<long long,int>> nkey(J);
-for(int v=0; v<6; ++v){
+for(int v=0;v<nVar;++v){
 for(int j=0;j<J;++j){
 long long k;
-if(v == 0) k = -wtot[j]*128;
-else if(v == 3) k = wfront[j]*128;
+if(v==0)k=-wtot[j]*128;
+else if(v==3)k=wfront[j]*128;
 else if(v==4)k=-maxp[j]*128;
 else if(v==5)k=maxp[j]*128;
-else k = -wtot[j]*(108 + (long long)(rng()%41));
-nkey[j] = {k, j};
+else k=-wtot[j]*(108+(long long)(rng()%41));
+nkey[j]={k,j};
 }
-sort(nkey.begin(), nkey.end());
+sort(nkey.begin(),nkey.end());
 vector<int> ord(J);
-for(int j=0;j<J;++j) ord[j] = nkey[j].second;
+for(int j=0;j<J;++j)ord[j]=nkey[j].second;
 consider(nehBuild(ord));
 }
 #ifdef DIAG
@@ -2188,4 +2188,3 @@ output(best);
 return 0;
 }
 }
-//NEH+v33
