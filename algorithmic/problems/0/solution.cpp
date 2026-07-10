@@ -1,11 +1,9 @@
-// v19.9: v19.5 + PP_CAPDW default 3 (was 2); local small-band A/B winner
+// v19.12: n/2 late + 2nd RNG pass
 #include <bits/stdc++.h>
 using namespace std;
 
-
-
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 1890.0; // Hard global deadline (env POLYPACK_TL override)
+static double TL_MS = 1890.0; 
 static inline double elapsed_ms() {
     return chrono::duration<double, milli>(chrono::steady_clock::now() - T0).count();
 }
@@ -362,7 +360,6 @@ static bool crownRepack(R& r, double deadlineMs) {
                     r.W = newW; r.H = newH; r.A = newA;
                     improvedAny = true;
                     anyDepthOk = true;
-                    if (getenv("PP_DEBUG")) fprintf(stderr, "crown: shaved %d row(s) (crown size %zu) A=%lld->%lld\n", crownDepth, crown.size(), origA, newA);
                     break; // success at this depth, move to next round
                 } else {
                     ok = false;
@@ -869,7 +866,6 @@ static R bfSolve(int minW, int base, double deadline) {
         }
     }
     DONE:;
-    if (getenv("PP_DEBUG")) fprintf(stderr, "bf: bestW=%d base=%d H=%d fill=%.4f K=%d idx=%zu lastPass=%.0f t=%.0f\n", bestW, base, bestH, (double)S/((double)bestW*bestH), K, idx.size(), lastPass, elapsed_ms());
     R r; if (bestW == 0) { r.ok = false; return r; }
     r.W = bestW; r.H = bestH; r.A = bestA; r.ok = true; r.packW = bestW;
     vector<int> mcur(K, 0);
@@ -1014,8 +1010,7 @@ int main() {
     bool useBF = (bfEnv < 0) ? (n >= BF_N && base <= 63 && minW <= 63) : (bfEnv > 0);
     if (useBF) {
         bestR = bfSolve(minW, min(base, 63), TL_MS - 40.0); // more leftover for GRASP
-        // BF path previously skipped final crown — multi-row crown can shave BF packings
-        if (bestR.ok) crownRepack(bestR, TL_MS - 5.0);
+                if (bestR.ok) crownRepack(bestR, TL_MS - 5.0);
     }
     if (!bestR.ok) {
     double tFB0 = elapsed_ms();
@@ -1056,7 +1051,6 @@ int main() {
     const double SEARCH_END = TL_MS;           // hard abort for any pack
     const double SOFT_END = TL_MS - 15.0;      // don't start new work after this
 
-
     vector<int> ordBLF = idx;
     stable_sort(ordBLF.begin(), ordBLF.end(), [&](int a, int b) {
         if (ps[a].k != ps[b].k) return ps[a].k > ps[b].k;
@@ -1079,7 +1073,6 @@ int main() {
             static double RTHRESH = envInt("PP_RTHRESH", 200) / 100.0;
             if (swinPred < RTHRESH * expL) big = true; // env too slow for this size: big path wins
         }
-        if (getenv("PP_DEBUG")) fprintf(stderr, "tFB=%.2f swin=%d (n/4=%d) big=%d\n", tFB, swin, max(1, n / 4), (int)big);
     }
     bool skipSweep = (big && BIGBLF) || (!big && SMALLBLF);
     int expLIM = big ? min(max(1, n / 4), (int)(350000 / max(1LL, S - 3500))) : 0;
@@ -1186,7 +1179,7 @@ int main() {
             if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
                 int W;
                 {
-                    static int dwBase = envInt("PP_CAPDW", 3); // v19.9: was 2; local A/B +holdout
+                    static int dwBase = envInt("PP_CAPDW", 3); 
                     static int dwWide = envInt("PP_CAPDWW", 6);
                     static int wideP = envInt("PP_CAPWIDEP", 25);
                     int dw = ((int)(rng.nxt() % 100) < wideP) ? dwWide : dwBase;
@@ -1241,7 +1234,6 @@ int main() {
                            : pack_blf(W, obuf, policy, SEARCH_END);
                 double dt = elapsed_ms() - t1;
                 cntBLF++; avgBLF = (avgBLF * (cntBLF - 1) + dt) / cntBLF;
-                if (getenv("PP_DEBUG")) fprintf(stderr, "BLF W=%d dt=%.1f ok=%d A=%lld best=%lld\n", W, dt, (int)r.ok, r.ok ? r.A : -1, bestR.A);
                 if (!r.ok) break;
                 crownRepack(r, SEARCH_END);
                 if (better(r, bestR)) { ilsOrd = obuf; ilsW = W; bestR = move(r); }
@@ -1264,26 +1256,32 @@ int main() {
             }
         }
     }
-    // late restart: try shuffled orderings at best width for fresh diversification
-    static int LATE = envInt("PP_LATE", 4);
+        static int LATE = envInt("PP_LATE", 4);
+    static int LATE2 = envInt("PP_LATE2", 4); 
     if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30 && LATE > 0) {
         int lateW = bestR.packW;
         int lateHcap = max(1, (int)(bestR.A / lateW) - 1);
-        if (lateHcap >= minW) {
-            for (int attempt = 0; attempt < LATE && elapsed_ms() < SOFT_END - 10; attempt++) {
+        auto latePass = [&](RNG& Rng, int ntry) {
+            if (lateHcap < minW) return;
+            for (int attempt = 0; attempt < ntry && elapsed_ms() < SOFT_END - 10; attempt++) {
                 vector<int> randOrd = idx;
                 int ns = max(1, n / 2);
-                for (int s = 0; s < ns; s++) { int a = rng.rint(n), b = rng.rint(n); swap(randOrd[a], randOrd[b]); }
-                R r = pack_capped(lateW, lateHcap, randOrd, max(1, n / 4), SEARCH_END, rng);
+                for (int s = 0; s < ns; s++) { int a = Rng.rint(n), b = Rng.rint(n); swap(randOrd[a], randOrd[b]); }
+                R r = pack_capped(lateW, lateHcap, randOrd, max(1, n / 4), SEARCH_END, Rng);
                 if (r.ok) { crownRepack(r, SEARCH_END); if (better(r, bestR)) bestR = move(r); }
             }
+        };
+        latePass(rng, LATE);
+        if (LATE2 > 0 && elapsed_ms() < SOFT_END - 25) {
+            RNG rng2(0xA5A5F00DULL ^ ((unsigned long long)n * 0x9E3779B97F4A7C15ULL) ^ (unsigned long long)S);
+                        lateHcap = max(1, (int)(bestR.A / lateW) - 1);
+            lateW = bestR.packW;
+            lateHcap = max(1, (int)(bestR.A / lateW) - 1);
+            latePass(rng2, LATE2);
         }
     }
-    } // end champion search block (skipped when best-fit produced the result)
-    if (getenv("PP_DEBUG")) fprintf(stderr, "t_search_done=%.1f\n", elapsed_ms());
-    if (!useBF) crownRepack(bestR, TL_MS + 10.0);
+    }     if (!useBF) crownRepack(bestR, TL_MS + 10.0);
     else if (bestR.ok) crownRepack(bestR, TL_MS + 10.0); // second pass if time
-    if (getenv("PP_DEBUG")) fprintf(stderr, "t_crown_done=%.1f\n", elapsed_ms());
 
     int maxX = -1, maxY = -1;
     for (auto& p : bestR.pl) {
@@ -1325,7 +1323,6 @@ int main() {
         out += to_string(ans[i][3]); out += '\n';
     }
     fwrite(out.data(), 1, out.size(), stdout);
-    if (getenv("PP_DEBUG")) fprintf(stderr, "t_output_done=%.1f\n", elapsed_ms());
     fflush(stdout);
     _Exit(0); // skip destructor teardown of large heaps
 }
