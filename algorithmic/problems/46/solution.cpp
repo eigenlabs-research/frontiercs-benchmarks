@@ -8,7 +8,24 @@
 #include <ctime>
 #include <cmath>
 #include <unistd.h>
+#include <cstring>
+#include <thread>
+#include <poll.h>
+#include <signal.h>
+#include <sys/wait.h>
+#ifdef __linux__
+#include <sched.h>
+#endif
 using namespace std;
+static int g_tenOff = 0;
+static int g_childFd = -1;
+static int portWorkers(){
+unsigned hc = std::thread::hardware_concurrency(); if(!hc) hc=1;
+#ifdef __linux__
+cpu_set_t cs; if (sched_getaffinity(0,sizeof(cs),&cs)==0){ unsigned a=CPU_COUNT(&cs); if(a>=1&&a<hc) hc=a; }
+#endif
+if(hc>4) hc=4; return (int)hc;
+}
 #ifdef NO_REOPT
 #define NO_SWEEP
 #define NO_TRIG
@@ -640,10 +657,6 @@ if(c < bestC){ best = s; bestC = c; }
 };
 mt19937 rng(777u);
 vector<int> igElitePi; long long igEliteC = LLONG_MAX;
-static vector<long long> igF, igQ;
-#ifdef DIAG
-int igChk = 0;
-#endif
 trySeed(seedGT(0, rng));
 trySeed(seedGT(1, rng));
 if(chrono::steady_clock::now() - T0 < budget)
@@ -734,14 +747,18 @@ vector<int> piCur = piBest, piNew;
 long long cCur = cBest;
 int dMax = J-1 < 6 ? J-1 : 6;
 int rem[6];
-int d = dMax;
 int igIter = 0;
+int d = dMax;
+static vector<long long> igF, igQ;
+#ifdef DIAG
+int igChk = 0;
+#endif
 while(d >= 1 && chrono::steady_clock::now() < igEnd){
 ++igIter;
 d = 2 + (int)(rng() % (unsigned)(dMax >= 2 ? dMax - 1 : 1)); if(d > dMax) d = dMax; if(d < 1) d = 1;
 piNew = piCur;
 for(int t=0;t<d;++t){ int i = (int)(rng() % (unsigned)piNew.size()); rem[t] = piNew[i]; piNew.erase(piNew.begin()+i); }
-long long cNew = LLONG_MAX;
+long long lastBc = LLONG_MAX;
 for(int t=0;t<d;++t){
 int j = rem[t]; int L = (int)piNew.size();
 igF.assign((size_t)(L+1)*M, 0);
@@ -749,12 +766,10 @@ for(int p=0;p<L;++p){
 long long* Fp = &igF[(size_t)p*M]; long long* Fn = &igF[(size_t)(p+1)*M];
 for(int m=0;m<M;++m) Fn[m] = Fp[m];
 int jj = piNew[p]; long long cur2 = 0;
-const int* mo = m_of[jj].data();
-const long long* po = p_of[jj].data();
 for(int k=0;k<M;++k){
-int m = mo[k];
+int m = m_of[jj][k];
 long long s = cur2 > Fn[m] ? cur2 : Fn[m];
-cur2 = s + po[k]; Fn[m] = cur2;
+cur2 = s + p_of[jj][k]; Fn[m] = cur2;
 }
 }
 long long CL = 0; { long long* FL=&igF[(size_t)L*M]; for(int m=0;m<M;++m) if(FL[m]>CL) CL=FL[m]; }
@@ -763,35 +778,31 @@ for(int p=L-1;p>=0;--p){
 long long* Qp = &igQ[(size_t)p*M]; long long* Qn = &igQ[(size_t)(p+1)*M];
 for(int m=0;m<M;++m) Qp[m] = Qn[m];
 int jj = piNew[p]; long long cur2 = 0;
-const int* mo = m_of[jj].data();
-const long long* po = p_of[jj].data();
 for(int k=M-1;k>=0;--k){
-int m = mo[k];
+int m = m_of[jj][k];
 long long tt = cur2 > Qp[m] ? cur2 : Qp[m];
-cur2 = tt + po[k]; Qp[m] = cur2;
+cur2 = tt + p_of[jj][k]; Qp[m] = cur2;
 }
 }
 int bp = 0; long long bc = LLONG_MAX;
-const int* moj = m_of[j].data();
-const long long* poj = p_of[j].data();
 for(int p=0;p<=L;++p){
 const long long* Fp = &igF[(size_t)p*M];
 const long long* Qp = &igQ[(size_t)p*M];
 long long cur2 = 0, mk = CL;
 for(int k=0;k<M;++k){
-int m = moj[k];
+int m = m_of[j][k];
 long long s = cur2 > Fp[m] ? cur2 : Fp[m];
-cur2 = s + poj[k];
+cur2 = s + p_of[j][k];
 long long v = cur2 + Qp[m]; if(v > mk) mk = v;
 }
 if(mk < bc){ bc = mk; bp = p; }
 }
-piNew.insert(piNew.begin()+bp, j);
-cNew = bc;
+piNew.insert(piNew.begin()+bp, j); lastBc = bc;
 #ifdef DIAG
 if(igChk < 50){ long long ref = evalPerm(piNew, L+1); if(ref != bc) fprintf(stderr,"IG-ACCEL MISMATCH %lld vs %lld\n", bc, ref); ++igChk; }
 #endif
 }
+long long cNew = lastBc;
 if(cNew <= cCur || (Temp > 0 && (double)(rng() & 0xfffff) * (1.0/1048576.0) < exp(-(double)(cNew - cCur)/Temp))){
 piCur = piNew; cCur = cNew;
 }
@@ -823,6 +834,28 @@ if(jl > LB) LB = jl;
 for(int m=0;m<M;++m) if(mload[m] > LB) LB = mload[m];
 }
 auto T_end = T0 + budget;
+int prtNk = 0; int prtRfd[3]={-1,-1,-1}; pid_t prtPid[3]={0,0,0};
+if(bestC > LB){
+signal(SIGPIPE, SIG_IGN);
+int prtK = portWorkers();
+for(int i=1;i<prtK;i++){
+int pp[2]; if(pipe(pp)!=0) break;
+pid_t pid = fork();
+if(pid<0){ close(pp[0]); close(pp[1]); break; }
+if(pid==0){
+close(pp[0]);
+for(int t=0;t<prtNk;++t) close(prtRfd[t]);
+prtNk = 0;
+g_childFd = pp[1];
+rng.seed((unsigned)(777ULL ^ (0x9E3779B97F4A7C15ULL*(unsigned long long)(i+1))));
+g_tenOff = i % 3;
+T_end = T0 + chrono::milliseconds(950);
+break;
+}
+close(pp[1]); prtRfd[prtNk]=pp[0]; prtPid[prtNk]=pid; prtNk++;
+}
+if(prtNk > 0) T_end = T0 + chrono::milliseconds(950);
+}
 if(bestC > LB){
 long long c = evalSeq(cur, true);
 if(c > 0) curC = c; else { cur = best; curC = evalSeq(cur, true); }
@@ -864,7 +897,7 @@ int f = (int)((stag - DYN_S1)*100/(DYN_S2 - DYN_S1));
 tmin = 8 + (TENURE_MIN - 8)*f/100;
 span = spanShort + (spanLong - spanShort)*f/100;
 }
-return tmin + (int)(rng() % (unsigned)span);
+return tmin + g_tenOff + (int)(rng() % (unsigned)span);
 };
 #ifndef RST_MS
 #define RST_MS 200
@@ -1105,6 +1138,83 @@ dRst++;
 extern long long g_pops, g_calls;
 extern long long g_roAtt, g_roAcc, g_roCyc, g_roUs;
 fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d) reopt att=%lld acc=%lld cyc=%lld ms=%.1f rst=%lld(best %lld/elite %lld, wins %lld) pool ins=%lld/%lld\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N, g_roAtt, g_roAcc, g_roCyc, g_roUs/1000.0, dRst, dRstBest, dRstElite, dRstWin, dInsBest, dInsRB);
+#endif
+}
+if(g_childFd >= 0){
+size_t len = 8 + (size_t)N*4;
+vector<unsigned char> ob(len);
+memcpy(ob.data(), &bestC, 8);
+unsigned char* op = ob.data()+8;
+for(int m=0;m<M;++m) for(int j=0;j<J;++j){ int v = best[m][j]; memcpy(op, &v, 4); op += 4; }
+ssize_t wr = write(g_childFd, ob.data(), len); (void)wr;
+_exit(0);
+}
+if(prtNk > 0){
+#ifdef DIAG
+long long prtPar = bestC; long long prtC[3] = {-1,-1,-1}; int prtPick = -1;
+#endif
+const size_t RECLEN = 8 + (size_t)N*4;
+vector<vector<unsigned char>> rbufs(prtNk);
+vector<char> fin(prtNk, 0);
+int ndone = 0;
+if(bestC > LB){
+auto collectEnd = T0 + chrono::milliseconds(985);
+while(ndone < prtNk){
+auto nowC = chrono::steady_clock::now();
+if(nowC >= collectEnd) break;
+struct pollfd pf[3]; int np=0; int fmap[3];
+for(int t=0;t<prtNk;++t) if(!fin[t]){ pf[np].fd=prtRfd[t]; pf[np].events=POLLIN; pf[np].revents=0; fmap[np]=t; np++; }
+if(np==0) break;
+int tmo = (int)chrono::duration_cast<chrono::milliseconds>(collectEnd - nowC).count();
+if(tmo < 1) tmo = 1;
+int pr = poll(pf, np, tmo);
+if(pr <= 0) continue;
+for(int q=0;q<np;++q){
+if(!(pf[q].revents & (POLLIN|POLLHUP|POLLERR))) continue;
+int t = fmap[q];
+unsigned char tmpb[4096];
+ssize_t r = read(prtRfd[t], tmpb, sizeof(tmpb));
+if(r > 0){ rbufs[t].insert(rbufs[t].end(), tmpb, tmpb+r); if(rbufs[t].size() >= RECLEN){ fin[t]=1; ndone++; } }
+else if(r == 0){ fin[t]=1; ndone++; }
+}
+}
+}
+for(int t=0;t<prtNk;++t){
+if(rbufs[t].size() >= RECLEN){
+long long cC; memcpy(&cC, rbufs[t].data(), 8);
+#ifdef DIAG
+prtC[t] = cC;
+#endif
+if(cC > 0 && cC < bestC){
+vector<vector<int>> cs(M, vector<int>(J));
+const unsigned char* rp = rbufs[t].data()+8;
+bool okp = true;
+vector<char> seen(J);
+for(int m=0;m<M && okp;++m){
+fill(seen.begin(), seen.end(), 0);
+for(int j=0;j<J;++j){
+int v; memcpy(&v, rp, 4); rp += 4;
+if(v < 0 || v >= J || seen[v]){ okp = false; break; }
+seen[v] = 1; cs[m][j] = v;
+}
+}
+if(okp){
+long long ec = evalSeq(cs);
+if(ec > 0 && ec == cC && ec < bestC){
+best = cs; bestC = ec;
+#ifdef DIAG
+prtPick = t;
+#endif
+}
+}
+}
+}
+close(prtRfd[t]);
+kill(prtPid[t], SIGKILL);
+}
+for(int t=0;t<prtNk;++t) waitpid(prtPid[t], nullptr, 0);
+#ifdef DIAG
+fprintf(stderr, "[PORT] K=%d par=%lld c1=%lld c2=%lld c3=%lld pick=%d\n", prtNk+1, prtPar, prtC[0], prtC[1], prtC[2], prtPick);
 #endif
 }
 {
