@@ -1,21 +1,392 @@
 #include <cstdio>
 #include <cstdint>
-#include <cstring>
-struct E{uint64_t h;const char*s;};static const E a[]={
-{1337409398582560185ULL,"I6ADPKSE120LBF9Q54COTM7JRN8HG3KAHLNOTS04EDRQP1IGF3J86BM7295CNGJA1L7Q9S3C05IFM4HO8RKBTE62PD15K0S4F9IORTQNECP2MAHJ8DBG73L64152LSHPTF763AEGODMNRBK9CI0J8QHEABG84MQJ102KSLOCRT56P7IDF93N29I8AM5LEGSTHKPCJ46N7F1RO0Q3DBQ751CDL0K4JSHP3A2I9ME6TN8GBFORTDE0P32JCQ1F7MOGRN5ILSK84HB69A97MGKJ0H2AI186LPSNOFE3R45TCDBQI7T4DJS9HQF23LA6GRP08M1NKBO5CEEDOMH1G0583RSPKI7A2J9NCBL4Q6TFT07D2M1KEI89LO64NH3BRC5SJAPGFQMJI5G8KC7A20EDL3H4NPOFB6RQT1S9JMBHS32QCP87KAERLO19045GI6FTND4BC5K01HM87AI3DR2TQP9OJLGFENS6A05QIKFRJL2783PC94HED1TGNSO6MB0B6ISM32JQ9LH1FOKN8GEDC4AR75PT78PEM0FDRC4529JG3LQBHTIK1A6NSOLRET0G62S17CBIM94KAOFJHND35Q8P"},
-{1097491252512501470ULL,"cQMF37P2UbDLIB05EJYN4RWdZA16KG8OT9VXCaSHMODU1cZP3IQ5YX2CEHb0a4RWFd7A6KG8T9VLBSJNE8LGPBZ37Q65O2CVSHXbMJ0NY4RWFdcA1KDUT9Ia3G57QODKdZ628PIBULaNYSHECbMJ4RWFcA1T9VX08CEUDdcP1bZM35QOGBINY0SH4RWF7A6K2T9VXLaJZU7QOc2JM0aSX5LEYNH4RWFdPA16K3DG8T9VBbCIaP4ZdOU7KN3L2I8QSB5HJYMRWFcA16DGT9VXEb0C4dDP3Z57XQO02UILBCYSaNHMRWFcA16KG8T9VEbJ52Q1cP68dZDIGEB30bMOYLS4RWF7AKUT9VXCaHJNR4WFd7cZA1P6K3DG8UTO29QVXEbBCI0LaJSHN5YM23OULD0ZB7MQP8X5bICSHY4RWFdcA16KGT9VEaJNP7F26T3LcDUN8OV5B0SEIYM4RWdZA1KGQ9XbCaHJEPKOG7U0D5S2Q6NCLabHBYM4RWFdZcA138T9VXIJ8XVTOcLJD3PUGE2C5IBHMYSN4RWFd7ZA16KQ9b0ab4cD8PGY5O3UL1X2N0IMCSHRWFd7ZA6KQT9VEBaJ"},
-{13064344411517067317ULL,"FS9LDPQ5ETIM7AK01RJ63G4OBN8HC22HSK68T05A94OB7CMLRDF3IJPQNE1G06NS89CDQ51LFMPAT43JBHEOG72IKRIJ25COTMG8BA9PFHRKLQ03D1NE67S48Q1IP2NS3AD4GMC57HLER9BKT0JO6FPEIKO75FTH3A4LMJGNCSQ29180R6DB63GACOBPEL4QMNJ8I51209HF7TDRSKH3DQOC6F84J7T1PLBE5K2S9N0MIRGAAC79BD30T28I6K1RNFH4Q5OGPJLSME8IC36EDKQA1S2MRBGJFPLH95OT4N077ON9AICF1GL3Q64SR0EBMKD285HJTPQ7AJ4605193COBTMRLFDHIG8S2NPEKMH01DFLIKR2AN83P74QOGBJ65T9SECEG1NJ4PA9KC28TH57DSL36MIQB0FRO21L3BN945KM67PES0JC8HQFGOTRADIJ5D2H190CTL48G6QKPRSBEFNIA3MO7D6O895JATS4NC1MKLIEP32FH7QRGB0CTGI7KO950ANHBMP8LREJF146SD32QALIO71JFHBSE90CN2R5QDM84KG6TP3N506Q489GMDSCTA213HORELIPJ7KBFSC54P3LHQRI9A6G1FNOE7JM20KB8DT39TA2C0NFLP7HBM5KQIRG6841DJSEO5FA79QL24DP3G0TONHCKRESMB1I8J61AL53BCKMI2F8H9PR6N0OE47SJGQDTARSGJ457BDTQ6PCL2FN0OHM3EK18I9"},
-{4443467892680442013ULL,"XDCPf2IR9OQcFd3LB5KGJS81HghaA64UWYVNb7ZeEi0TMd7XfLQTWE4H8gNhMJ5DiZ9IGYS1RB23AeP0KO6bFcaVCUBNUP8cd3RXDi2KaFTheVAZOWLHgM5091fC6SQbG7IE4JYVBhCRgSPK31fLX8ZYUHi264OcDET5Q7NdJ0FaGWI9MeAba9LEiIRfhQF73JcBO4KYPg1MZADC2NV8bTXe5SUH6Wd0G74NJS62FVa1QAHEBOKPgcXT3bWZUM95RYGfL8ed0hCIDiRPFc2SIV5WAHdKi3CDM4aTEXU0fGJ8e7b6LQgBY9NhO1ZaVPFRQ47XcEihNCUIeTG16Y0S8ObMB95fgAWZdDJL2K3H1R8a2DdfLgUFT75WSAC9I3PbQBK0eJhZ6VOHEciMNX4YG9SQ7EaKB48cPJU1ibeVf0OWFM32DTHNACGIgLRdY5hXZ6QcgdFWJL9XDNMaG4702S6CbYefI1E5i8UhZKHAVTB3RPOSfWg98iMZBhY0V6GEIRNL7AXdCPb3FKacQOT4DJ21UH5e"},
-{5397184421306091276ULL,"KPN410BM8G5Z96FE3DRIVQSJHA2XCOU7WLYTK1APJNW406BM8G5Z9FE3DRVIQSH2XCOLTY7UPKN1M40B8GZ569EF3DIVRQSJAH2OXCWLT7YUPKN104M8GBZ965EFD3RIVQJSAH2XCOWLT7YUPK1NM40GB8Z695ED3FRVQIJAH2XSCWOLT7YUPK1M4N0GBZ869EF5D3IRVQJAHS2XWOTCL7UYPK1NM0G4Z8B96E5DF3RVIQJAHS2XWOLCYT7UPKMN10G4Z869BE5DF3RVIQJAHSCX2OWTL7YUPK1NM0G4Z869BE5FD3RIJVAQH2SXWOCLT7YUPK1NM04GZ689BE5FD3VRQJAIH2SXOWCLT7YUPK1NMG40Z689BE5FD3RJVAIQHX2SOWLC7TYUPK1NM4G0Z869BEF5D3RJQAIVHSX2OWCL7TYUPK1NM4G08Z96BE5F3DJRIAQVH2XSOWCL7TYUPK1NM40G869BZE5F3RDJIQAVXH2WOSCL7YTUPK1NM4G06ZB89E5F3DRJIQAVXH2OWSCLT7UYPK1NM0G46B8Z9E5F3RJDIQVAXH2OWSCL7YTUPK1N4MG06B89ZE5F3RJIQDVAXOH2WSC7LTYUP1KNMG406B8Z9E5F3JIRQDVAOXHWS2C7LTYUP1KNM0G46B8ZE9F5RJ3IQDAVHOXWSC27LTYUPK1NGM06B89ZE5F3JRVIQDAOHX4WCSL27TYUK1NPM40G6B8ZE95FJ3RIQDVAXOHWCL27TYSUPK1NMG640B8ZE95FJ3QIDRVAXOHSWL27YTCU"},
-{16799144620432447045ULL,"Df9aTJdQ2OmMPS3K8Wnb0Vi1jk6X4LIg7eCYEhcNAFlR5ZUBHGMUOED43ZemR87gf9lN1jdT6BXQJWHCYhiac0APF5VSbnkL2GKIhX19dOKRmM4ES328WLG7gflNTU6PQJYIeHCiaDjc0AF5VZbnBk1dlMiELOh7QA2ZWDVf9NTU6B4KSmJIeCY8ajc0PFR5XbgnkH3GJHKMXL1Th8WR2QZ3A0GVf9ilN6B4mOYIeCaDjcPF5dESbUgnk7iVDhR1TmdOP4QEn3Ge07f9lk6BXK2JLIHCYbajcNAF5ZSMUgW8O4E9aRMS820gVflN1dTUmQLIeHCYhiDjcAPF5ZXbJn6BkWG3K7NDfij6XUmOJYhaFR5CHZEMbn8c0APld3VSgBkQL2WGKeI7T1495DiaXMh8W0TARS3G7V9lN1jUB4K2LOIHCYZcfPFdEbmJgnQ6kecV9l1dTkBP4KS2QLWIGg7eYhiaDjNfFR5ZXEMbmUJn6OH80C3A"},
-{15351599476256066243ULL,"ARJC2IEQUF69431DNO5M0H8KSLBV7PTGO3ARCFJ12IQU648M90NE5DKSHLPBV7TGAQRCJF2IU3416OMD95NE08KSHVLPB7TGARCJQF2I934U16MO05NED8KSLHVPB7GTRACJQF2IOU1346M5EN90D8KHSLVPB7TGRACJQ2I341FMUO9NE650D8KHSLBVP7TGRACJQ24IU31MONEF9D6058KHVSLPB7GTRAJCQ241UIE3FNMO690D5K8SHLVBP7GTRACJQ24U1NMOE3IF960D5K8HSLVBP7GTRACQ2J4UEN3FOM5I1608D9KSVPLH7BGTCJRQA24UEN3FOMI1506D9KSL8HVPB7GTJRACQ24UE3NOMF6I1509DKSLHV8PB7GTRCQAJ42E3NUOMF6I1509DSKLHVP8B7GTRQCAJ42U3NEFOIM165L0KV98HSPDB7GTRCQAJ423EUNOFIM16LH5SVKP9D08B7GTRCQAJ24N3EUFO6IM5L0H1SVKDP98B7GTRCQAJ243UENFIMOH6L5V10D98BSKGP7TRCQAJ243UENFMILO1SK65VHD098GP7TB"},
-{2769073518643703594ULL,"P2STBEY4b6GAI38VR1NMH95XODKa7JULF0WCZQ9RQZKVS2UTDYPH5X0M4BI6F8aWN7OCbJE1LG3AUJFMAXB0G7QE1bORTPY8DNKZ35a2WCLS6IVH94ALRPZbTC75JS1FIWVQ3XHK6ME8DGY09BNa24OU39Fa4BM5PXUZHJW18SQT0RYKA6EDbIV2CNOG7L4B3WMa68D7CQY9J10ZSVLEFbHNUI5XGPAKOT2RBIbDaLQEUR6TG345MKXA980SNWPJF1C2VHY7OZQJOP6BbKL3DY8ZSAH75MNEF2a0RC1XUG4VTW9IRLX2CAPH65DIBEYKWQGM831aTSZFNU074bOVJ9MU56SHXA73YBKIQTE1R9DZbFJCPNOVa4WG280LAPL3RQDEC1YK4MNHXF092SWOI56aJB78VTUbZGW2QA5F14OHSPNCVEK3TYDMXLBIJZ8b0a69RG7UTAU0ZFaXb7KHDL4Y3E1J865PIB9RQCMNSO2GWVDNAMHWQLaUbTRZXK38IGOS196B5PE70F2J4YCVCPRM8KQ3aWAE65DIUbJ4YNB9XG0LZVOTF7S21HXHU238GBaDRIJSbVAK50M76WPYECZOQLF9T4N1C0NHAMSKPU3B5RY8WJXLID6FZbV74GOQ1T29Ea2T6Z7BJaGCH8MS5VY0DARXO3K9PU4IELFNbQW1HXabM83KDSJ7EZCT906YL5PBIGUV4Q2NAO1RFW"},
-{15367604488868639828ULL,"EMNDLCJ2F4198567OH3KBAG0IEMNDLC2JF4195867OH3KBAG0IEMNDLC2JF4195867OH3KBAG0IEMNDLC2JF4198567OH3BKAG0IEMNDLCJF2418956O7H3BKGA0IEMNDLCJF2418956O7H3BGKI0AEMNDLCJF2418956O7H3GBK0AIEMNDLCJ2F418956O7H3GBKA0IEMNDLCJ2F489516O7H3GBKA0IEMNDLCJ2F485916O7H3GBKA0IEMNDLCJ2F458916O7H3GBKA0IEMNDLCJ2F458916O7H3GBKA0IEMNDLCJ2F459861O7H3GBKA0IEMNDLJCF2459861O7H3GBKA0IEMNDLJCF24958167OHG3BKA0IEMNDLJCF24985617OHG3BAK0IEMNDLJCF29845671OHG3BAK0IEMNDLJCF29845671OHG3BAK0IEMNDLJCF29845671OHG3BAK0IEMDNLCJF29846517OHG3BAK0IEMDNLCJF29846517OHG3BAK0IEMNDLCFJ29846517OHG3BAK0IEMNDLCFJ92846517OHG3BAK0IEMNDLCFJ29845617G3BOHAK0IEMNLDCFJ98256417G3BOHKA0I"},
-{8959737032643399058ULL,"70P56DVN24MYLIE1OFQ9KSCZRUf8BTdbAX3WHcaGJeAZI6DGP2OLcVNBb083CWYEXHJd4SQ9RUe5faK1TMF7OMcdFVSU7ZP1E9CKXTW8JQ4NY5G03LA2HBDebRIfa6PVQJ945LCNcRKFT38SH2G16YAEWZdIDBbMUX0fOa7eLW0McIJY8e3ZRPa4HUdKE1f9GC7XVO6D5N2SQABTFb4fUNEeB7AO3DcQM5VTa0CGFP6KX1WYZIS8LJHd9bR2GVAYKD6Ne7QJ5fF1HCMX2WBS8TI4cbRZ9UaOL30dPEcR5KN2W71FfbT4I0Ue6PHS3VAZ9DXGJEMLCQOdYaB8d74ZB1MAG95LFNKc6SU328aWYERJbH0DQXOVCePTIfdQb5ePDXHWJaCcF03912NOI6G8ZESBT4MLVAUR7YKfVWUMITY1N294JZeK875HOEFaDR0SXGfcdAB3QbLPC6dNELPYM9JZc40Ve81aHKX2WCSOFR7fQ3TUbBAGD5I6P0FCG1SHUTcJBYZ4OfRb26aIWADQe38E97XV5MNKLd0dPaZNAMG2IBc8U71fYVE64KCWLTRDHJ9QFXOS5be3dJGeMOZE6DBUb5179CFVXK8WISfQT4RA23H0NcYLPaaBFPKA621NbDU9Td0XJeWO7ZC4VQERGcM38LYHS5fI"},
-{15096950851723449319ULL,"fKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXflKdEkTCe1jQM8WacOYBiN65I3RF24LJDUHVhS79A0GgZbPXdkTCe1jQMWacYBiN5l3I2RF4LJDHVhS79A0GfgZbPXKE8O6UfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXaV7fPXKdEkTCe1jQM8WcOYBiN65l3IRF24LJDUHhS9A0GgZbfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPX"},
-{17556072703228808712ULL,"Z6F4C7Ba20M5OH3VWDGYUIdTSbAJP8NEQXK9RLc1S1Ad9L7MaIHNXP4CZ8B20QOKcVFWY65Tb3JGDEURHSC7cUMIYGXN6PA4EB1JL05RKOFDZT2ba38QWd9VTMVKOcN6A4ZBa190LRHFD7YCId5S2bJ3P8GEUQWXM0TH1GNKXUcVd6PACEZ8JLQFD7YI5OS2bBa34W9RHdJcVWYMG64CEZ7Ba12b0LQOFDIT5SA3P8NUXK9RV17MHcNdK6A4E8JbLQXFWYCUIZ5TO2SBa3P0GD9R7FcB3SH01KVOd6P4Ca2J9MLRQXWDYUIZ5TbA8GNEPH1EYaMcVKN6AS4Z8B290LQWF7GCUI5TOb3JDXdRH1MSaVT7O9IGcX6A4Cb0LRKFYdZ52B3JP8NDEUQWcVHX1MGdNPFA4ab0LRQ3D7YCI6Z5TOS2BJ8EUWK9B37DMWdVacGKI6S4ET81J290LQHOFYCZ5bAPNUXRTEcWGHVNIPA4CB10LRQO3XFD7YU6dZ5S2baJ8MK9GJECKI1WUHdcX647BaM0LNFDYZ5TO2SbA3P8Q9RV6C7aS0JM1GcIYHdAB9RQKOFDZ5T2b34P8NEUWXVLABSd07TGYOMVKWcNP4CEZ1J295RHFUI6ba38DQXLbPASET81J9LRQKcNXF7C6Z5O2Ba340GMDUWHdYVIFH0c1ONXGK6dA4CZ7Ba2MLQDYI5TSb3JP8EUW9RV78TBWYL1HVMNXRd6P4aJ90QOKcFDGCUIZ52SbA3E4E9QFM7Nc0H1GKId6XPC8JLOVWYUZ5TS2bBAa3DR"},
-{16105635282489783152ULL,"4PD1F8L6R3E92BVCI0GWOJQS5THXUAKNM77JP4F816RELND3BI2GWOQCSHXMV9TU5AK04PF8LD16RCEVWBG7N93OJSQTHXU5AKM0I24PF38WLDN1H6RCEVBG79OJSQTXU5AKM0I24PF8LD16RCEVWBG7N93OJSQTHXU5AKM0I24PF8LD16RCEWVGB7N93OJSQTHXUA5KM0I24PF8LD16RCEVWBG7N93OJSQTHX5UAKM0I24PF8DL16CREVWG7B9NOJ3SQTHX5UAKM0I24PFL8D16RECWVBG7N93OJSQTHX5UAK02MI4PFLD816RCEWVGB79N3OJSQXTH5UMA0K2I4FP8DL16RCEWVGB79N3OJSQTX5HUAK02MI4FPL8D16RCEWVGB79NO3SJQTHX5UAK02MI4FP8DL16RECWVGB79NO3SJQTX5HUAK0M2I4FP8LD16CREWVGB79NO3SJQXT5HUAK02MI4FPD8L16RCEWVGB79NO3SJQXT5HUAK02MI4FPD8L16RECWVG7B9NO3SJXQT5HUAK0M2I4FPDL816RCEWVGB79NO3SJQXT5HUAK02MI4FPD8L61RCEWGBV79NO3SJXQT5HUAK02MI4FPDL816RCEWVGB79NO3SJXQT5HUAK2M0I4FP8DL61RWCEVGB79NOS3JXQUH5TA02IKM4FPLD816RCWEVB9OG7NS3XQJTH5UAKM20I"},
-{9210720080051577033ULL,"R61JFKOS3B5A74TG0HCDM82PE9LQNIEIT5MQ3BP47ASF98JNG0D2KOL1R6HCRDBF7JMO86G4Q9T1NA3S0ECPHKL25IHSNRITAKOLD4B91EFP85703G2QCMJ62JQ57PC1IO8460NEDHB9MAFK3LRTSG1OBRH62I90JQ4K7G8PSTCNAEDFML359N0I315A6SRJPB274KFTOMECQGDH8L70AF9NDIKS65R2B1M3GQLEPJ8O4HCTDCIJO1E0RM682L5HQG4BNP79TA3FKSH07MBJE51LD6I3G28PQRS9FNAO4TCKH95JBC8OLR0FG473A2EMNDT6IKS1QPB324JOH8ELIR0D7A15CSGMKNT9F6PQDGH36JSCFQ0PE1OR7NMBK54T8I92LA2M4AT3HB1ILD0CRKF5J9OS76EQPNG8IQH9M8PNR520SK4G6CEBADLJOT7F13B6270N9GR81FEJHOMLPCAKI45DTS3QJP643M51IC8RF9OE7QB0LH2DAKNTGSNR9FOE5I13CAGHKBJ8627Q4TMSPDL06T13Q2K8PNFJ7DHR5M0E9ASI4OGBCLB17FSI28RQ6K4MOHG3LECTP95ND0JAQP9TDKFGCJ7EMN62405HLSA83BIRO1RS5D4QJ01HOB6IMPKLF3CTN87EAG924FT16J8ALBR2DMO79PSNEC5KHQI30GJFM7R9CT1SN63DK0PAO4GEQBL8I25H"},
-{4661888390002088212ULL,"FSHE7dWUPfAeDNiJL91GRcC4M2a6hK0bVXQg5O8BYI3TZAFS7EHWdeGP9fNDiJLcUR1C04MKa6h2bVXOQBgZ5I83TYFSEdAHWPf7eNDiJ9L1GURcC2Ma6Kh0bXVO5B8Q4T3gIYZSF7HEWdAP9fNiDJe1GUcLC4MRa62Kh0bVXO5B38QgITYZFSE7HdWAfePDi9JNLRUG14cCMa26Kh0bVX5BQ8Og3ITYZSFEdW7PAfeDiJ9GHU1NcLCM6R2abKhXV054BQT8gO3ZIYSFEWdA7PfeDiN9JRUH1cGLMC62ah0KbVOX4B58Qg3TIZYSFEdW7PfeDJi9AUN1cHGMLR62Ca0KbhXV4B5Q8O3gTIYZSFEd7WPefDiJ9AN1UHLcGMR62aKChb0VX4B5QgO3I8TYZSFEWd7fPeDJi9AU1cHLGNRMCa62bhVK04XBQ58gO3IYTZSFEdWP7feiDJ9A1UcHLMNGR6a2bChVXKB045QgO8Y3TIZEFSWd7PfeDiJ9A1UcHLMNGRK6a2bhCVXB045QgO8IT3ZYFEdSWfeiDP7U9cJ1ALGHRMa6N2hKCVX04bQ5gB8OYI3ZTFWSdE7fDieP91UJcHLGARa6bhMKVCXB04Qg825NO3TIYZ"}};
-static int d(char c){const char*t="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/";return(int)(strchr(t,c)-t);}
-int main(){int J,M;if(scanf("%d%d",&J,&M)!=2)return 0;uint64_t h=1469598103934665603ULL;auto u=[&](long long x){h=(h^(uint64_t)x)*1099511628211ULL;};u(J);u(M);for(int j=0;j<J;++j)for(int k=0;k<M;++k){int m;long long p;if(scanf("%d%lld",&m,&p)!=2)return 1;u(m);u(p);}const char*s=0;for(auto&e:a)if(e.h==h){s=e.s;break;}if(!s)return 1;for(int m=0;m<M;++m)for(int j=0;j<J;++j)printf(j+1<J?"%d ":"%d\n",d(*s++));}
+#include <cstdlib>
+#include <utility>
+#include <chrono>
+
+// Job Shop Scheduling heuristic solver.
+// Emits one permutation of the jobs for each machine. The judge turns these
+// machine orders into the earliest-feasible schedule (longest path in the
+// disjunctive graph formed by the machine arcs and the job precedence chains)
+// and measures its makespan.
+//
+// Two complementary strategies are used:
+//  * Flow-shop instances (every job visits machines 0..M-1 in natural order)
+//    are tackled with the NEH insertion heuristic followed by an iterated
+//    adjacent-transposition search over a single permutation, evaluated with
+//    the standard O(J*M) flow-shop makespan dynamic program.
+//  * General job-shop instances use several serial schedule generation priority
+//    rules (critical-remaining-work, shortest-processing-time,
+//    longest-processing-time), each refined by first-improvement adjacent
+//    transposition local search inside an iterated-local-search loop. Feasible
+//    (cycle-free) orders are required and verified by a longest-path check.
+
+#define MAXDIM 96
+#define MAXOP  (MAXDIM * MAXDIM)
+
+static int J, M, n;                       // jobs, machines, total operations
+static long long procOf[MAXOP];           // processing time of operation (j*M+k)
+static int8_t machOf[MAXOP];              // machine of operation
+static long long remWork[MAXOP];          // remaining job processing from this op to job end
+static int jobPosMachine[MAXDIM][MAXDIM]; // route position k of machine m in job j
+
+static int machOrder[MAXDIM][MAXDIM];     // machOrder[m][i] = job processed i-th on machine m
+static int machLen[MAXDIM];               // jobs assigned to each machine (== J)
+static int bestOrder[MAXDIM][MAXDIM];     // best machine order found so far
+
+// Reusable workspace for the longest-path evaluation (general instances).
+static int indeg[MAXOP], outcnt[MAXOP], s0[MAXOP], s1[MAXOP], qbuf[MAXOP];
+static long long startT[MAXOP];
+
+// Longest path (makespan) in the disjunctive graph defined by the current
+// machine orders and the job precedence chains. Returns -1 if the orders induce
+// a cycle (infeasible); otherwise returns the makespan.
+static inline long long makespan() {
+    for (int i = 0; i < n; ++i) {
+        indeg[i] = outcnt[i] = 0;
+        s0[i] = s1[i] = -1;
+        startT[i] = 0;
+    }
+    // Machine arcs: consecutive jobs on each machine define the orientation.
+    for (int m = 0; m < M; ++m) {
+        for (int i = 0; i + 1 < machLen[m]; ++i) {
+            int ja = machOrder[m][i], jb = machOrder[m][i + 1];
+            int u = ja * M + jobPosMachine[ja][m];
+            int v = jb * M + jobPosMachine[jb][m];
+            if (outcnt[u] == 0) s0[u] = v; else s1[u] = v;
+            ++outcnt[u]; ++indeg[v];
+        }
+    }
+    // Job arcs: consecutive operations along each job's route.
+    for (int j = 0; j < J; ++j) {
+        for (int k = 0; k + 1 < M; ++k) {
+            int u = j * M + k, v = j * M + (k + 1);
+            if (outcnt[u] == 0) s0[u] = v; else s1[u] = v;
+            ++outcnt[u]; ++indeg[v];
+        }
+    }
+    // Kahn topological traversal carrying earliest start times.
+    int head = 0, tail = 0;
+    for (int i = 0; i < n; ++i) if (indeg[i] == 0) qbuf[tail++] = i;
+    int processed = 0;
+    long long res = 0;
+    while (head < tail) {
+        int u = qbuf[head++];
+        long long comp = startT[u] + procOf[u];
+        if (comp > res) res = comp;
+        for (int t = 0; t < outcnt[u]; ++t) {
+            int v = (t == 0) ? s0[u] : s1[u];
+            if (comp > startT[v]) startT[v] = comp;
+            if (--indeg[v] == 0) qbuf[tail++] = v;
+        }
+        ++processed;
+    }
+    if (processed < n) return -1; // cyclic orientation -> infeasible
+    return res;
+}
+
+static void copyOrders(int dst[MAXDIM][MAXDIM], const int src[MAXDIM][MAXDIM]) {
+    for (int m = 0; m < M; ++m)
+        for (int i = 0; i < J; ++i) dst[m][i] = src[m][i];
+}
+
+// Serial schedule generation with a selectable priority rule among eligible
+// operations (whose job predecessor is already scheduled). The chosen operation
+// is placed as early as possible on its machine, which always yields a feasible
+// (cycle-free) machine ordering.
+//   mode 0: critical path (largest remaining job work), ties by longer processing
+//   mode 1: shortest processing time first
+//   mode 2: longest processing time first
+static void serialSGS(int mode) {
+    static long long machAvail[MAXDIM], jobDone[MAXDIM];
+    static int schedCount[MAXDIM];
+    static bool done[MAXOP];
+    for (int i = 0; i < n; ++i) done[i] = false;
+    for (int m = 0; m < M; ++m) { machAvail[m] = 0; machLen[m] = 0; }
+    for (int j = 0; j < J; ++j) { jobDone[j] = 0; schedCount[j] = 0; }
+    int scheduled = 0;
+    while (scheduled < n) {
+        int best = -1;
+        for (int op = 0; op < n; ++op) {
+            if (done[op]) continue;
+            int j = op / M, k = op % M;
+            if (schedCount[j] != k) continue; // job predecessor not scheduled yet
+            if (best < 0) { best = op; continue; }
+            bool take = false;
+            if (mode == 0) {
+                if (remWork[op] != remWork[best]) take = remWork[op] > remWork[best];
+                else if (procOf[op] != procOf[best]) take = procOf[op] > procOf[best];
+                else take = rand() & 1;
+            } else if (mode == 1) {
+                if (procOf[op] != procOf[best]) take = procOf[op] < procOf[best];
+                else take = rand() & 1;
+            } else {
+                if (procOf[op] != procOf[best]) take = procOf[op] > procOf[best];
+                else take = rand() & 1;
+            }
+            if (take) best = op;
+        }
+        if (best < 0) break; // no eligible operation (should not occur for valid input)
+        int j = best / M, m = machOf[best];
+        long long st = machAvail[m] > jobDone[j] ? machAvail[m] : jobDone[j];
+        long long en = st + procOf[best];
+        machAvail[m] = en;
+        jobDone[j] = en;
+        done[best] = true;
+        schedCount[j]++;
+        machOrder[m][machLen[m]++] = j;
+        ++scheduled;
+    }
+}
+
+// Iterated local search for general job-shop instances. Descends from the best
+// multi-start order by first-improving adjacent transpositions per machine,
+// escapes local optima by random-walk perturbation, and restarts from a fresh
+// schedule (cycling priority rules) when no global progress is made. Only
+// feasible (cycle-free) orders are accepted; the best order found is restored.
+static void optimize() {
+    int modes[3] = {0, 1, 2};
+    long long best = -1;
+    int restartMode = 0;
+    // Multi-start: keep the lowest-makespan order among several priority rules.
+    for (int mi = 0; mi < 3; ++mi) {
+        serialSGS(modes[mi]);
+        long long ms = makespan();
+        if (ms >= 0 && (best < 0 || ms < best)) {
+            best = ms;
+            copyOrders(bestOrder, machOrder);
+        }
+    }
+    copyOrders(machOrder, bestOrder);
+    long long cur = best;
+
+    using namespace std::chrono;
+    auto t0 = steady_clock::now();
+    const long long LIMIT_US = 500000LL; // wall-clock budget for refinement
+    auto over = [&]() {
+        return duration_cast<microseconds>(steady_clock::now() - t0).count() > LIMIT_US;
+    };
+    auto nowUs = [&]() {
+        return duration_cast<microseconds>(steady_clock::now() - t0).count();
+    };
+    long long lastImprove = nowUs();
+
+    static int perm[MAXDIM];
+    auto firstImp = [&]() -> bool {
+        for (int a = 0; a < M; ++a) {
+            int m = perm[a];
+            if (machLen[m] < 2) continue;
+            for (int i = 0; i + 1 < machLen[m]; ++i) {
+                std::swap(machOrder[m][i], machOrder[m][i + 1]);
+                long long nm = makespan();
+                if (nm >= 0 && nm < cur) {
+                    cur = nm;
+                    if (cur < best) {
+                        best = cur;
+                        copyOrders(bestOrder, machOrder);
+                        lastImprove = nowUs();
+                    }
+                    return true;
+                }
+                std::swap(machOrder[m][i], machOrder[m][i + 1]);
+            }
+        }
+        return false;
+    };
+
+    for (;;) {
+        if (over()) break;
+        // Restart from a fresh schedule when no progress for a while.
+        if (nowUs() - lastImprove > 120000) {
+            serialSGS(modes[restartMode]);
+            restartMode = (restartMode + 1) % 3;
+            long long nm = makespan();
+            if (nm >= 0 && (nm < best || best < 0)) { best = nm; copyOrders(bestOrder, machOrder); }
+            cur = nm;
+            lastImprove = nowUs();
+            continue;
+        }
+        // Randomized machine scan order for first-improvement descent.
+        for (int mm = 0; mm < M; ++mm) perm[mm] = mm;
+        for (int mm = M - 1; mm > 0; --mm) {
+            int r = rand() % (mm + 1);
+            std::swap(perm[mm], perm[r]);
+        }
+        if (!firstImp()) {
+            // Local optimum reached: restore the best known order, then perturb.
+            if (best < cur) { copyOrders(machOrder, bestOrder); cur = best; }
+            for (int it = 0; it < 32 && !over(); ++it) {
+                int m = rand() % M;
+                if (machLen[m] < 2) continue;
+                int i = rand() % (machLen[m] - 1);
+                std::swap(machOrder[m][i], machOrder[m][i + 1]);
+                long long nm = makespan();
+                if (nm < 0) { std::swap(machOrder[m][i], machOrder[m][i + 1]); continue; }
+                cur = nm;
+            }
+        }
+    }
+    copyOrders(machOrder, bestOrder);
+}
+
+// True when every job visits machines in the natural order 0,1,...,M-1, i.e. a
+// (permutation) flow shop. Permutation schedules are always feasible here.
+static bool isFlowShop() {
+    for (int j = 0; j < J; ++j)
+        for (int k = 0; k < M; ++k)
+            if (machOf[j * M + k] != k) return false;
+    return true;
+}
+
+// Makespan of a permutation flow-shop schedule (same job order on every
+// machine) covering the first cnt jobs. Standard O(cnt*M) longest-path DP.
+static long long flowMs(const int *order, int cnt) {
+    static long long prevRow[MAXDIM], curRow[MAXDIM];
+    long long acc = 0;
+    for (int m = 0; m < M; ++m) { acc += procOf[order[0] * M + m]; prevRow[m] = acc; }
+    for (int i = 1; i < cnt; ++i) {
+        curRow[0] = prevRow[0] + procOf[order[i] * M];
+        for (int m = 1; m < M; ++m) {
+            long long up = prevRow[m];
+            long long left = curRow[m - 1];
+            long long mx = up > left ? up : left;
+            curRow[m] = mx + procOf[order[i] * M + m];
+        }
+        for (int m = 0; m < M; ++m) prevRow[m] = curRow[m];
+    }
+    return prevRow[M - 1];
+}
+
+// NEH heuristic: order jobs by descending total processing time, then insert
+// each job at the position minimizing the flow-shop makespan.
+static void neh(int *order) {
+    static int idx[MAXDIM], tmp[MAXDIM];
+    static long long tot[MAXDIM];
+    for (int j = 0; j < J; ++j) {
+        long long s = 0;
+        for (int k = 0; k < M; ++k) s += procOf[j * M + k];
+        tot[j] = s;
+        idx[j] = j;
+    }
+    // Selection sort: descending total processing time.
+    for (int i = 0; i < J; ++i) {
+        int p = i;
+        for (int l = i + 1; l < J; ++l)
+            if (tot[idx[l]] > tot[idx[p]]) p = l;
+        if (p != i) std::swap(idx[i], idx[p]);
+    }
+    int len = 1;
+    order[0] = idx[0];
+    for (int t = 1; t < J; ++t) {
+        int j = idx[t];
+        long long bestMs = -1;
+        int bestPos = 0;
+        for (int pos = 0; pos <= len; ++pos) {
+            for (int a = 0; a < pos; ++a) tmp[a] = order[a];
+            tmp[pos] = j;
+            for (int a = pos; a < len; ++a) tmp[a + 1] = order[a];
+            long long ms = flowMs(tmp, len + 1);
+            if (bestMs < 0 || ms < bestMs) { bestMs = ms; bestPos = pos; }
+        }
+        for (int a = len; a > bestPos; --a) order[a] = order[a - 1];
+        order[bestPos] = j;
+        ++len;
+    }
+}
+
+// Iterated local search over a single permutation for flow-shop instances,
+// evaluated with the fast flow-shop makespan. First-improving adjacent
+// transpositions plus random-walk perturbation, restoring the best found.
+static void flowOptimize() {
+    static int order[MAXDIM], bestPerm[MAXDIM];
+    neh(order);
+    if (J <= 1) {
+        for (int m = 0; m < M; ++m) {
+            for (int i = 0; i < J; ++i) machOrder[m][i] = order[i];
+            machLen[m] = J;
+        }
+        return;
+    }
+    long long cur = flowMs(order, J);
+    long long best = cur;
+    for (int i = 0; i < J; ++i) bestPerm[i] = order[i];
+
+    using namespace std::chrono;
+    auto t0 = steady_clock::now();
+    const long long LIMIT_US = 500000LL;
+    auto over = [&]() {
+        return duration_cast<microseconds>(steady_clock::now() - t0).count() > LIMIT_US;
+    };
+
+    auto firstImp = [&]() -> bool {
+        for (int i = 0; i + 1 < J; ++i) {
+            std::swap(order[i], order[i + 1]);
+            long long nm = flowMs(order, J);
+            if (nm < cur) {
+                cur = nm;
+                if (cur < best) {
+                    best = cur;
+                    for (int z = 0; z < J; ++z) bestPerm[z] = order[z];
+                }
+                return true;
+            }
+            std::swap(order[i], order[i + 1]);
+        }
+        return false;
+    };
+
+    while (!over()) {
+        if (!firstImp()) {
+            // Local optimum: restore best, then perturb with adjacent swaps.
+            for (int z = 0; z < J; ++z) order[z] = bestPerm[z];
+            cur = best;
+            for (int it = 0; it < 60 && !over(); ++it) {
+                int i = rand() % (J - 1);
+                std::swap(order[i], order[i + 1]);
+                cur = flowMs(order, J);
+                if (cur < best) {
+                    best = cur;
+                    for (int z = 0; z < J; ++z) bestPerm[z] = order[z];
+                }
+            }
+        }
+    }
+    for (int m = 0; m < M; ++m) {
+        for (int i = 0; i < J; ++i) machOrder[m][i] = bestPerm[i];
+        machLen[m] = J;
+    }
+}
+
+int main() {
+    if (scanf("%d %d", &J, &M) != 2) return 0;
+    n = J * M;
+    for (int j = 0; j < J; ++j) {
+        for (int m = 0; m < M; ++m) jobPosMachine[j][m] = -1;
+        for (int k = 0; k < M; ++k) {
+            int mm;
+            long long pp;
+            if (scanf("%d %lld", &mm, &pp) != 2) return 1;
+            int op = j * M + k;
+            machOf[op] = (int8_t)mm;
+            procOf[op] = pp;
+            jobPosMachine[j][mm] = k;
+        }
+    }
+    for (int j = 0; j < J; ++j) {
+        long long acc = 0;
+        for (int k = M - 1; k >= 0; --k) {
+            acc += procOf[j * M + k];
+            remWork[j * M + k] = acc;
+        }
+    }
+    std::srand(20240710);
+    if (isFlowShop()) flowOptimize(); else optimize();
+    for (int m = 0; m < M; ++m) {
+        for (int i = 0; i < J; ++i) {
+            if (i) std::putchar(' ');
+            std::printf("%d", machOrder[m][i]);
+        }
+        std::putchar('\n');
+    }
+    return 0;
+}
