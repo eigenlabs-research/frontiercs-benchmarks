@@ -1233,24 +1233,24 @@ static inline int rndInt(int n){ return (int)(rnd() % (unsigned long long)n); }
 static long long evaluate(const vector<vector<int>>& seq){
 for(int op = 0; op < N; ++op){
 indeg[op] = (kOf[op] > 0) ? 1 : 0;
-mSucc[op] = -1; mPred[op] = -1;
 }
 for(int m = 0; m < M; ++m){
 const vector<int>& s = seq[m];
+int a = opOnMachine(s[0], m); mPred[a] = -1;
 for(int i = 1; i < J; ++i){
-int a = opOnMachine(s[i-1], m);
 int b = opOnMachine(s[i],   m);
 mSucc[a] = b; mPred[b] = a; ++indeg[b];
+a = b;
 }
+mSucc[a] = -1;
 }
 int tail = 0, head = 0;
 for(int op = 0; op < N; ++op){
 if(indeg[op] == 0){ dist_[op] = procOp[op]; order_[tail++] = op; }
 else dist_[op] = 0;
 }
-int cnt = 0;
 while(head < tail){
-int u = order_[head++]; ++cnt;
+int u = order_[head++];
 long long du = dist_[u];
 int js = jobSucc[u];
 if(js != -1){
@@ -1263,7 +1263,7 @@ if(dist_[ms] < du + procOp[ms]) dist_[ms] = du + procOp[ms];
 if(--indeg[ms] == 0) order_[tail++] = ms;
 }
 }
-if(cnt != N) return -1;
+if(tail != N) return -1;
 long long C = 0;
 for(int op = 0; op < N; ++op) if(dist_[op] > C) C = dist_[op];
 for(int idx = N - 1; idx >= 0; --idx){
@@ -1546,24 +1546,24 @@ static inline int rndInt(int n){ return (int)(rnd() % (unsigned long long)n); }
 static long long evaluate(const vector<vector<int>>& seq){
 for(int op = 0; op < N; ++op){
 indeg[op] = (kOf[op] > 0) ? 1 : 0;
-mSucc[op] = -1; mPred[op] = -1;
 }
 for(int m = 0; m < M; ++m){
 const vector<int>& s = seq[m];
+int a = opOnMachine(s[0], m); mPred[a] = -1;
 for(int i = 1; i < J; ++i){
-int a = opOnMachine(s[i-1], m);
 int b = opOnMachine(s[i],   m);
 mSucc[a] = b; mPred[b] = a; ++indeg[b];
+a = b;
 }
+mSucc[a] = -1;
 }
 int tail = 0, head = 0;
 for(int op = 0; op < N; ++op){
 if(indeg[op] == 0){ dist_[op] = procOp[op]; order_[tail++] = op; }
 else dist_[op] = 0;
 }
-int cnt = 0;
 while(head < tail){
-int u = order_[head++]; ++cnt;
+int u = order_[head++];
 long long du = dist_[u];
 int js = jobSucc[u];
 if(js != -1){
@@ -1576,7 +1576,7 @@ if(dist_[ms] < du + procOp[ms]) dist_[ms] = du + procOp[ms];
 if(--indeg[ms] == 0) order_[tail++] = ms;
 }
 }
-if(cnt != N) return -1;
+if(tail != N) return -1;
 long long C = 0;
 for(int op = 0; op < N; ++op) if(dist_[op] > C) C = dist_[op];
 for(int idx = N - 1; idx >= 0; --idx){
@@ -1811,8 +1811,8 @@ vector<vector<int>> seq = gifflerThompson(rule);
 long long mk = evaluate(seq);
 if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
 }
-for(int r = 0; r < 150; ++r){
-vector<vector<int>> seq = gifflerThompson(r % 5);
+for(int r = 0; r < 30; ++r){
+vector<vector<int>> seq = gifflerThompson(4);
 long long mk = evaluate(seq);
 if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
 }
@@ -1851,24 +1851,24 @@ static inline int rndInt(int n){ return (int)(rnd() % (unsigned long long)n); }
 static long long evaluate(const vector<vector<int>>& seq){
 for(int op = 0; op < N; ++op){
 indeg[op] = (kOf[op] > 0) ? 1 : 0;
-mSucc[op] = -1; mPred[op] = -1;
 }
 for(int m = 0; m < M; ++m){
 const vector<int>& s = seq[m];
+int a = opOnMachine(s[0], m); mPred[a] = -1;
 for(int i = 1; i < J; ++i){
-int a = opOnMachine(s[i-1], m);
 int b = opOnMachine(s[i],   m);
 mSucc[a] = b; mPred[b] = a; ++indeg[b];
+a = b;
 }
+mSucc[a] = -1;
 }
 int tail = 0, head = 0;
 for(int op = 0; op < N; ++op){
 if(indeg[op] == 0){ dist_[op] = procOp[op]; order_[tail++] = op; }
 else dist_[op] = 0;
 }
-int cnt = 0;
 while(head < tail){
-int u = order_[head++]; ++cnt;
+int u = order_[head++];
 long long du = dist_[u];
 int js = jobSucc[u];
 if(js != -1){
@@ -1881,7 +1881,7 @@ if(dist_[ms] < du + procOp[ms]) dist_[ms] = du + procOp[ms];
 if(--indeg[ms] == 0) order_[tail++] = ms;
 }
 }
-if(cnt != N) return -1;
+if(tail != N) return -1;
 long long C = 0;
 for(int op = 0; op < N; ++op) if(dist_[op] > C) C = dist_[op];
 for(int idx = N - 1; idx >= 0; --idx){
@@ -2107,7 +2107,9 @@ tabuJob[(size_t)m * J + job] = iter + tenure;
 }
 curMk = evaluate(cur);
 if(curMk < 0){
-cur = best; rebuildPos(cur); curMk = evaluate(cur);
+if(useMode==0){ int b=useAsp?asB:alB; doSwap(cur,b,useAsp?asA:alA); }
+else { int m=useAsp?asM:alM,f=useAsp?asF:alF,t=useAsp?asT:alT; doInsert(cur,m,t,f); }
+curMk = evaluate(cur);
 }
 if(curMk < bestMk){ bestMk = curMk; best = cur; lastImprove = iter; tenure = 15 + rndInt(13); }
 ++iter;
@@ -2169,8 +2171,8 @@ vector<vector<int>> seq = gifflerThompson(rule);
 long long mk = evaluate(seq);
 if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
 }
-for(int r = 0; r < 150; ++r){
-vector<vector<int>> seq = gifflerThompson(r % 5);
+for(int r = 0; r < 30; ++r){
+vector<vector<int>> seq = gifflerThompson(4);
 long long mk = evaluate(seq);
 if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
 }
