@@ -98,8 +98,6 @@ static inline long long readLL(){
     return neg?-v:v;
 }
 
-static void legacyOracleSolve();
-
 int main(){
     T0=chrono::steady_clock::now();
     if(const char* e=getenv("SANTA_TL")){ double v=atof(e); if(v>50&&v<10000) TL_MS=v; }
@@ -112,11 +110,10 @@ int main(){
     for(int i=0;i<N;i++){ X[i]=(double)readLL(); Y[i]=(double)readLL(); }
     if(N==1){ printf("2\n0\n0\n"); return 0; }
     if(N==2){ printf("3\n0\n1\n0\n"); return 0; }
-    if(N==15000) legacyOracleSolve();
 
     vector<char> pr((size_t)N,0);
     { vector<char> comp((size_t)N,0); for(long long i=2;i<N;i++) if(!comp[i]){ pr[i]=1; for(long long q=i*i;q<N;q+=i) comp[q]=1; } }
-    bool legacyMid = N>5000 && N<16000;
+    bool legacyMid = false;
     GeomResult geom;
     if(GEOM_MODE && !legacyMid) geom=buildGeometry(X,Y);
 #ifdef GEOM_RESET_TIMER
@@ -255,7 +252,7 @@ int main(){
     }
 #endif
 #ifdef GEOM_KD_SEED
-    if(!legacyMid){
+    if(!legacyMid && el_ms() < TL_MS - 300.0){
         vector<int> kd=DynamicKD(X,Y).route();auto cycleLen=[&](const vector<int>&v){double z=0;for(int i=0;i<N;i++)z+=dist(v[i],v[(i+1)%N]);return z;};
         if(getenv("GEOM_DEBUG"))cerr<<"grid="<<(haveOrder?cycleLen(order):-1)<<" kd="<<((int)kd.size()==N?cycleLen(kd):-1)<<"\n";
         if((int)kd.size()==N&&(!haveOrder||cycleLen(kd)<cycleLen(order))){order.swap(kd);haveOrder=true;}
@@ -505,9 +502,9 @@ int main(){
             if(N<=50000){ fill(dontlook.begin(),dontlook.end(),0); b=orOptPass(); if(b) fill(dontlook.begin(),dontlook.end(),0); }
             bool c=false;
 #ifndef GEOM_SPLAY_LK
-            if(N>=8000){ fill(dontlook2.begin(),dontlook2.end(),0); c=lkPass(); if(c) fill(dontlook.begin(),dontlook.end(),0); }
+            if(N>=64){ fill(dontlook2.begin(),dontlook2.end(),0); c=lkPass(); if(c) fill(dontlook.begin(),dontlook.end(),0); }
 #else
-            if(N>=8000){c=fastLkPass();if(c)fill(dontlook.begin(),dontlook.end(),0);}
+            if(N>=64){c=fastLkPass();if(c)fill(dontlook.begin(),dontlook.end(),0);}
 #endif
             if(!a && !b && !c) break;
         }
@@ -532,10 +529,11 @@ int main(){
 
     vector<int> best=order; int bestDir=0;
     double bestLen=evalBest(bestDir);
-    if(N==40000){
+    if(N>=8){
         uint64_t rng=0x9e3779b97f4a7c15ULL ^ (uint64_t)N*2654435761ULL;
         auto rnd=[&](){ rng^=rng<<7; rng^=rng>>9; return rng; };
         int win = N<=60?N:max(24,min(N,N<=2000?N/4:(N<=50000?400:N)));
+        int stale=0;
         while(el_ms()<TL_MS){
             int span = min(win, N-1);
             if(span<4) break;
@@ -558,30 +556,8 @@ int main(){
             while(el_ms()<TL_MS){ if(!twoOptPass()) break; }
             if(N<=50000){ orOptPass(); while(el_ms()<TL_MS){ if(!twoOptPass()) break; } }
             int d2=0; double L=evalBest(d2);
-            if(L<bestLen-1e-6){ bestLen=L; best=order; bestDir=d2; }
-            else { order=best; for(int i=0;i<N;i++) pos[order[i]]=i; } // revert
-        }
-        order=best; for(int i=0;i<N;i++) pos[order[i]]=i;
-    } else if(N>=8){
-        uint64_t rng=0x9e3779b97f4a7c15ULL ^ (uint64_t)N*2654435761ULL;
-        auto rnd=[&](){ rng^=rng<<7; rng^=rng>>9; return rng; };
-        while(el_ms()<TL_MS){
-            int a=1+(int)(rnd()%(N-3)), b=1+(int)(rnd()%(N-3)), c=1+(int)(rnd()%(N-3));
-            int lo=min({a,b,c}), hi=max({a,b,c}), mid=a+b+c-lo-hi;
-            if(lo==mid||mid==hi){ continue; }
-            static vector<int> nt; nt.clear(); nt.reserve(N);
-            for(int i=0;i<lo;i++) nt.push_back(order[i]);
-            for(int i=mid;i<hi;i++) nt.push_back(order[i]);
-            for(int i=lo;i<mid;i++) nt.push_back(order[i]);
-            for(int i=hi;i<N;i++) nt.push_back(order[i]);
-            order.swap(nt);
-            for(int i=0;i<N;i++) pos[order[i]]=i;
-            fill(dontlook.begin(),dontlook.end(),0);
-            while(el_ms()<TL_MS){ if(!twoOptPass()) break; }
-            if(N<=50000){ fill(dontlook.begin(),dontlook.end(),0); orOptPass(); while(el_ms()<TL_MS){ if(!twoOptPass()) break; } }
-            int d2=0; double L=evalBest(d2);
-            if(L<bestLen-1e-6){ bestLen=L; best=order; bestDir=d2; }
-            else { order=best; for(int i=0;i<N;i++) pos[order[i]]=i; } // revert
+            if(L<bestLen-1e-6){ bestLen=L; best=order; bestDir=d2; stale=0; }
+            else { order=best; for(int i=0;i<N;i++) pos[order[i]]=i; if(++stale>200 && N<64) break; } // revert
         }
         order=best; for(int i=0;i<N;i++) pos[order[i]]=i;
     }
@@ -609,7 +585,7 @@ int main(){
     }
 #endif
 
-    if(N>=12){
+    if(N>=10){
         auto sAt=[&](int p)->int{ return p<N? seq[p]:0; };
         auto stepCost=[&](int t)->double{ int a=seq[t-1], b=sAt(t); double d=dist(a,b); if(t%10==0&&!pr[a]) d*=1.1; return d; };
         int window = N<=1200? N : (N<=5000?120:(N<=20000?140:80));
@@ -642,321 +618,6 @@ int main(){
         vector<int> rev(N);rev[0]=0;for(int i=1;i<N;i++)rev[i]=seq[N-i];
         if(exact(rev)<exact(seq))seq.swap(rev);
     }
-
-    string out; out.reserve((size_t)N*7+16);
-    out+=to_string(N+1); out+='\n';
-    for(int i=0;i<N;i++){ out+=to_string(seq[i]); out+='\n'; }
-    out+="0\n";
-    fwrite(out.data(),1,out.size(),stdout);
-    fflush(stdout);
-    _Exit(0);
-}
-
-__attribute__((noinline)) static void legacyOracleSolve(){
-    vector<char> pr((size_t)N,0);
-    { vector<char> comp((size_t)N,0); for(long long i=2;i<N;i++) if(!comp[i]){ pr[i]=1; for(long long q=i*i;q<N;q+=i) comp[q]=1; } }
-    if(N>100000) TL_MS -= 20.0;
-    double RESERVE = N==15000?10.0:(N>150000?220.0:(N>50000?90.0:(N>5000?50.0:40.0)));
-    TL_MS -= RESERVE; // reserve tail for endgame touch-up
-
-    double minx=X[0],maxx=X[0],miny=Y[0],maxy=Y[0];
-    for(int i=1;i<N;i++){ minx=min(minx,X[i]);maxx=max(maxx,X[i]);miny=min(miny,Y[i]);maxy=max(maxy,Y[i]); }
-    double w=max(1.0,maxx-minx), h=max(1.0,maxy-miny);
-    int G=max(1,(int)floor(sqrt((double)N/2.0)));
-    double cw=w/G, ch=h/G;
-    auto gx=[&](double x){ int c=(int)((x-minx)/cw); return c<0?0:(c>=G?G-1:c); };
-    auto gy=[&](double y){ int c=(int)((y-miny)/ch); return c<0?0:(c>=G?G-1:c); };
-    vector<int> cellOf(N), cnt(G*G+1,0);
-    for(int i=0;i<N;i++){ int c=gx(X[i])*G+gy(Y[i]); cellOf[i]=c; cnt[c+1]++; }
-    for(int i=0;i<G*G;i++) cnt[i+1]+=cnt[i];
-    vector<int> bucket(N); { vector<int> tmp=cnt; for(int i=0;i<N;i++) bucket[tmp[cellOf[i]]++]=i; }
-
-    int K=min(N-1, N>50000?6:(N>5000?24:10));
-    vector<int> nbr((size_t)N*K,-1);
-    {
-        vector<pair<double,int>> cand; cand.reserve(128);
-        for(int i=0;i<N;i++){
-            int cx=gx(X[i]),cy=gy(Y[i]); cand.clear();
-            int ring=0, extra=1;
-            while(true){
-                int x0=max(0,cx-ring),x1=min(G-1,cx+ring),y0=max(0,cy-ring),y1=min(G-1,cy+ring);
-                for(int xx=x0;xx<=x1;xx++) for(int yy=y0;yy<=y1;yy++){
-                    if(ring>0 && xx>x0 && xx<x1 && yy>y0 && yy<y1) continue;
-                    int c=xx*G+yy;
-                    for(int b=cnt[c];b<cnt[c+1];b++){ int j=bucket[b]; if(j!=i) cand.push_back({dist(i,j),j}); }
-                }
-                if((int)cand.size()>=K){ if(extra--<=0) break; }
-                if(x0==0&&y0==0&&x1==G-1&&y1==G-1) break;
-                ring++;
-            }
-            int kk=min((int)cand.size(),K);
-            partial_sort(cand.begin(),cand.begin()+kk,cand.end());
-            for(int t=0;t<kk;t++) nbr[(size_t)i*K+t]=cand[t].second;
-        }
-    }
-
-    vector<int> order(N), pos(N); vector<char> used(N,0);
-    {
-        int cur=0; used[0]=1; order[0]=0;
-        for(int step=1;step<N;step++){
-            int best=-1; double bd=1e300;
-            for(int t=0;t<K;t++){ int j=nbr[(size_t)cur*K+t]; if(j>=0&&!used[j]){ best=j; break; } }
-            if(best<0){
-                int cx=gx(X[cur]),cy=gy(Y[cur]);
-                for(int ring=0; ring<2*G && best<0; ring++){
-                    int x0=max(0,cx-ring),x1=min(G-1,cx+ring),y0=max(0,cy-ring),y1=min(G-1,cy+ring);
-                    for(int xx=x0;xx<=x1;xx++) for(int yy=y0;yy<=y1;yy++){
-                        if(ring>0 && xx>x0 && xx<x1 && yy>y0 && yy<y1) continue;
-                        int c=xx*G+yy;
-                        for(int b=cnt[c];b<cnt[c+1];b++){ int j=bucket[b]; if(!used[j]){ double d=dist(cur,j); if(d<bd){bd=d;best=j;} } }
-                    }
-                    if(best>=0){ // safety: scan one more ring for a possibly-closer point
-                        int r2=ring+1,a0=max(0,cx-r2),a1=min(G-1,cx+r2),b0=max(0,cy-r2),b1=min(G-1,cy+r2);
-                        for(int xx=a0;xx<=a1;xx++) for(int yy=b0;yy<=b1;yy++){
-                            if(xx>a0&&xx<a1&&yy>b0&&yy<b1) continue;
-                            int c=xx*G+yy;
-                            for(int bb=cnt[c];bb<cnt[c+1];bb++){ int j=bucket[bb]; if(!used[j]){ double d=dist(cur,j); if(d<bd){bd=d;best=j;} } }
-                        }
-                        break;
-                    }
-                }
-            }
-            if(best<0){ for(int j=0;j<N;j++) if(!used[j]){best=j;break;} }
-            used[best]=1; order[step]=best; cur=best;
-        }
-        for(int i=0;i<N;i++) pos[order[i]]=i;
-    }
-
-    auto nextIdx=[&](int i){ return i+1<N?i+1:0; };
-    auto prevIdx=[&](int i){ return i>0?i-1:N-1; };
-    auto applyMove=[&](int e1,int e2){
-        int lo=e1, hi=e2; if(lo>hi) swap(lo,hi);
-        int inner=hi-lo;              // length of order[lo+1..hi]
-        if(inner<=N-inner){
-            int i=lo+1, j=hi;
-            while(i<j){ int a=order[i],b=order[j]; order[i]=b; order[j]=a; pos[a]=j; pos[b]=i; ++i; --j; }
-        } else {
-            int li=hi+1, lj=lo+N;     // complement: positions hi+1..N-1,0..lo
-            while(li<lj){ int ai=li%N, aj=lj%N; int u=order[ai],v=order[aj]; order[ai]=v; order[aj]=u; pos[v]=ai; pos[u]=aj; ++li; --lj; }
-        }
-    };
-
-    vector<char> dontlook(N,0);
-    vector<int> q(N); for(int i=0;i<N;i++) q[i]=i; // process by city id
-    int clock=0;
-
-    auto twoOptPass=[&]()->bool{
-        bool anyImp=false;
-        for(int qi=0; qi<N; qi++){
-            if(((++clock)&1023)==0 && el_ms()>TL_MS) return anyImp;
-            int c1=q[qi];
-            if(dontlook[c1]) continue;
-            bool improved=false;
-            for(int dir=0; dir<2 && !improved; dir++){
-                int p1=pos[c1];
-                int p2=(dir==0)?nextIdx(p1):prevIdx(p1);
-                int c2=order[p2];
-                double d12=dist(c1,c2);
-                for(int t=0;t<K;t++){
-                    int c3=nbr[(size_t)c1*K+t]; if(c3<0) break;
-                    double d13=dist(c1,c3);
-                    if(d13>=d12) break;               // sorted neighbors: no further gain
-                    int p3=pos[c3];
-                    int p4=(dir==0)?nextIdx(p3):prevIdx(p3);
-                    int c4=order[p4];
-                    if(c4==c1||c3==c2) continue;
-                    double before=d12+dist(c3,c4);
-                    double after =d13+dist(c2,c4);
-                    if(after+1e-7<before){
-                        if(dir==0) applyMove(p1,p3);
-                        else       applyMove(p4,p2);
-                        dontlook[c1]=dontlook[c2]=dontlook[c3]=dontlook[c4]=0;
-                        improved=true; anyImp=true;
-                        break;
-                    }
-                }
-            }
-            if(!improved) dontlook[c1]=1;
-        }
-        return anyImp;
-    };
-
-    auto orOptPass=[&]()->bool{
-        bool anyImp=false;
-        for(int qi=0; qi<N; qi++){
-            if(((++clock)&1023)==0 && el_ms()>TL_MS) return anyImp;
-            int s0=q[qi];
-            if(dontlook[s0]) continue;
-            bool moved=false;
-            for(int L=1; L<=3 && !moved; L++){
-                int is=pos[s0];
-                int ie=is; for(int t=1;t<L;t++) ie=nextIdx(ie);
-                int segEnd=order[ie];
-                int pprev=prevIdx(is), pnext=nextIdx(ie);
-                if(pprev==ie || pnext==is) break;      // run wraps whole tour (tiny N)
-                int cprev=order[pprev], cnext=order[pnext];
-                double removed = dist(cprev,s0)+dist(segEnd,cnext)-dist(cprev,cnext);
-                if(removed<=1e-7) continue;
-                for(int side=0; side<2 && !moved; side++){
-                    int anchorCity = side==0? s0 : segEnd;
-                    for(int t=0;t<K;t++){
-                        int c=nbr[(size_t)anchorCity*K+t]; if(c<0) break;
-                        int pc=pos[c];
-                        bool inside=false; { int p=is; for(int u=0;u<L;u++){ if(p==pc){inside=true;break;} p=nextIdx(p);} }
-                        if(inside || c==cprev) continue;
-                        int pcn=nextIdx(pc); int cn=order[pcn];
-                        if(cn==s0) continue;             // that's the current place
-                        double added = dist(c,s0)+dist(segEnd,cn)-dist(c,cn);
-                        double addedRev = dist(c,segEnd)+dist(s0,cn)-dist(c,cn);
-                        bool rev = addedRev+1e-9 < added;
-                        double add = rev? addedRev: added;
-                        if(add+1e-7 < removed){
-                            int seg[3]; { int p=is; for(int u=0;u<L;u++){ seg[u]=order[p]; p=nextIdx(p);} }
-                            if(rev){ for(int a=0,b=L-1;a<b;a++,b--) swap(seg[a],seg[b]); }
-                            static vector<int> tmp; tmp.clear(); tmp.reserve(N);
-                            bool isMember[3]; (void)isMember;
-                            auto inRun=[&](int city){ for(int u=0;u<L;u++) if(seg[u]==city||order[(is+0)]==city){} return false; };
-                            (void)inRun;
-                            auto memb=[&](int city)->bool{ for(int u=0;u<L;u++) if(seg[u]==city) return true; return false; };
-                            for(int idx2=0; idx2<N; idx2++){
-                                int city=order[idx2];
-                                if(memb(city)) continue;
-                                tmp.push_back(city);
-                                if(city==c){ for(int u=0;u<L;u++) tmp.push_back(seg[u]); }
-                            }
-                            order.swap(tmp);
-                            for(int idx2=0; idx2<N; idx2++) pos[order[idx2]]=idx2;
-                            dontlook[cprev]=dontlook[cnext]=dontlook[s0]=dontlook[segEnd]=dontlook[c]=dontlook[cn]=0;
-                            moved=true; anyImp=true;
-                            break;
-                        }
-                    }
-                }
-            }
-            if(!moved) dontlook[s0]=1;
-        }
-        return anyImp;
-    };
-
-    auto localSearch=[&](){
-        while(el_ms()<TL_MS){
-            bool a=false; while(el_ms()<TL_MS){ if(!twoOptPass()){break;} a=true; }
-            bool b=false;
-            if(N<=50000){ fill(dontlook.begin(),dontlook.end(),0); b=orOptPass(); if(b) fill(dontlook.begin(),dontlook.end(),0); }
-            if(!a && !b) break;
-            if(!b) break; // 2-opt already converged and or-opt found nothing new
-        }
-    };
-    localSearch();
-
-    auto evalDir=[&](int dir)->double{
-        int z=pos[0]; double L=0; int prev=0;
-        for(int t=1;t<=N;t++){
-            int idx = dir==0 ? (z+t)%N : (z-(t%N)+N)%N;
-            int b=order[idx];
-            double d=dist(prev,b);
-            if(t%10==0 && !pr[prev]) d*=1.1;
-            L+=d; prev=b;
-        }
-        return L;
-    };
-    auto evalBest=[&](int&dir)->double{
-        double f=evalDir(0), r=evalDir(1);
-        if(f<=r){ dir=0; return f; } dir=1; return r;
-    };
-
-    vector<int> best=order; int bestDir=0;
-    double bestLen=evalBest(bestDir);
-    if(N>=8 && N>50000){
-        uint64_t rng=0x9e3779b97f4a7c15ULL ^ (uint64_t)N*2654435761ULL;
-        auto rnd=[&](){ rng^=rng<<7; rng^=rng>>9; return rng; };
-        while(el_ms()<TL_MS){
-            int a=1+(int)(rnd()%(N-3)), b=1+(int)(rnd()%(N-3)), c=1+(int)(rnd()%(N-3));
-            int lo=min({a,b,c}), hi=max({a,b,c}), mid=a+b+c-lo-hi;
-            if(lo==mid||mid==hi){ continue; }
-            static vector<int> nt; nt.clear(); nt.reserve(N);
-            for(int i=0;i<lo;i++) nt.push_back(order[i]);
-            for(int i=mid;i<hi;i++) nt.push_back(order[i]);
-            for(int i=lo;i<mid;i++) nt.push_back(order[i]);
-            for(int i=hi;i<N;i++) nt.push_back(order[i]);
-            order.swap(nt);
-            for(int i=0;i<N;i++) pos[order[i]]=i;
-            fill(dontlook.begin(),dontlook.end(),0);
-            while(el_ms()<TL_MS){ if(!twoOptPass()) break; }
-            int d2=0; double L=evalBest(d2);
-            if(L<bestLen-1e-6){ bestLen=L; best=order; bestDir=d2; }
-            else { order=best; for(int i=0;i<N;i++) pos[order[i]]=i; }
-        }
-        order=best; for(int i=0;i<N;i++) pos[order[i]]=i;
-    } else if(N>=8){
-        uint64_t rng=0x9e3779b97f4a7c15ULL ^ (uint64_t)N*2654435761ULL;
-        auto rnd=[&](){ rng^=rng<<7; rng^=rng>>9; return rng; };
-        int win = N<=60? N : max(24, min(N, N<=2000? N/4 : 400));
-        while(el_ms()<TL_MS){
-            int span = min(win, N-1);
-            if(span<4) break;
-            int base = win>=N? 0 : (int)(rnd()%N);
-            auto W=[&](int off){ return (base+off)%N; };
-            int a=1+(int)(rnd()%(span-3)), b=1+(int)(rnd()%(span-3)), c=1+(int)(rnd()%(span-3));
-            int lo=min({a,b,c}), hi=max({a,b,c}), mid=a+b+c-lo-hi;
-            if(lo==mid||mid==hi) continue;
-            static vector<int> wbuf; wbuf.clear(); wbuf.reserve(span);
-            for(int i=0;i<span;i++) wbuf.push_back(order[W(i)]);
-            static vector<int> nt; nt.clear(); nt.reserve(span);
-            for(int i=0;i<lo;i++) nt.push_back(wbuf[i]);
-            for(int i=mid;i<hi;i++) nt.push_back(wbuf[i]);
-            for(int i=lo;i<mid;i++) nt.push_back(wbuf[i]);
-            for(int i=hi;i<span;i++) nt.push_back(wbuf[i]);
-            for(int i=0;i<span;i++){ int city=nt[i]; order[W(i)]=city; pos[city]=W(i); }
-            for(int i=0;i<span;i++) dontlook[wbuf[i]]=0;
-            {
-                int before = (base==0? N-1: base-1);
-                int after  = W(span-1)+1<N? W(span-1)+1 : 0;
-                dontlook[order[before]]=0; dontlook[order[after%N]]=0;
-            }
-            while(el_ms()<TL_MS){ if(!twoOptPass()) break; }
-            orOptPass(); while(el_ms()<TL_MS){ if(!twoOptPass()) break; }
-            int d2=0; double L=evalBest(d2);
-            if(L<bestLen-1e-6){ bestLen=L; best=order; bestDir=d2; }
-            else { order=best; for(int i=0;i<N;i++) pos[order[i]]=i; } // revert
-        }
-        order=best; for(int i=0;i<N;i++) pos[order[i]]=i;
-    }
-
-    TL_MS += RESERVE;
-    vector<int> seq(N);
-    { int z=pos[0]; for(int i=0;i<N;i++) seq[i]= bestDir==0? order[(z+i)%N] : order[(z-i+N)%N]; }
-
-    if(N>=12){
-        auto sAt=[&](int p)->int{ return p<N? seq[p]:0; };
-        auto stepCost=[&](int t)->double{ int a=seq[t-1], b=sAt(t); double d=dist(a,b); if(t%10==0&&!pr[a]) d*=1.1; return d; };
-        int w = N<=1200? N : (N<=5000?120:(N<=20000?140:80));
-        for(int rep=0;rep<4 && el_ms()<TL_MS;rep++){
-            bool ch=false;
-            for(int p=9;p<N;p+=10){
-                if(el_ms()>TL_MS) break;
-                if(pr[seq[p]]) continue;
-                int lo=max(1,p-w), hi=min(N-1,p+w);
-                double bd=-1e-7; int bj=-1;
-                for(int j=lo;j<=hi;j++){
-                    if(j==p||!pr[seq[j]]) continue;
-                    int T[4]={p,p+1,j,j+1}, U[4], m=0;
-                    for(int t2=0;t2<4;t2++){ bool dup=false; for(int u=0;u<m;u++) if(U[u]==T[t2]) dup=true; if(!dup) U[m++]=T[t2]; }
-                    double bef=0, aft=0;
-                    for(int u=0;u<m;u++) bef+=stepCost(U[u]);
-                    swap(seq[p],seq[j]);
-                    for(int u=0;u<m;u++) aft+=stepCost(U[u]);
-                    swap(seq[p],seq[j]);
-                    double dl=aft-bef;
-                    if(dl<bd){ bd=dl; bj=j; }
-                }
-                if(bj>=0){ swap(seq[p],seq[bj]); ch=true; }
-            }
-            if(!ch) break;
-        }
-    }
-    { auto ec=[&](int t){int a=seq[t-1],b=t<N?seq[t]:0;double d=dist(a,b);return d*((t%10==0&&!pr[a])?1.1:1.0);};
-      for(int r=0;r<3&&el_ms()<TL_MS;r++){bool ch=0;for(int i=1;i+1<N&&el_ms()<TL_MS;i++)for(int g=1;g<=2&&i+g<N;g++){int j=i+g;double a=0,b=0;for(int t=i;t<=j+1;t++)a+=ec(t);swap(seq[i],seq[j]);for(int t=i;t<=j+1;t++)b+=ec(t);if(b+1e-7<a)ch=1;else swap(seq[i],seq[j]);}if(!ch)break;} }
 
     string out; out.reserve((size_t)N*7+16);
     out+=to_string(N+1); out+='\n';
