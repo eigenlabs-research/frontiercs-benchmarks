@@ -160,7 +160,7 @@ int i = 0;
 while(i < J){
 if(!ISCRIT_(opOf(s[i], m))){ i++; continue; }
 int b = i;
-while(i+1 < J && ISCRIT_(opOf(s[i+1], m))) i++;
+while(i+1 < J){ int u=opOf(s[i],m),v=opOf(s[i+1],m); if(!ISCRIT_(v) || ds[u]+pn[v]!=ds[v]) break; i++; }
 int e = i; i++;
 if(e == b) continue;
 for(int t=b+1; t<=e; ++t) gmoves.push_back({m,b,e,t,true});
