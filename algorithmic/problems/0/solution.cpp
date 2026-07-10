@@ -1,4 +1,4 @@
-// v21.11: fix + crown5
+// v21.16: fix + crown5
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -1330,5 +1330,6 @@ int main() {
     }
     fwrite(out.data(), 1, out.size(), stdout);
     fflush(stdout);
+    (void)n; (void)S; (void)ps.data(); (void)baseOrder.data();
     _Exit(0); // skip destructor teardown of large heaps
 }
