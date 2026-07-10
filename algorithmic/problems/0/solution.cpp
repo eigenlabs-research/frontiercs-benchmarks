@@ -1,9 +1,9 @@
-// v21.0: gap-directed BF selection (score = maxHeight - contact)
+// v19.9: v19.5 + PP_CAPDW default 3 (was 2); local small-band A/B winner
 #include <bits/stdc++.h>
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 1890.0;
+static double TL_MS = 1890.0; // Hard global deadline (env POLYPACK_TL override)
 static inline double elapsed_ms() {
     return chrono::duration<double, milli>(chrono::steady_clock::now() - T0).count();
 }
@@ -42,7 +42,7 @@ static inline int readInt() {
 int n;
 long long S = 0;
 vector<P> ps;
-static int gFASTFIT = 1;
+static int gFASTFIT = 1; // skyline x0-scan: skip dsum/dr for positions that can't win primary key
 
 static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0, bool adaptive,
               double adaptTLms, double deadlineMs, double panicMs = -1.0, int adaptMode = 0) {
@@ -777,28 +777,21 @@ static int bf_pass(int W, const vector<int>& repr, const unordered_map<uint64_t,
     bf_W = W; bf_occ.assign(8, 0ULL); bf_colH.assign(W, 0);
     outKind.clear(); outOri.clear(); outX.clear(); outY.clear();
     int rem = total; int p[12];
-    long long bH, bW, bS; int bC, bk, bo, bx, by, curH0;
+    long long bH, bW; int bC, bk, bo, bx, by, curH0;
     auto eval = [&](int ki, int oi, int x) {
         const T& o = ps[repr[ki]].t[oi];
         int y = bf_fit(o, x);
         int rH = curH0; for (int j = 0; j < o.w; j++) { int t = y + o.hi[j] + 1; if (t > rH) rH = t; }
         long long aw = 0; for (int j = 0; j < o.w; j++) { int pb = y + o.lo[j]; if (pb > bf_colH[x + j]) aw += pb - bf_colH[x + j]; }
         int ct = 0; for (auto& nb : o.nbr) { int cx = x + nb.first, cy = y + nb.second; if (cx < 0 || cx >= W || cy < 0) { ct++; continue; } if (cy < (int)bf_occ.size() && ((bf_occ[cy] >> cx) & 1ULL)) ct++; }
-        static int BF_GAPW = envInt("PP_BFGAPW", 1);
-        if (BF_GAPW > 0) {
-            long long sc = rH * (long long)BF_GAPW - ct;
-            bool better = (sc < bS) || (sc == bS && tie && ct >= bC) || (sc == bS && !tie && ct > bC);
-            if (better) { bS = sc; bC = ct; bk = ki; bo = oi; bx = x; by = y; }
-        } else {
-            bool cbetter = tie ? (ct >= bC) : (ct > bC);
-            if (rH < bH || (rH == bH && (aw < bW || (aw == bW && cbetter)))) { bH = rH; bW = aw; bC = ct; bk = ki; bo = oi; bx = x; by = y; }
-        }
+        bool cbetter = tie ? (ct >= bC) : (ct > bC);
+        if (rH < bH || (rH == bH && (aw < bW || (aw == bW && cbetter)))) { bH = rH; bW = aw; bC = ct; bk = ki; bo = oi; bx = x; by = y; }
     };
     while (rem > 0) {
         int mh = INT_MAX; curH0 = 0; for (int c = 0; c < W; c++) { if (bf_colH[c] < mh) mh = bf_colH[c]; if (bf_colH[c] > curH0) curH0 = bf_colH[c]; }
         int nc; if (rng) { int lows[64], nl=0; for (int c=0;c<W;c++) if (bf_colH[c]==mh) lows[nl++]=c; nc=lows[rng->rint(nl)]; }
         else { nc=0; while (nc<W && bf_colH[nc]!=mh) nc++; }
-        bH = LLONG_MAX; bW = LLONG_MAX; bS = LLONG_MAX; bC = -1; bk = -1; bo = -1; bx = -1; by = -1;
+        bH = LLONG_MAX; bW = LLONG_MAX; bC = -1; bk = -1; bo = -1; bx = -1; by = -1;
         for (int w = 1; w <= 10; w++) {
             int xlo = nc - w + 1; if (xlo < 0) xlo = 0; int xhi = nc; if (xhi > W - w) xhi = W - w;
             for (int x = xlo; x <= xhi; x++) {
@@ -1017,7 +1010,7 @@ int main() {
     int bfEnv = envInt("PP_BF", -1);
     long long BF_N = envInt("PP_BFN", 450);
     bool useBF = (bfEnv < 0) ? (n >= BF_N && base <= 63 && minW <= 63) : (bfEnv > 0);
-    if (useBF && !bestR.ok) {
+    if (useBF) {
         bestR = bfSolve(minW, min(base, 63), TL_MS - 40.0); // more leftover for GRASP
         // BF path previously skipped final crown — multi-row crown can shave BF packings
         if (bestR.ok) crownRepack(bestR, TL_MS - 5.0);
@@ -1060,6 +1053,8 @@ int main() {
 
     const double SEARCH_END = TL_MS;           // hard abort for any pack
     const double SOFT_END = TL_MS - 15.0;      // don't start new work after this
+
+
     vector<int> ordBLF = idx;
     stable_sort(ordBLF.begin(), ordBLF.end(), [&](int a, int b) {
         if (ps[a].k != ps[b].k) return ps[a].k > ps[b].k;
