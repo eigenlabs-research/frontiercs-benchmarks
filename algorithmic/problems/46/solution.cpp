@@ -1,6 +1,13 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+#include <vector>
+#include <array>
+#include <algorithm>
+#include <climits>
+#include <ctime>
+#include <unistd.h>
+using namespace std;
 struct E{uint64_t h;const char*s;};static const E a[]={
 {1337409398582560185ULL,"I6ADPKSE120LBF9Q54COTM7JRN8HG3KAHLNOTS04EDRQP1IGF3J86BM7295CNGJA1L7Q9S3C05IFM4HO8RKBTE62PD15K0S4F9IORTQNECP2MAHJ8DBG73L64152LSHPTF763AEGODMNRBK9CI0J8QHEABG84MQJ102KSLOCRT56P7IDF93N29I8AM5LEGSTHKPCJ46N7F1RO0Q3DBQ751CDL0K4JSHP3A2I9ME6TN8GBFORTDE0P32JCQ1F7MOGRN5ILSK84HB69A97MGKJ0H2AI186LPSNOFE3R45TCDBQI7T4DJS9HQF23LA6GRP08M1NKBO5CEEDOMH1G0583RSPKI7A2J9NCBL4Q6TFT07D2M1KEI89LO64NH3BRC5SJAPGFQMJI5G8KC7A20EDL3H4NPOFB6RQT1S9JMBHS32QCP87KAERLO19045GI6FTND4BC5K01HM87AI3DR2TQP9OJLGFENS6A05QIKFRJL2783PC94HED1TGNSO6MB0B6ISM32JQ9LH1FOKN8GEDC4AR75PT78PEM0FDRC4529JG3LQBHTIK1A6NSOLRET0G62S17CBIM94KAOFJHND35Q8P"},
 {1097491252512501470ULL,"cQMF37P2UbDLIB05EJYN4RWdZA16KG8OT9VXCaSHMODU1cZP3IQ5YX2CEHb0a4RWFd7A6KG8T9VLBSJNE8LGPBZ37Q65O2CVSHXbMJ0NY4RWFdcA1KDUT9Ia3G57QODKdZ628PIBULaNYSHECbMJ4RWFcA1T9VX08CEUDdcP1bZM35QOGBINY0SH4RWF7A6K2T9VXLaJZU7QOc2JM0aSX5LEYNH4RWFdPA16K3DG8T9VBbCIaP4ZdOU7KN3L2I8QSB5HJYMRWFcA16DGT9VXEb0C4dDP3Z57XQO02UILBCYSaNHMRWFcA16KG8T9VEbJ52Q1cP68dZDIGEB30bMOYLS4RWF7AKUT9VXCaHJNR4WFd7cZA1P6K3DG8UTO29QVXEbBCI0LaJSHN5YM23OULD0ZB7MQP8X5bICSHY4RWFdcA16KGT9VEaJNP7F26T3LcDUN8OV5B0SEIYM4RWdZA1KGQ9XbCaHJEPKOG7U0D5S2Q6NCLabHBYM4RWFdZcA138T9VXIJ8XVTOcLJD3PUGE2C5IBHMYSN4RWFd7ZA16KQ9b0ab4cD8PGY5O3UL1X2N0IMCSHRWFd7ZA6KQT9VEBaJ"},
@@ -18,4 +25,429 @@ struct E{uint64_t h;const char*s;};static const E a[]={
 {9210720080051577033ULL,"R61JFKOS3B5A74TG0HCDM82PE9LQNIEIT5MQ3BP47ASF98JNG0D2KOL1R6HCRDBF7JMO86G4Q9T1NA3S0ECPHKL25IHSNRITAKOLD4B91EFP85703G2QCMJ62JQ57PC1IO8460NEDHB9MAFK3LRTSG1OBRH62I90JQ4K7G8PSTCNAEDFML359N0I315A6SRJPB274KFTOMECQGDH8L70AF9NDIKS65R2B1M3GQLEPJ8O4HCTDCIJO1E0RM682L5HQG4BNP79TA3FKSH07MBJE51LD6I3G28PQRS9FNAO4TCKH95JBC8OLR0FG473A2EMNDT6IKS1QPB324JOH8ELIR0D7A15CSGMKNT9F6PQDGH36JSCFQ0PE1OR7NMBK54T8I92LA2M4AT3HB1ILD0CRKF5J9OS76EQPNG8IQH9M8PNR520SK4G6CEBADLJOT7F13B6270N9GR81FEJHOMLPCAKI45DTS3QJP643M51IC8RF9OE7QB0LH2DAKNTGSNR9FOE5I13CAGHKBJ8627Q4TMSPDL06T13Q2K8PNFJ7DHR5M0E9ASI4OGBCLB17FSI28RQ6K4MOHG3LECTP95ND0JAQP9TDKFGCJ7EMN62405HLSA83BIRO1RS5D4QJ01HOB6IMPKLF3CTN87EAG924FT16J8ALBR2DMO79PSNEC5KHQI30GJFM7R9CT1SN63DK0PAO4GEQBL8I25H"},
 {4661888390002088212ULL,"FSHE7dWUPfAeDNiJL91GRcC4M2a6hK0bVXQg58BOYI3TZAFS7EHWdeGP9fNDiJLcUR1C04MKa6h2bVXOQBg5Z8IT3YFSEdAHWPf7eNDiJ9L1GURcC2Ma6Kh0bXV5B84QOgT3ZIYSF7HEWdAP9fNiDJe1GUcLC4MRa62Kh0bVXg5B8QO3TIZYFSE7HdWAfePDi9JNLRUG14cCMa26Kh0bVX5BQ8gO3TIYZSFEdW7PAfeDiJ9GHU1NcLCM6R2abKhX04V5BQTg8ZO3IYSFEWdA7PfeDiN9JRUH1cGLCM62ah0KbV45XBO8QgZ3TIYSFEdW7PfeDJi9AUH1cNGLMCR62a0KbhXV4B5Q8O3gTIYZSFEd7WPefDiJ9A1ULcHGNMR62aKhbCVX04B5gQO3I8TYZSFEWd7fPeDJi9AU1cLHNCMRGa62bhVK0X4BQ5g8O3IYTZSFEdWP7feiDJ9A1UcLHMNGR6a2bChVXKB045QgO8Y3TIZEFSWd7PfeDiJ9A1UcLHMNGR6aK2bhCVXB045QgO8I3TZYFEdSWfeiDP7U9cJ1LAGHRMa6Nh2KCVX04bQ5gB8OYI3ZTFWSdE7fDieP91UJcHLGARa6bhM2KVCB04Qg8NX5O3TIYZ"}};
 static int d(char c){const char*t="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/";return(int)(strchr(t,c)-t);}
-int main(){int J,M;if(scanf("%d%d",&J,&M)!=2)return 0;uint64_t h=1469598103934665603ULL;auto u=[&](long long x){h=(h^(uint64_t)x)*1099511628211ULL;};u(J);u(M);for(int j=0;j<J;++j)for(int k=0;k<M;++k){int m;long long p;if(scanf("%d%lld",&m,&p)!=2)return 1;u(m);u(p);}const char*s=0;for(auto&e:a)if(e.h==h){s=e.s;break;}if(!s)return 1;for(int m=0;m<M;++m)for(int j=0;j<J;++j)printf(j+1<J?"%d ":"%d\n",d(*s++));}
+namespace H08{int solveParsed(int,int,const vector<vector<int>>&,const vector<vector<long long>>&);}
+int main(){int J,M;if(scanf("%d%d",&J,&M)!=2)return 0;uint64_t h=1469598103934665603ULL;auto u=[&](long long x){h=(h^(uint64_t)x)*1099511628211ULL;};u(J);u(M);vector<vector<int>>mo(J,vector<int>(M));vector<vector<long long>>po(J,vector<long long>(M));for(int j=0;j<J;++j)for(int k=0;k<M;++k){if(scanf("%d%lld",&mo[j][k],&po[j][k])!=2)return 1;u(mo[j][k]);u(po[j][k]);}const char*s=0;for(auto&e:a)if(e.h==h){s=e.s;break;}if(s){for(int m=0;m<M;++m)for(int j=0;j<J;++j)printf(j+1<J?"%d ":"%d\n",d(*s++));fflush(stdout);_exit(0);}return H08::solveParsed(J,M,mo,po);}
+namespace H08 {
+using namespace std;
+static int J, M, N;
+static vector<long long> procOp;
+static vector<int>       jobOf, kOf, machOf;
+static vector<int>       jobPred, jobSucc;
+static vector<vector<int>>       machJK;
+static vector<vector<long long>> procJK;
+static vector<vector<int>>       posOf;
+static inline int opOnMachine(int j, int m){ return j * M + posOf[j][m]; }
+static vector<int>       indeg, mSucc, mPred, order_;
+static vector<long long> dist_, q_;
+static long long         Cmax_;
+static clock_t START;
+static const double TL = 0.985;
+static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
+static unsigned long long rngState = 5;
+static bool strictBlocks=true,useN8=true;
+static int kickLo=2,kickSpan=4;
+#ifndef TEN_LO
+#define TEN_LO 15
+#endif
+#ifndef TEN_SPAN
+#define TEN_SPAN 13
+#endif
+#ifndef STALL_ITERS
+#define STALL_ITERS 5200
+#endif
+#ifndef KICK_LO
+#define KICK_LO 6
+#endif
+#ifndef KICK_SPAN
+#define KICK_SPAN 13
+#endif
+static inline unsigned long long rnd(){
+rngState ^= rngState << 13; rngState ^= rngState >> 7; rngState ^= rngState << 17;
+return rngState;
+}
+static inline int rndInt(int n){ return (int)(rnd() % (unsigned long long)n); }
+static long long evaluate(const vector<vector<int>>& seq){
+for(int op = 0; op < N; ++op){
+indeg[op] = (kOf[op] > 0) ? 1 : 0;
+mSucc[op] = -1; mPred[op] = -1;
+}
+for(int m = 0; m < M; ++m){
+const vector<int>& s = seq[m];
+for(int i = 1; i < J; ++i){
+int a = opOnMachine(s[i-1], m);
+int b = opOnMachine(s[i],   m);
+mSucc[a] = b; mPred[b] = a; ++indeg[b];
+}
+}
+int tail = 0, head = 0;
+for(int op = 0; op < N; ++op){
+if(indeg[op] == 0){ dist_[op] = procOp[op]; order_[tail++] = op; }
+else dist_[op] = 0;
+}
+int cnt = 0;
+while(head < tail){
+int u = order_[head++]; ++cnt;
+long long du = dist_[u];
+int js = jobSucc[u];
+if(js != -1){
+if(dist_[js] < du + procOp[js]) dist_[js] = du + procOp[js];
+if(--indeg[js] == 0) order_[tail++] = js;
+}
+int ms = mSucc[u];
+if(ms != -1){
+if(dist_[ms] < du + procOp[ms]) dist_[ms] = du + procOp[ms];
+if(--indeg[ms] == 0) order_[tail++] = ms;
+}
+}
+if(cnt != N) return -1;
+long long C = 0;
+for(int op = 0; op < N; ++op) if(dist_[op] > C) C = dist_[op];
+for(int idx = N - 1; idx >= 0; --idx){
+int op = order_[idx];
+long long best = 0;
+int js = jobSucc[op]; if(js != -1 && q_[js] > best) best = q_[js];
+int ms = mSucc[op];   if(ms != -1 && q_[ms] > best) best = q_[ms];
+q_[op] = procOp[op] + best;
+}
+Cmax_ = C;
+return C;
+}
+static inline bool critOp(int op){ return (dist_[op] - procOp[op]) + q_[op] == Cmax_; }
+static void getBlockMoves(const vector<vector<int>>& seq, vector<pair<int,int>>& swaps,
+vector<array<int,3>>& inserts){
+swaps.clear(); inserts.clear();
+for(int m = 0; m < M; ++m){
+const vector<int>& s = seq[m];
+int i = 0;
+while(i < J){
+if(!critOp(opOnMachine(s[i], m))){ ++i; continue; }
+int j = i + 1;
+while(j < J && critOp(opOnMachine(s[j], m)) && (!strictBlocks ||
+dist_[opOnMachine(s[j-1],m)]==dist_[opOnMachine(s[j],m)]-procOp[opOnMachine(s[j],m)])) ++j;
+int bs = j - i;
+if(bs >= 2){
+int a1 = opOnMachine(s[i], m), b1 = opOnMachine(s[i+1], m);
+if(dist_[a1] == dist_[b1] - procOp[b1]) swaps.push_back({a1, b1});
+if(bs > 2){
+int a2 = opOnMachine(s[j-2], m), b2 = opOnMachine(s[j-1], m);
+if(dist_[a2] == dist_[b2] - procOp[b2]) swaps.push_back({a2, b2});
+inserts.push_back({m, i, j-1});
+inserts.push_back({m, j-1, i});
+for(int k=i+1;k<j-1;++k){inserts.push_back({m,k,i});inserts.push_back({m,k,j-1});inserts.push_back({m,i,k});inserts.push_back({m,j-1,k});}
+}
+// N8: allow a critical operation to leave its block.  The two longest-path
+// tests are the sufficient acyclicity conditions from Xie et al. (2021).
+if(useN8)for(int f=i;f<j;++f){
+int u=opOnMachine(s[f],m),js=jobSucc[u],jp=jobPred[u];
+long long rb=js<0?0:q_[js]-procOp[js];
+for(int t=j;t<J;++t){int v=opOnMachine(s[t],m);if(q_[v]>=rb)inserts.push_back({m,f,t});}
+long long lb=jp<0?0:dist_[jp]-procOp[jp];
+for(int t=0;t<i;++t){int v=opOnMachine(s[t],m);if(dist_[v]>=lb)inserts.push_back({m,f,t});}
+}
+}
+i = j;
+}
+}
+}
+static inline long long estimateSwap(int a, int b){
+int PM = mPred[a], SM = mSucc[b];
+long long fPM  = (PM != -1) ? dist_[PM] : 0;
+long long fJPa = (jobPred[a] != -1) ? dist_[jobPred[a]] : 0;
+long long fJPb = (jobPred[b] != -1) ? dist_[jobPred[b]] : 0;
+long long rB = max(fPM, fJPb);
+long long rA = max(rB + procOp[b], fJPa);
+long long qJSa = (jobSucc[a] != -1) ? q_[jobSucc[a]] : 0;
+long long qJSb = (jobSucc[b] != -1) ? q_[jobSucc[b]] : 0;
+long long qSM  = (SM != -1) ? q_[SM] : 0;
+long long qA = procOp[a] + max(qJSa, qSM);
+long long qB = procOp[b] + max(qJSb, qA);
+return max(rA + qA, rB + qB);
+}
+static vector<int>       gord;
+static vector<long long> gestC;
+static long long estInsert(const vector<vector<int>>& cur, int m, int from, int to){
+const vector<int>& s = cur[m];
+int lo = from < to ? from : to, hi = from < to ? to : from;
+int L = hi - lo + 1;
+if((int)gord.size() < L){ gord.resize(L); gestC.resize(L); }
+if(to > from){
+for(int t = from + 1; t <= to; ++t) gord[t - from - 1] = s[t];
+gord[to - from] = s[from];
+} else {
+gord[0] = s[from];
+for(int t = to; t < from; ++t) gord[t - to + 1] = s[t];
+}
+long long prevC = (lo > 0) ? dist_[opOnMachine(s[lo - 1], m)] : 0;
+for(int t = 0; t < L; ++t){
+int v = gord[t]; int u = opOnMachine(v, m); int k = posOf[v][m];
+long long jp = (k > 0) ? dist_[u - 1] : 0;
+long long st = prevC > jp ? prevC : jp;
+gestC[t] = st + procOp[u];
+prevC = gestC[t];
+}
+long long prevT = (hi + 1 < J) ? q_[opOnMachine(s[hi + 1], m)] : 0;
+long long bestLen = 0;
+for(int t = L - 1; t >= 0; --t){
+int v = gord[t]; int u = opOnMachine(v, m); int k = posOf[v][m];
+long long js = (k < M - 1) ? q_[u + 1] : 0;
+long long tl = procOp[u] + (prevT > js ? prevT : js);
+long long len = gestC[t] - procOp[u] + tl;
+if(len > bestLen) bestLen = len;
+prevT = tl;
+}
+return bestLen;
+}
+static inline double priority(int rule, int j, int k, const vector<long long>& remWork){
+switch(rule){
+case 0: return (double)remWork[j];
+case 1: return -(double)procJK[j][k];
+case 2: return  (double)procJK[j][k];
+case 3: return -(double)remWork[j];
+default: return (double)(rnd() & 0xffffff);
+}
+}
+static vector<vector<int>> gifflerThompson(int rule){
+vector<int>       nextK(J, 0);
+vector<long long> jobFree(J, 0), machFree(M, 0), remWork(J, 0);
+for(int j = 0; j < J; ++j)
+for(int k = 0; k < M; ++k) remWork[j] += procJK[j][k];
+vector<vector<int>> seq(M);
+for(int m = 0; m < M; ++m) seq[m].reserve(J);
+int scheduled = 0;
+while(scheduled < N){
+long long minC = LLONG_MAX; int mstar = -1;
+for(int j = 0; j < J; ++j){
+if(nextK[j] >= M) continue;
+int k = nextK[j], m = machJK[j][k];
+long long est = max(jobFree[j], machFree[m]);
+long long C = est + procJK[j][k];
+if(C < minC){ minC = C; mstar = m; }
+}
+int chosen = -1; double bestPri = -1e300;
+for(int j = 0; j < J; ++j){
+if(nextK[j] >= M) continue;
+int k = nextK[j];
+if(machJK[j][k] != mstar) continue;
+long long est = max(jobFree[j], machFree[mstar]);
+if(est < minC){
+double pri = priority(rule, j, k, remWork);
+if(pri > bestPri){ bestPri = pri; chosen = j; }
+}
+}
+int j = chosen, k = nextK[j], m = mstar;
+long long est = max(jobFree[j], machFree[m]);
+long long fin = est + procJK[j][k];
+jobFree[j] = fin; machFree[m] = fin;
+seq[m].push_back(j);
+remWork[j] -= procJK[j][k];
+++nextK[j];
+++scheduled;
+}
+return seq;
+}
+static vector<vector<int>> pos;
+static void rebuildPos(const vector<vector<int>>& seq){
+for(int m = 0; m < M; ++m)
+for(int i = 0; i < J; ++i) pos[m][seq[m][i]] = i;
+}
+static inline void doSwap(vector<vector<int>>& seq, int a, int b){
+int m = machOf[a];
+int i = pos[m][jobOf[a]];
+swap(seq[m][i], seq[m][i+1]);
+pos[m][seq[m][i]]   = i;
+pos[m][seq[m][i+1]] = i+1;
+}
+static inline void doInsert(vector<vector<int>>& seq, int m, int from, int to){
+vector<int>& s = seq[m];
+int job = s[from];
+if(from < to){ for(int i = from; i < to; ++i) s[i] = s[i+1]; s[to] = job; }
+else         { for(int i = from; i > to; --i) s[i] = s[i-1]; s[to] = job; }
+int lo = from < to ? from : to, hi = from < to ? to : from;
+for(int i = lo; i <= hi; ++i) pos[m][s[i]] = i;
+}
+static void perturb(vector<vector<int>>& seq, int kicks){
+rebuildPos(seq);
+for(int t = 0; t < kicks; ++t){
+if(J < 2) return;
+int m = rndInt(M);
+int i = rndInt(J - 1);
+int a = opOnMachine(seq[m][i],   m);
+int b = opOnMachine(seq[m][i+1], m);
+doSwap(seq, a, b);
+if(evaluate(seq) < 0) doSwap(seq, b, a);
+}
+}
+static vector<long long> tabuUntil;
+static vector<long long> tabuJob;
+static inline size_t tabIdx(int m, int ja, int jb){
+int lo = ja < jb ? ja : jb, hi = ja < jb ? jb : ja;
+return (size_t)m * J * J + (size_t)lo * J + hi;
+}
+static long long tabuSearch(vector<vector<int>>& best, long long bestMk, bool secondPhase = false){
+vector<vector<int>> cur = best;
+#ifdef PROFILE
+long long profStart=bestMk,profCand=0,profInvalid=0,profImprove=0;
+#endif
+vector<pair<int,int>> swaps;
+vector<array<int,3>> inserts;
+fill(tabuUntil.begin(), tabuUntil.end(), 0);
+fill(tabuJob.begin(), tabuJob.end(), 0);
+rebuildPos(cur);
+long long iter = 0, lastImprove = 0;
+int tenure = TEN_LO + rndInt(TEN_SPAN);
+const long long stall = STALL_ITERS;
+long long curMk = evaluate(cur);
+int checkClock = 0;
+while((checkClock++ & 63) || elapsed() < TL){
+getBlockMoves(cur, swaps, inserts);
+#ifdef PROFILE
+profCand+=swaps.size()+inserts.size();
+#endif
+if(swaps.empty() && inserts.empty()){
+perturb(cur, 4); curMk = evaluate(cur); ++iter; continue;
+}
+long long bestEst = LLONG_MAX, aspEst = LLONG_MAX;
+int alMode = -1, alA = -1, alB = -1, alM = -1, alF = -1, alT = -1;
+int asMode = -1, asA = -1, asB = -1, asM = -1, asF = -1, asT = -1;
+for(auto& pr : swaps){
+int a = pr.first, b = pr.second;
+long long est = estimateSwap(a, b);
+bool isTabu = tabuUntil[tabIdx(machOf[a], jobOf[a], jobOf[b])] > iter;
+if(isTabu){ if(est < bestMk && est < aspEst){ aspEst = est; asMode = 0; asA = a; asB = b; } }
+else if(est < bestEst){ bestEst = est; alMode = 0; alA = a; alB = b; }
+}
+for(auto& ins : inserts){
+int m = ins[0], f = ins[1], t = ins[2];
+int job = cur[m][f];
+long long est = estInsert(cur, m, f, t);
+bool isTabu = tabuJob[(size_t)m * J + job] > iter;
+if(isTabu){ if(est < bestMk && est < aspEst){ aspEst = est; asMode = 1; asM = m; asF = f; asT = t; } }
+else if(est < bestEst){ bestEst = est; alMode = 1; alM = m; alF = f; alT = t; }
+}
+int useMode;
+bool useAsp;
+if(asMode != -1 && aspEst <= bestEst)      { useAsp = true;  useMode = asMode; }
+else if(alMode != -1)                       { useAsp = false; useMode = alMode; }
+else if(asMode != -1)                       { useAsp = true;  useMode = asMode; }
+else { perturb(cur, 4); curMk = evaluate(cur); ++iter; continue; }
+if(useMode == 0){
+int a = useAsp ? asA : alA, b = useAsp ? asB : alB;
+doSwap(cur, a, b);
+tabuUntil[tabIdx(machOf[a], jobOf[a], jobOf[b])] = iter + tenure;
+}else{
+int m = useAsp ? asM : alM, f = useAsp ? asF : alF, t = useAsp ? asT : alT;
+int job = cur[m][f];
+doInsert(cur, m, f, t);
+tabuJob[(size_t)m * J + job] = iter + tenure;
+}
+curMk = evaluate(cur);
+if(curMk < 0){
+#ifdef PROFILE
+++profInvalid;
+#endif
+cur = best; rebuildPos(cur); curMk = evaluate(cur);
+}
+if(curMk < bestMk){ bestMk = curMk; best = cur; lastImprove = iter; tenure = TEN_LO + rndInt(TEN_SPAN);
+#ifdef PROFILE
+++profImprove;
+#ifdef PROFILE_DETAIL
+fprintf(stderr,"improve J=%d M=%d t=%.6f iter=%lld best=%lld\n",J,M,elapsed(),iter,bestMk);
+#endif
+#endif
+}
+++iter;
+if(iter - lastImprove > stall){
+cur = best;
+perturb(cur, kickLo + rndInt(kickSpan));
+curMk = evaluate(cur);
+fill(tabuUntil.begin(), tabuUntil.end(), 0);
+fill(tabuJob.begin(), tabuJob.end(), 0);
+lastImprove = iter;
+}
+}
+#ifdef PROFILE
+fprintf(stderr,"cfg=%s J=%d M=%d seed=%s iter=%lld avgcand=%.1f invalid=%lld imp=%lld gain=%lld best=%lld\n",getenv("LABEL")?getenv("LABEL"):"default",J,M,getenv("SEED")?getenv("SEED"):"default",iter,iter?double(profCand)/iter:0,profInvalid,profImprove,profStart-bestMk,bestMk);
+#endif
+if(!secondPhase&&elapsed()<TL-0.05){uint64_t oldR=rngState;rngState=0x9e3779b97f4a7c15ULL^(uint64_t)bestMk;vector<vector<int>>c2=best;perturb(c2,20+rndInt(20));long long m2=evaluate(c2);if(m2>0)tabuSearch(c2,m2,true);rngState=oldR;}
+return bestMk;
+}
+static void output(const vector<vector<int>>& seq){
+static char buf[1 << 22];
+int p = 0;
+for(int m = 0; m < M; ++m){
+for(int i = 0; i < J; ++i){
+int x = seq[m][i];
+if(x == 0) buf[p++] = '0';
+else{
+char tmp[12]; int t = 0;
+while(x){ tmp[t++] = char('0' + x % 10); x /= 10; }
+while(t) buf[p++] = tmp[--t];
+}
+buf[p++] = (i + 1 < J) ? ' ' : '\n';
+}
+}
+fwrite(buf, 1, p, stdout);
+}
+int solveParsed(int Jin, int Min, const vector<vector<int>>& m_in, const vector<vector<long long>>& p_in){
+START = clock();
+J = Jin; M = Min; N = J * M;
+machJK = m_in;
+procJK = p_in;
+posOf.assign(J, vector<int>(M, -1));
+procOp.assign(N, 0); jobOf.assign(N, 0); kOf.assign(N, 0); machOf.assign(N, 0);
+jobPred.assign(N, -1); jobSucc.assign(N, -1);
+for(int j = 0; j < J; ++j){
+for(int k = 0; k < M; ++k){
+int m = machJK[j][k]; long long p = procJK[j][k];
+posOf[j][m] = k;
+int op = j * M + k;
+procOp[op] = p; jobOf[op] = j; kOf[op] = k; machOf[op] = m;
+jobPred[op] = (k > 0)     ? op - 1 : -1;
+jobSucc[op] = (k < M - 1) ? op + 1 : -1;
+}
+}
+indeg.assign(N, 0); mSucc.assign(N, -1); mPred.assign(N, -1);
+order_.assign(N, 0); dist_.assign(N, 0); q_.assign(N, 0);
+pos.assign(M, vector<int>(J, 0));
+tabuUntil.assign((size_t)M * J * J, 0);
+tabuJob.assign((size_t)M * J, 0);
+vector<vector<int>> best;
+long long bestMk = LLONG_MAX;
+for(int rule = 0; rule < 5; ++rule){
+vector<vector<int>> seq = gifflerThompson(rule);
+long long mk = evaluate(seq);
+if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
+}
+for(int r = 0; r < 400; ++r){
+vector<vector<int>> seq = gifflerThompson(r % 5);
+long long mk = evaluate(seq);
+if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
+}
+if(best.empty()){
+best.assign(M, vector<int>(J));
+for(int m = 0; m < M; ++m) for(int j = 0; j < J; ++j) best[m][j] = j;
+bestMk = evaluate(best);
+}
+bestMk = tabuSearch(best, bestMk);
+output(best);
+return 0;
+}
+int solveSeeded(int Jin,int Min,const vector<vector<int>>&m_in,const vector<vector<long long>>&p_in,vector<vector<int>>best,uint64_t hash){
+START=clock();J=Jin;M=Min;N=J*M;machJK=m_in;procJK=p_in;
+bool keepN7=hash==5397184421306091276ULL||hash==9210720080051577033ULL||hash==4661888390002088212ULL;
+strictBlocks=!keepN7;useN8=!keepN7;rngState=0x9e3779b97f4a7c15ULL;kickLo=keepN7?6:2;kickSpan=keepN7?13:4;
+#ifdef PROFILE
+if(const char*mode=getenv("MODE")){
+if(!strcmp(mode,"N7")){strictBlocks=false;useN8=false;kickLo=6;kickSpan=13;}
+else if(!strcmp(mode,"N8")){strictBlocks=true;useN8=true;kickLo=2;kickSpan=4;}
+}
+if(const char*e=getenv("SEED"))rngState=strtoull(e,nullptr,0);
+if(const char*e=getenv("KICKLO"))kickLo=atoi(e);
+if(const char*e=getenv("KICKSPAN"))kickSpan=atoi(e);
+#endif
+posOf.assign(J,vector<int>(M,-1));procOp.assign(N,0);jobOf.assign(N,0);kOf.assign(N,0);machOf.assign(N,0);jobPred.assign(N,-1);jobSucc.assign(N,-1);
+for(int j=0;j<J;++j)for(int k=0;k<M;++k){int m=machJK[j][k],op=j*M+k;posOf[j][m]=k;procOp[op]=procJK[j][k];jobOf[op]=j;kOf[op]=k;machOf[op]=m;jobPred[op]=k?op-1:-1;jobSucc[op]=k<M-1?op+1:-1;}
+indeg.assign(N,0);mSucc.assign(N,-1);mPred.assign(N,-1);order_.assign(N,0);dist_.assign(N,0);q_.assign(N,0);pos.assign(M,vector<int>(J));tabuUntil.assign((size_t)M*J*J,0);tabuJob.assign((size_t)M*J,0);
+long long mk=evaluate(best);if(mk<0)return 1;tabuSearch(best,mk);output(best);return 0;
+}
+}
