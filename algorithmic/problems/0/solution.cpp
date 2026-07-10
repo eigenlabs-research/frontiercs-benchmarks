@@ -1,4 +1,3 @@
-// v21.11: fix + crown5
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -280,6 +279,7 @@ static bool crownRepack(R& r, double deadlineMs) {
         if (p.y + t.h > H0) H0 = p.y + t.h;
     }
     if (H0 <= 1) return false;
+    int maxCd = (S < 6000 ? 10 : 5);
     auto& grid = c_grid;
     grid.assign(H0, 0ULL);
     for (auto& p : r.pl) {
@@ -297,7 +297,7 @@ static bool crownRepack(R& r, double deadlineMs) {
         while (H > 0 && grid[H - 1] == 0) H--;
         if (H <= 1) break;
         bool anyDepthOk = false;
-        for (int crownDepth = 1; crownDepth <= 5; crownDepth++) {
+        for (int crownDepth = 1; crownDepth <= maxCd; crownDepth++) {
             if (H - crownDepth < 1) break;
             vector<int> crown;
             for (int i = 0; i < (int)r.pl.size(); i++) {
@@ -311,7 +311,7 @@ static bool crownRepack(R& r, double deadlineMs) {
                 auto& t = ps[p.idx].t[p.ti];
                 for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] &= ~(((uint64_t)t.rmask[dy]) << p.x);
             }
-            sort(crown.begin(), crown.end(), [&](int a, int b) { return ps[r.pl[a].idx].k > ps[r.pl[b].idx].k; });
+            sort(crown.begin(),crown.end(),[&](int a,int b){auto &pa=r.pl[a],&pb=r.pl[b];int ta=pa.y+ps[pa.idx].t[pa.ti].h,tb=pb.y+ps[pb.idx].t[pb.ti].h;if(ta!=tb)return ta>tb;if(pa.y!=pb.y)return pa.y>pb.y;return ps[pa.idx].k>ps[pb.idx].k;});
             int targetH = H - crownDepth;
             vector<array<int,3>> newPos(crown.size()); // ti, x, y
             bool ok = true;
@@ -897,19 +897,19 @@ static R bfSolve(int minW, int base, double deadline) {
 int main() {
     T0 = chrono::steady_clock::now();
     if (const char* e = getenv("POLYPACK_TL")) { double v = atof(e); if (v > 50 && v < 10000) TL_MS = v; }
-    int ffEnv = envInt("PP_FASTFIT", -1);    // -1 => auto-gate by S below; 0/1 => explicit override
-    int BIGBLF = envInt("PP_BIGBLF", 0);     // 1: big cases skip champion pack, BLF-only
-    int SMALLBLF = envInt("PP_SMALLBLF", 0); // 1: small cases skip champion sweep
-    int JUMP = envInt("PP_JUMP", 15);        // % chance of W jump in restarts
-    int BLF2 = envInt("PP_BLF2", 1);         // 1: restarts use blf2 (hole-aware window best-fit)
-    int BLF2SWEEP = envInt("PP_BLF2SWEEP", 0); // 1: small-case sweep uses blf2 instead of skyline
-    int BLF2ORD = envInt("PP_BLF2ORD", 1);   // 0: big-first order, 1: champion order
-    int B3 = envInt("PP_B3", 1);             // 1: use cached blf3 instead of blf2
-    int PHASE2 = envInt("PP_PHASE2", 1);     // 1: blf2 pass over best sweep Ws
-    double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;  // 0 => auto by size
-    double P2ENDF = envInt("PP_P2END", 0) / 100.0;   // 0 => auto by size
-    long long P2MAXS = envInt("PP_P2MAXS", 22000);   // phase2 only when S below this
-    long long B2RESTS = envInt("PP_B2RESTS", 50000);  // blf2 restarts when S below this (was 1300)
+    int ffEnv = envInt("PP_FASTFIT", -1);
+    int BIGBLF = envInt("PP_BIGBLF", 0);
+    int SMALLBLF = envInt("PP_SMALLBLF", 0);
+    int JUMP = envInt("PP_JUMP", 15);
+    int BLF2 = envInt("PP_BLF2", 1);
+    int BLF2SWEEP = envInt("PP_BLF2SWEEP", 0);
+    int BLF2ORD = envInt("PP_BLF2ORD", 1);
+    int B3 = envInt("PP_B3", 1);
+    int PHASE2 = envInt("PP_PHASE2", 1);
+    double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;
+    double P2ENDF = envInt("PP_P2END", 0) / 100.0;
+    long long P2MAXS = envInt("PP_P2MAXS", 22000);
+    long long B2RESTS = envInt("PP_B2RESTS", 50000);
 
     {
         size_t cap = 1 << 20; inbuf.resize(cap); size_t len = 0;
@@ -933,7 +933,7 @@ int main() {
     gFASTFIT = (ffEnv < 0) ? (S >= 12000 ? 1 : 0) : ffEnv;
     if (P2FRAC <= 0.0) P2FRAC = (S < 6000) ? 0.25 : 0.55;
     if (P2ENDF <= 0.0) P2ENDF = (S < 6000) ? 0.35 : 0.70;
-    if (BF_HD == 0) BF_HD = (S > 30000 || S < 10000) ? 10 : 46; // adaptive persistence
+    if (BF_HD == 0) BF_HD = (S > 30000 || S < 10000) ? 10 : 46;
     for (int i = 0; i < n; i++) {
         auto& p = ps[i];
         unordered_set<string> seen; seen.reserve(32);
@@ -959,7 +959,7 @@ int main() {
                         if (t.lo[x] > y) t.lo[x] = y; if (t.hi[x] < y) t.hi[x] = y;
                         t.rmask[y] |= (unsigned short)(1u << x);
                     }
-                    {   // neighbor offsets (adjacent to piece, not in piece)
+                    {
                         set<pair<int,int>> inp(v2.begin(), v2.end()), nbs;
                         const int DX[4] = {1, -1, 0, 0}, DY[4] = {0, 0, 1, -1};
                         for (auto& q : v2)
@@ -998,8 +998,8 @@ int main() {
     else if (S < 3000) factor = 0.5;
     else if (S < 10000) factor = 0.27;
     else if (S < 30000) factor = 0.08;
-    else if (S < 50000) factor = 0.028;  // measured optimum W~33 at S~38k (was 0.01 -> W~19)
-    else factor = 0.009;                 // measured optimum W~24-28 at S~58-96k
+    else if (S < 50000) factor = 0.028;
+    else factor = 0.009;
     int base = max(minW, (int)floor(sqrt((double)S * factor)));
     if (const char* e = getenv("PP_BASEW")) { int v = atoi(e); if (v >= minW && v <= 4000) base = v; }
 
@@ -1030,8 +1030,7 @@ int main() {
     long long BF_N = envInt("PP_BFN", 450);
     bool useBF = (bfEnv < 0) ? (n >= BF_N && base <= 63 && minW <= 63) : (bfEnv > 0);
     if (useBF && !bestR.ok) {
-        bestR = bfSolve(minW, min(base, 63), TL_MS - 40.0); // more leftover for GRASP
-        // BF path previously skipped final crown — multi-row crown can shave BF packings
+        bestR = bfSolve(minW, min(base, 63), TL_MS - 40.0);
         if (bestR.ok) crownRepack(bestR, TL_MS - 5.0);
     }
     // Post-BF retry: use remaining time for capped packing at best width
@@ -1063,8 +1062,8 @@ int main() {
         bestR = move(r);
     }
 
-    const double SEARCH_END = TL_MS;           // hard abort for any pack
-    const double SOFT_END = TL_MS - 15.0;      // don't start new work after this
+    const double SEARCH_END = TL_MS;
+    const double SOFT_END = TL_MS - 15.0;
     vector<int> ordBLF = idx;
     stable_sort(ordBLF.begin(), ordBLF.end(), [&](int a, int b) {
         if (ps[a].k != ps[b].k) return ps[a].k > ps[b].k;
@@ -1091,9 +1090,9 @@ int main() {
     bool skipSweep = (big && BIGBLF) || (!big && SMALLBLF);
     int expLIM = big ? min(max(1, n / 4), (int)(350000 / max(1LL, S - 3500))) : 0;
     double avg = 250.0; int cnt = 0;
-    vector<pair<long long,int>> sweepRes; // (area, W)
+    vector<pair<long long,int>> sweepRes;
     bool doPhase2 = (!big && PHASE2 && S < P2MAXS);
-    double SWFRAC = envInt("PP_SWFRAC", 100) / 100.0; // sweep cap for the no-phase2 small path
+    double SWFRAC = envInt("PP_SWFRAC", 100) / 100.0;
     double sweepEnd = doPhase2 ? min(SOFT_END, TL_MS * P2FRAC)
                                : (!big ? min(SOFT_END, TL_MS * SWFRAC) : SOFT_END);
     for (int wi = 0; wi < (skipSweep ? 0 : (int)Ws.size()); wi++) {
@@ -1193,7 +1192,7 @@ int main() {
             if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
                 int W;
                 {
-                    static int dwBase = envInt("PP_CAPDW", 3); // v19.9: was 2; local A/B +holdout
+                    static int dwBase = envInt("PP_CAPDW", 3);
                     static int dwWide = envInt("PP_CAPDWW", 6);
                     static int wideP = envInt("PP_CAPWIDEP", 25);
                     int dw = ((int)(rng.nxt() % 100) < wideP) ? dwWide : dwBase;
@@ -1270,7 +1269,6 @@ int main() {
             }
         }
     }
-    // late restart: try shuffled orderings at best width for fresh diversification
     static int LATE = envInt("PP_LATE", 4);
     if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30 && LATE > 0) {
         int lateW = bestR.packW;
@@ -1287,7 +1285,7 @@ int main() {
     }
     } // end champion search block (skipped when best-fit produced the result)
     if (!useBF) crownRepack(bestR, TL_MS + 10.0);
-    else if (bestR.ok) crownRepack(bestR, TL_MS + 10.0); // second pass if time
+    else if (bestR.ok) crownRepack(bestR, TL_MS + 10.0);
 
     int maxX = -1, maxY = -1;
     for (auto& p : bestR.pl) {
@@ -1330,5 +1328,5 @@ int main() {
     }
     fwrite(out.data(), 1, out.size(), stdout);
     fflush(stdout);
-    _Exit(0); // skip destructor teardown of large heaps
+    _Exit(0);
 }
