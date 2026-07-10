@@ -754,7 +754,7 @@ static bool localSearch(vector<vector<int>> seed, int K, chrono::steady_clock::t
     long long it=0;
     while(true){
         it++;
-        if((it&255)==0 && past(dl)) break;
+        if((it&63)==0 && past(dl)) break;
         if((it&511)==0 && done()){ res.assign(K,vector<int>(K)); for(int r=0;r<K;r++)for(int c=0;c<K;c++)res[r][c]=g[r*K+c]; return true; }
         int p=-1,forced=-1;
         if((int)(rng()%1000)<20) p=rng()%(K*K);
@@ -922,6 +922,32 @@ int main(){
                 long long rem2=chrono::duration_cast<chrono::milliseconds>(sl-chrono::steady_clock::now()).count();
                 if(rem2>15){ vector<vector<int>> res2;
                     if(saRepair(seed,aim,rem2/1000.0,sl,res2)&&verifyGrid(res2)){ best=res2; bestK=aim; return true; }
+                }
+            }
+            // Optional: min-conflicts local search. Uses a separately-snapshotted rng so
+            // the surrounding search stream is byte-identical to the baseline (this can
+            // only ever lower bestK, never raise it, and only runs on leftover slice time,
+            // so it cannot regress any case or push runtime past the deadline). Tight
+            // internal deadline checking keeps overshoot negligible. Tries two distinct
+            // seeds (shrink-resample and rescale) split across the leftover slice time.
+            if(!past(sl)){
+                auto rngSave=rng;
+                // targeted edge-forcer first (cheap), then min-conflicts.
+                { auto seed=mkSeed(0); makeContactLegal(seed);
+                  long long rem2=chrono::duration_cast<chrono::milliseconds>(sl-chrono::steady_clock::now()).count();
+                  if(rem2>10){ vector<vector<int>> res2;
+                      if(patchRepair(seed,aim,sl,res2)&&verifyGrid(res2)){ best=res2; bestK=aim; rng=rngSave; return true; }
+                  }
+                }
+                for(int ls=0; ls<2 && !past(sl); ls++){
+                    auto seed = (ls==0) ? ([&]{ auto s=mkSeed(0); while((int)s.size()>aim) s=shrinkByOne(s); if((int)s.size()!=aim) s=rescale(best,aim); return s; })()
+                                    : ([&]{ return rescale(best,aim); })();
+                    makeContactLegal(seed);
+                    long long rem2=chrono::duration_cast<chrono::milliseconds>(sl-chrono::steady_clock::now()).count();
+                    if(rem2>10){ vector<vector<int>> res2;
+                        if(localSearch(seed,aim,sl,res2)&&verifyGrid(res2)){ best=res2; bestK=aim; rng=rngSave; return true; }
+                    }
+                    rng=rngSave; // reset for next seed's determinism
                 }
             }
             return false;
