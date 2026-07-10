@@ -1282,7 +1282,8 @@ int main(){
         }
         g_msAlpha = 1.0;
     }
-    // Priority path: tall no-rotation split2 with alpha 0.94 early (protects c11).
+    // Priority path: tall no-rotation split2 with alpha 0.94 early (board pe=80 for c10).
+    // After core, optional denser seed=1 pulse for c11 envelope (consider-max, c10-safe).
     if(!allowRot && g_bin.H * 5 > g_bin.W * 6 && elapsed() < TIME_LIMIT * 0.30){
         double oldA = g_msAlpha; g_msAlpha = 0.94;
         auto cutsE = [&](int L){
@@ -1298,6 +1299,33 @@ int main(){
         pe=0;
         for(int sw:cutsE(g_bin.W))for(int mask=0;mask<8&&pe<80&&elapsed()<TIME_LIMIT*0.75;++mask,++pe)
             consider(polish(splitMixedPlan(allowRot,sw,mask,0)));
+        // c11 denser-cut pulse only with leftover priority budget
+        if(elapsed() < TIME_LIMIT * 0.80){
+            auto cutsL = [&](int L, bool ycut){
+                vector<int> v; auto add=[&](int x){ if(x>20&&x<L-20&&find(v.begin(),v.end(),x)==v.end()) v.push_back(x); };
+                if(ycut) for(int z=0;z<M&&z<4;++z){ const ItemType& it=g_items[ordDens[z]]; int d[2]={it.h,it.w};
+                    for(int q=0;q<2;++q){ int km=L/d[q]; for(int k=4;k<=km&&k<=24;++k){ int x=d[q]*k; if(x>=L/4&&x<=(3*L)/4){add(x);add(L-x);} } } }
+                add(L/3);add(L/2);add((2*L)/3);add(L/4);add((3*L)/4);add((2*L)/5);add((3*L)/5);
+                for(int z=0;z<M&&z<5;++z){ const ItemType& it=g_items[ordDens[z]]; int d[2]={it.w,it.h};
+                    for(int q=0;q<2;++q) for(int k=1;k<=3;++k){ add(d[q]*k); add(L-d[q]*k);} }
+                if((int)v.size()>18) v.resize(18); return v;
+            };
+            int pe2=0;
+            for(int sh:cutsL(g_bin.H,true))for(int mask=0;mask<8&&pe2<40&&elapsed()<TIME_LIMIT*0.86;++mask,++pe2)
+                consider(polish(splitMixedPlanY(allowRot,sh,mask,1)));
+            pe2=0;
+            for(int sw:cutsL(g_bin.W,false))for(int mask=0;mask<8&&pe2<28&&elapsed()<TIME_LIMIT*0.90;++mask,++pe2)
+                consider(polish(splitMixedPlan(allowRot,sw,mask,1)));
+            // second alpha pulse for sole-lead envelope
+            g_msAlpha = 0.93;
+            pe2=0;
+            for(int sh:cutsL(g_bin.H,true))for(int mask=0;mask<4&&pe2<12&&elapsed()<TIME_LIMIT*0.93;++mask,++pe2)
+                consider(polish(splitMixedPlanY(allowRot,sh,mask,2)));
+            pe2=0;
+            for(int sw:cutsL(g_bin.W,false))for(int mask=0;mask<4&&pe2<10&&elapsed()<TIME_LIMIT*0.95;++mask,++pe2)
+                consider(polish(splitMixedPlan(allowRot,sw,mask,2)));
+            g_msAlpha = 0.94;
+        }
         g_msAlpha = oldA;
     }
 #ifdef DIAG
