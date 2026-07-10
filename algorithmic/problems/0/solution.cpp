@@ -1,4 +1,3 @@
-// v21.11: fix + crown5; portfolio trial 3
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -191,7 +190,7 @@ static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0,
         adapt();
         if (!panic && deadlineMs > 0 && elapsed_ms() > deadlineMs) return R{};
     }
-    if ((int)pl.size() != nm) return R{};  // validate all pieces placed
+    if ((int)pl.size() != nm) return R{};
     int H = (int)g + 1;
     int maxX = -1;
     for (auto& pp : pl) {
@@ -305,7 +304,7 @@ static bool crownRepack(R& r, double deadlineMs) {
                 auto& t = ps[p.idx].t[p.ti];
                 if (p.y + t.h > H - crownDepth) crown.push_back(i);
             }
-            if (crown.empty()) { anyDepthOk = true; break; } // nothing to relocate, H is fine
+            if (crown.empty()) { anyDepthOk = true; break; }
             for (int ci : crown) {
                 auto& p = r.pl[ci];
                 auto& t = ps[p.idx].t[p.ti];
@@ -313,7 +312,7 @@ static bool crownRepack(R& r, double deadlineMs) {
             }
             sort(crown.begin(), crown.end(), [&](int a, int b) { return ps[r.pl[a].idx].k > ps[r.pl[b].idx].k; });
             int targetH = H - crownDepth;
-            vector<array<int,3>> newPos(crown.size()); // ti, x, y
+            vector<array<int,3>> newPos(crown.size());
             bool ok = true;
             for (size_t c = 0; c < crown.size() && ok; c++) {
                 auto& p = r.pl[crown[c]];
@@ -360,7 +359,7 @@ static bool crownRepack(R& r, double deadlineMs) {
                     r.W = newW; r.H = newH; r.A = newA;
                     improvedAny = true;
                     anyDepthOk = true;
-                    break; // success at this depth, move to next round
+                    break;
                 } else {
                     ok = false;
                 }
@@ -373,7 +372,7 @@ static bool crownRepack(R& r, double deadlineMs) {
                 }
             }
         }
-        if (!anyDepthOk) break; // all depths failed, can't improve further
+        if (!anyDepthOk) break;
     }
     if (!improvedAny) {
         r.pl = move(origPl);
@@ -390,7 +389,7 @@ static R pack_blf2(int W, const vector<int>& order, int window, double deadlineM
     grid.assign(max<size_t>(64, estH), 0ULL);
     const uint64_t FULLROW = (W == 64) ? ~0ULL : ((1ULL << W) - 1);
     int y0full = 0, topY = 0;
-    long long g = -1; // current max occupied row index
+    long long g = -1;
     vector<int> o = order;
     vector<Pl> pl; pl.reserve(nm);
     int checkCnt = 0;
@@ -464,7 +463,7 @@ static R pack_blf2(int W, const vector<int>& order, int window, double deadlineM
 }
 
 struct B3Cache { int y, x, contact; bool valid; };
-static vector<B3Cache> b3cache; // [pieceId * 8 + orientIdx]
+static vector<B3Cache> b3cache;
 static R pack_blf3(int W, const vector<int>& order, int window, double deadlineMs, RNG& rng, bool randtie) {
     if (W > 64 || W <= 0) return R{};
     int nm = (int)order.size();
@@ -580,7 +579,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
     vector<Pl> pl; pl.reserve(nm);
     if ((int)b3cache.size() < nm * 8) b3cache.resize(nm * 8);
     for (int i = 0; i < nm * 8; i++) b3cache[i].valid = false;
-    static int REPAIR = envInt("PP_REPAIR", 25); // ejection-chain depth (0 = off)
+    static int REPAIR = envInt("PP_REPAIR", 25);
     auto& own = g_own;
     auto& plSlot = g_plSlot;
     if (REPAIR > 0) {
@@ -637,7 +636,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
         for (int depth = 0; depth <= REPAIR; depth++) {
             if (deadlineMs > 0 && elapsed_ms() > deadlineMs) return false;
             auto& p = ps[pending];
-            if (depth > 0) { // pending may fit normally now
+            if (depth > 0) {
                 int bTi = -1, bYy = INT_MAX, bXx = 0;
                 for (int ti = 0; ti < (int)p.t.size(); ti++) {
                     auto& tt = p.t[ti];
@@ -701,7 +700,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
                     for (auto& nb : tt.nbr) {
                         int cx = xF + nb.first, cy = yF + nb.second;
                         if (cx < 0 || cx >= W || cy < 0) { contact++; continue; }
-                        if (cy >= Hcap) { contact++; continue; } // cap edge counts as wall
+                        if (cy >= Hcap) { contact++; continue; }
                         if (cy < (int)grid.size() && (grid[cy] >> cx) & 1ULL) contact++;
                     }
                     cc = {yF, xF, contact, true};
@@ -731,10 +730,10 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
                     redo = true;
                     break;
                 }
-                return R{}; // permanently infeasible under the cap
+                return R{};
             }
         }
-        if (redo) continue; // t stays: the placed piece occupies o[t]... advance below
+        if (redo) continue;
         if (bPos < 0) return R{};
         int placedId = o[bPos];
         place(placedId, bTi, bX, bY);
@@ -761,7 +760,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
     return res;
 }
 
-static int BF_HD = envInt("PP_BFHD", 0); // 0=auto: smaller HD for larger S
+static int BF_HD = envInt("PP_BFHD", 0);
 static vector<uint64_t> bf_occ; static vector<int> bf_colH; static int bf_W;
 static inline int bf_fit(const T& o, int x) {
     int ysky = 0; for (int j = 0; j < o.w; j++) { int v = bf_colH[x + j] - o.lo[j]; if (v > ysky) ysky = v; }
@@ -812,7 +811,7 @@ static int bf_pass(int W, const vector<int>& repr, const unordered_map<uint64_t,
                 for (auto& pr : it->second) if (avail[pr.first] > 0) eval(pr.first, pr.second, x);
             }
         }
-        if (bk < 0) // no indexed candidate: full scan over kinds (rare)
+        if (bk < 0)
             for (int ki = 0; ki < (int)repr.size(); ki++) { if (avail[ki] <= 0) continue;
                 const P& Kp = ps[repr[ki]];
                 for (int oi = 0; oi < (int)Kp.t.size(); oi++) { const T& o = Kp.t[oi]; if (o.w > W) continue;
@@ -856,10 +855,10 @@ static R bfSolve(int minW, int base, double deadline) {
     }
     long long bestA = LLONG_MAX; int bestW = 0, bestH = 0; vector<int> bK, bO, bX, bY, tK, tO, tX, tY;
     double lastPass = 0;
-    for (int d = 0; d <= 30; d++) { // v19.5: wider W only
+    for (int d = 0; d <= 30; d++) {
         for (int sgn = (d ? -1 : 1); sgn <= 1; sgn += 2) {
             int W = base + sgn * d; if (W < minW || W > 63) continue;
-            for (int tie = 1; tie >= 0; tie--) {   // try both tie-break directions, keep best area
+            for (int tie = 1; tie >= 0; tie--) {
                 if (elapsed_ms() + lastPass * 1.3 > deadline) goto DONE;
                 vector<int> avail = kcnt; double t0 = elapsed_ms();
                 int H = bf_pass(W, repr, idx, avail, n, tK, tO, tX, tY, tie);
@@ -978,8 +977,7 @@ int main() {
     }
 
     vector<int> idx(n); iota(idx.begin(), idx.end(), 0);
-    bool alt = S < 1200 || (S >= 1400 && S < 1600) || (S >= 2000 && S < 6000);
-    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL) ^ (alt ? 123 : 0);
+    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL);
     RNG rng(seed);
     auto ord4 = [&]() {
         vector<int> res = idx;
@@ -1206,7 +1204,7 @@ int main() {
                 int Hcap = (int)(capA / W);
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
-                obuf = fromBest ? ilsOrd : ((((cntBLF & 1) != 0) ^ alt) ? ordBLF : ordB2);
+                obuf = fromBest ? ilsOrd : ((cntBLF & 1) ? ordBLF : ordB2);
                 int swaps = 1 + rng.rint(12);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
