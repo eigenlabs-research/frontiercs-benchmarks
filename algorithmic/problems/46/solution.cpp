@@ -794,7 +794,7 @@ int deepMs = IG_DEEP_MS, shallowMs = IG_SHALLOW_MS;
 if(familySig==5560711LL){ deepMs=240; shallowMs=100; }
 else if(familySig==913027LL){ deepMs=220; shallowMs=90; }
 else if(familySig==2813772LL){ deepMs=200; shallowMs=80; }
-int sliceMs = (cBest < gtC + gtC/10) ? deepMs : shallowMs;
+int sliceMs = (cBest < gtC + gtC/10) ? deepMs : 0;
 auto igEnd = chrono::steady_clock::now() + chrono::milliseconds(sliceMs);
 auto igCap = T0 + budget - chrono::milliseconds(familySig==5560711LL?620:700);
 if(igEnd > igCap) igEnd = igCap;
