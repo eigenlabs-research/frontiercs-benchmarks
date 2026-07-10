@@ -1,4 +1,4 @@
-// v21.11: fix + crown5; portfolio trial 3
+// v21.11: fix + crown5
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -270,116 +270,53 @@ static int envInt(const char* name, int def) {
     return def;
 }
 
+static bool betterR(const R&a,const R&b){return !b.ok||(a.ok&&(a.A<b.A||(a.A==b.A&&(a.H<b.H||(a.H==b.H&&a.W<b.W)))));}
+static bool validR(const R&q){
+ if(!q.ok||q.pl.size()!=n||q.W<1||q.H<1||q.packW<1||q.packW>64)return false;
+ vector<uint64_t>g(q.H);vector<char>seen(n);int mw=0,mh=0;
+ for(auto&p:q.pl){if(p.idx<0||p.idx>=n||seen[p.idx]++||p.ti<0||p.ti>=(int)ps[p.idx].t.size()||p.x<0||p.y<0)return false;auto&t=ps[p.idx].t[p.ti];if(p.x+t.w>q.W||p.y+t.h>q.H)return false;for(int y=0;y<t.h;y++){uint64_t m=(uint64_t)t.rmask[y]<<p.x;if(g[p.y+y]&m)return false;g[p.y+y]|=m;}mw=max(mw,p.x+t.w);mh=max(mh,p.y+t.h);}
+ for(char x:seen)if(!x)return false;return q.W==mw&&q.H==mh&&q.A==1LL*mw*mh;
+}
 static vector<uint64_t> c_grid;
-static bool crownRepack(R& r, double deadlineMs) {
-    if (!r.ok || r.packW <= 0 || r.packW > 64) return false;
-    int W = r.packW;
-    int H0 = 0;
-    for (auto& p : r.pl) {
-        auto& t = ps[p.idx].t[p.ti];
-        if (p.y + t.h > H0) H0 = p.y + t.h;
+static bool crownRepack(R& r,double deadlineMs){
+ if(!r.ok||r.packW<=0||r.packW>64||deadlineMs-elapsed_ms()<8)return false;
+ int W=r.packW,commits=0; bool improved=false;
+ while(commits<16&&deadlineMs-elapsed_ms()>=8){
+  int H=0; for(auto&p:r.pl)H=max(H,p.y+ps[p.idx].t[p.ti].h); if(H<=1)break;
+  int Ht=H-1; vector<short> owner((size_t)W*H,-1); c_grid.assign(H,0);
+  for(int i=0;i<(int)r.pl.size();i++){auto&p=r.pl[i];auto&t=ps[p.idx].t[p.ti];for(auto&q:t.c)owner[(p.y+q.second)*W+p.x+q.first]=i;for(int y=0;y<t.h;y++)c_grid[p.y+y]|=(uint64_t)t.rmask[y]<<p.x;}
+  bool committed=false;
+  for(int d:{4,6,8,10}){
+   if(deadlineMs-elapsed_ms()<8)break;
+   vector<char> mv(r.pl.size()); vector<int> seed;
+   for(int i=0;i<(int)r.pl.size();i++){auto&p=r.pl[i];auto&t=ps[p.idx].t[p.ti];if(p.y+t.h>H-d){mv[i]=1;seed.push_back(i);}}
+   static const int dx[4]={1,-1,0,0},dy[4]={0,0,1,-1};
+   for(int i:seed){auto&p=r.pl[i];auto&t=ps[p.idx].t[p.ti];for(auto&q:t.c)for(int z=0;z<4;z++){int x=p.x+q.first+dx[z],y=p.y+q.second+dy[z];if(x>=0&&x<W&&y>=0&&y<H){short j=owner[y*W+x];if(j>=0&&j!=i)mv[j]=1;}}}
+   vector<int> ids; for(int i=0;i<(int)mv.size();i++)if(mv[i])ids.push_back(i);
+   if((int)ids.size()>min(n,max(24,3*W)))continue;
+   vector<uint64_t> fixed=c_grid;
+   for(int i:ids){auto&p=r.pl[i];auto&t=ps[p.idx].t[p.ti];for(int y=0;y<t.h;y++)fixed[p.y+y]&=~((uint64_t)t.rmask[y]<<p.x);}
+   bool bad=false;for(int y=Ht;y<H;y++)if(fixed[y])bad=true;if(bad)continue;
+   sort(ids.begin(),ids.end(),[&](int a,int b){auto&A=ps[r.pl[a].idx];auto&B=ps[r.pl[b].idx];if(A.k!=B.k)return A.k>B.k;if(A.minA-A.k!=B.minA-B.k)return A.minA-A.k>B.minA-B.k;return A.id<B.id;});
+   for(int at=0;at<6&&deadlineMs-elapsed_ms()>=8;at++){
+    vector<int> o=ids;if(at){RNG rg((unsigned long long)S^(n*10007ULL)^(d*131ULL)^at);for(int z=0;z<(int)o.size()/3+1;z++)swap(o[rg.rint(o.size())],o[rg.rint(o.size())]);}
+    vector<uint64_t> grid=fixed;vector<Pl> np;bool ok=true;
+    for(int step=0;step<(int)o.size()&&ok;step++){
+     int lim=min((int)o.size(),step+64),bp=-1,bti=-1,bx=0,by=0,bc=-1;
+     for(int pos=step;pos<lim;pos++){int slot=o[pos],pid=r.pl[slot].idx;for(int ti=0;ti<(int)ps[pid].t.size();ti++){auto&t=ps[pid].t[ti];if(t.w>W||t.h>Ht)continue;for(int y=0;y+t.h<=Ht;y++)for(int x=0;x+t.w<=W;x++){
+      bool hit=false;for(int yy=0;yy<t.h;yy++)if(grid[y+yy]&((uint64_t)t.rmask[yy]<<x)){hit=true;break;}if(hit)continue;
+      int ct=0;for(auto&nb:t.nbr){int xx=x+nb.first,yy=y+nb.second;if(xx<0||xx>=W||yy<0||yy>=Ht||((grid[yy]>>xx)&1))ct++;}
+      if(ct>bc||(ct==bc&&(y<by||(y==by&&x<bx)))){bc=ct;by=y;bx=x;bti=ti;bp=pos;}
+     }}}
+     if(bp<0){ok=false;break;}swap(o[step],o[bp]);int slot=o[step],pid=r.pl[slot].idx;auto&t=ps[pid].t[bti];for(int y=0;y<t.h;y++)grid[by+y]|=(uint64_t)t.rmask[y]<<bx;np.push_back({pid,bti,bx,by});
     }
-    if (H0 <= 1) return false;
-    auto& grid = c_grid;
-    grid.assign(H0, 0ULL);
-    for (auto& p : r.pl) {
-        auto& t = ps[p.idx].t[p.ti];
-        for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] |= ((uint64_t)t.rmask[dy]) << p.x;
-    }
-    bool improvedAny = false;
-    long long origA = r.A;
-    int origW = r.W, origH = r.H;
-    vector<Pl> origPl = r.pl;
-    int rounds = 0;
-    while (rounds++ < 64) {
-        if (deadlineMs > 0 && elapsed_ms() > deadlineMs) break;
-        int H = (int)grid.size();
-        while (H > 0 && grid[H - 1] == 0) H--;
-        if (H <= 1) break;
-        bool anyDepthOk = false;
-        for (int crownDepth = 1; crownDepth <= 5; crownDepth++) {
-            if (H - crownDepth < 1) break;
-            vector<int> crown;
-            for (int i = 0; i < (int)r.pl.size(); i++) {
-                auto& p = r.pl[i];
-                auto& t = ps[p.idx].t[p.ti];
-                if (p.y + t.h > H - crownDepth) crown.push_back(i);
-            }
-            if (crown.empty()) { anyDepthOk = true; break; } // nothing to relocate, H is fine
-            for (int ci : crown) {
-                auto& p = r.pl[ci];
-                auto& t = ps[p.idx].t[p.ti];
-                for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] &= ~(((uint64_t)t.rmask[dy]) << p.x);
-            }
-            sort(crown.begin(), crown.end(), [&](int a, int b) { return ps[r.pl[a].idx].k > ps[r.pl[b].idx].k; });
-            int targetH = H - crownDepth;
-            vector<array<int,3>> newPos(crown.size()); // ti, x, y
-            bool ok = true;
-            for (size_t c = 0; c < crown.size() && ok; c++) {
-                auto& p = r.pl[crown[c]];
-                auto& piece = ps[p.idx];
-                int bTi = -1, bX = 0, bY = INT_MAX;
-                for (int ti = 0; ti < (int)piece.t.size(); ti++) {
-                    auto& t = piece.t[ti];
-                    if (t.w > W || t.h > targetH) continue;
-                    uint64_t limMask = (W - t.w + 1 >= 64) ? ~0ULL : ((1ULL << (W - t.w + 1)) - 1);
-                    int ymax = targetH - t.h;
-                    for (int y = 0; y <= ymax; y++) {
-                        if (bY <= y) break;
-                        uint64_t conflict = 0;
-                        for (int dy = 0; dy < t.h; dy++) {
-                            uint64_t g = grid[y + dy];
-                            if (!g) continue;
-                            unsigned m = t.rmask[dy];
-                            while (m) { int b = __builtin_ctz(m); conflict |= (g >> b); m &= m - 1; }
-                        }
-                        uint64_t allowed = ~conflict & limMask;
-                        if (allowed) {
-                            int x = (int)__builtin_ctzll(allowed);
-                            if (y < bY || (y == bY && x < bX)) { bY = y; bX = x; bTi = ti; }
-                            break;
-                        }
-                    }
-                }
-                if (bTi < 0) { ok = false; break; }
-                auto& t = piece.t[bTi];
-                for (int dy = 0; dy < t.h; dy++) grid[bY + dy] |= ((uint64_t)t.rmask[dy]) << bX;
-                newPos[c] = {bTi, bX, bY};
-            }
-            if (ok) {
-                uint64_t colU = 0; int rows = 0;
-                for (auto& g : grid) if (g) { colU |= g; rows++; }
-                int newW = max(1, __builtin_popcountll(colU));
-                int newH = max(1, rows);
-                long long newA = (long long)newW * newH;
-                if (newA < r.A) {
-                    for (size_t c = 0; c < crown.size(); c++) {
-                        auto& p = r.pl[crown[c]];
-                        p.ti = newPos[c][0]; p.x = newPos[c][1]; p.y = newPos[c][2];
-                    }
-                    r.W = newW; r.H = newH; r.A = newA;
-                    improvedAny = true;
-                    anyDepthOk = true;
-                    break; // success at this depth, move to next round
-                } else {
-                    ok = false;
-                }
-            }
-            if (!ok) {
-                fill(grid.begin(), grid.end(), 0ULL);
-                for (auto& p : r.pl) {
-                    auto& t = ps[p.idx].t[p.ti];
-                    for (int dy = 0; dy < t.h; dy++) grid[p.y + dy] |= ((uint64_t)t.rmask[dy]) << p.x;
-                }
-            }
-        }
-        if (!anyDepthOk) break; // all depths failed, can't improve further
-    }
-    if (!improvedAny) {
-        r.pl = move(origPl);
-        r.W = origW; r.H = origH; r.A = origA;
-    }
-    return improvedAny;
+    if(ok){vector<Pl> cand=r.pl;for(int z=0;z<(int)o.size();z++)cand[o[z]]=np[z];int mw=0,mh=0;for(auto&p:cand){auto&t=ps[p.idx].t[p.ti];mw=max(mw,p.x+t.w);mh=max(mh,p.y+t.h);}long long A=1LL*mw*mh;R q=r;q.pl=move(cand);q.W=mw;q.H=mh;q.A=A;if(validR(q)&&betterR(q,r)){r=move(q);improved=committed=true;commits++;break;}}
+   }
+   if(committed)break;
+  }
+  if(!committed)break;
+ }
+ return improved;
 }
 
 static R pack_blf2(int W, const vector<int>& order, int window, double deadlineMs, RNG& rng, bool randtie) {
@@ -978,8 +915,7 @@ int main() {
     }
 
     vector<int> idx(n); iota(idx.begin(), idx.end(), 0);
-    bool alt = S < 1200 || (S >= 1400 && S < 1600) || (S >= 2000 && S < 6000);
-    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL) ^ (alt ? 123 : 0);
+    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL);
     RNG rng(seed);
     auto ord4 = [&]() {
         vector<int> res = idx;
@@ -1206,7 +1142,7 @@ int main() {
                 int Hcap = (int)(capA / W);
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
-                obuf = fromBest ? ilsOrd : ((((cntBLF & 1) != 0) ^ alt) ? ordBLF : ordB2);
+                obuf = fromBest ? ilsOrd : ((cntBLF & 1) ? ordBLF : ordB2);
                 int swaps = 1 + rng.rint(12);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
@@ -1287,8 +1223,11 @@ int main() {
         }
     }
     } // end champion search block (skipped when best-fit produced the result)
+    R safe;
+    if(validR(bestR))safe=bestR;
     if (!useBF) crownRepack(bestR, TL_MS + 10.0);
     else if (bestR.ok) crownRepack(bestR, TL_MS + 10.0); // second pass if time
+    if(!validR(bestR)&&safe.ok)bestR=move(safe);
 
     int maxX = -1, maxY = -1;
     for (auto& p : bestR.pl) {
