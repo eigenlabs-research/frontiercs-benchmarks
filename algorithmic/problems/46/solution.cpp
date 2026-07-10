@@ -991,14 +991,14 @@ while(!timeUp){
 auto nowT = chrono::steady_clock::now();
 if(nowT >= T_end) break;
 iter++;
-if((iter & 16383) == 0){
+if((iter & 8191) == 0){
 long long fc = evalSeq(cur, true);
 if(fc >= 0) curC = fc;
 if((int)pool.size() >= 2){
 long long sbC = bestC; vector<vector<int>> sb = best;
 int bi=0,wi=0;
 for(int z=1;z<(int)pool.size();++z){ if(pool[z].C<pool[bi].C) bi=z; if(pool[z].C>pool[wi].C) wi=z; }
-if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,30); poolAdd(best,bestC); }
+if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,40); poolAdd(best,bestC); }
 bestC = sbC; best = sb;
 evalSeq(cur, true);
 }
@@ -2184,3 +2184,4 @@ output(best);
 return 0;
 }
 }
+// v16: 8K iter pathRelink, 40 steps
