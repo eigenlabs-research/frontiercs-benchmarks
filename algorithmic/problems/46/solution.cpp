@@ -610,7 +610,7 @@ for(int i=0;i+1<J;++i) if(posT[s[i]]>posT[s[i+1]]){
 Mv mv{m,i,i+1,i+1,true}; cands.push_back({estMove(cur,mv),m,i});
 }}
 if(cands.empty()) break;
-int K=(int)min((size_t)8,cands.size());
+int K=(int)min((size_t)12,cands.size());
 partial_sort(cands.begin(),cands.begin()+K,cands.end(),[](const Cand&a,const Cand&b){return a.est<b.est;});
 int bm=-1,bi=-1; long long bnc=LLONG_MAX;
 for(int t=0;t<min(K,4);++t){
@@ -2186,3 +2186,4 @@ output(best);
 return 0;
 }
 }
+// v32: Kcand=12
