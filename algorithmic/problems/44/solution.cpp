@@ -67,7 +67,7 @@ int main(){
     // band and keep the leader-tuned K=24 everywhere else, plus the large-N (>50000) time cap.
     // Env overrides retained for further sweeps.
     int K;
-    if(N>50000)                      K=min(N-1,6);
+    if(N>50000)                      K=min(N-1,10);
     else if(N>=16000 && N<=36000)    K=min(N-1,40);
     else if(N>5000)                  K=min(N-1,24);
     else                             K=min(N-1,10);
