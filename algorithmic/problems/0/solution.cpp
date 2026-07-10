@@ -978,7 +978,7 @@ int main() {
     }
 
     vector<int> idx(n); iota(idx.begin(), idx.end(), 0);
-    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL);
+    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL) ^ (unsigned)envInt("PP_SEED",13);
     RNG rng(seed);
     auto ord4 = [&]() {
         vector<int> res = idx;
@@ -1205,7 +1205,7 @@ int main() {
                 int Hcap = (int)(capA / W);
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
-                obuf = fromBest ? ilsOrd : ((cntBLF & 1) ? ordBLF : ordB2);
+                obuf = fromBest ? ilsOrd : ((cntBLF & 1) ? ordB2 : ordBLF);
                 int swaps = 1 + rng.rint(12);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
