@@ -856,10 +856,10 @@ static R bfSolve(int minW, int base, double deadline) {
     }
     long long bestA = LLONG_MAX; int bestW = 0, bestH = 0; vector<int> bK, bO, bX, bY, tK, tO, tX, tY;
     double lastPass = 0;
-    for (int tie = 1; tie >= 0; tie--) { // cover widths before alternate tie-break
-        for (int d = 0; d <= 30; d++) {
-            for (int sgn = (d ? -1 : 1); sgn <= 1; sgn += 2) {
-                int W = base + sgn * d; if (W < minW || W > 63) continue;
+    for (int d = 0; d <= 30; d++) { // v19.5: wider W only
+        for (int sgn = (d ? -1 : 1); sgn <= 1; sgn += 2) {
+            int W = base + sgn * d; if (W < minW || W > 63) continue;
+            for (int tie = 1; tie >= 0; tie--) {   // try both tie-break directions, keep best area
                 if (elapsed_ms() + lastPass * 1.3 > deadline) goto DONE;
                 vector<int> avail = kcnt; double t0 = elapsed_ms();
                 int H = bf_pass(W, repr, idx, avail, n, tK, tO, tX, tY, tie);
@@ -883,7 +883,7 @@ static R bfSolve(int minW, int base, double deadline) {
     r.W = bestW; r.H = bestH; r.A = bestA; r.ok = true; r.packW = bestW;
     vector<int> mcur(K, 0);
     r.pl.reserve(n);
-    for (size_t z = 0; z < bK.size(); z++) { int ki = bK[z]; int pi = members[ki][mcur[ki]++]; r.pl.push_back({pi, bO[z], bX[z], bY[z]}); }
+    for (size_t z = 0; z < bK.size(); z++) { int ki = bK[z]; int pi = members[ki][mcur[ki]++]; if((int)bO[z]>=(int)ps[pi].t.size()||ps[pi].t[bO[z]].c!=ps[repr[ki]].t[bO[z]].c){r.ok=false;return r;} r.pl.push_back({pi, bO[z], bX[z], bY[z]}); }
     return r;
 }
 
@@ -966,6 +966,11 @@ int main() {
                 }
             }
         }
+        sort(p.t.begin(), p.t.end(), [](const T& a, const T& b) {
+            string ka, kb;
+            for (auto& q : a.c) { ka.append(to_string(q.first)); ka.push_back(','); ka.append(to_string(q.second)); ka.push_back(';'); }
+            for (auto& q : b.c) { kb.append(to_string(q.first)); kb.push_back(','); kb.append(to_string(q.second)); kb.push_back(';'); }
+            return ka < kb; });
         for (auto& t : p.t) { p.minW = min(p.minW, t.w); p.minH = min(p.minH, t.h); p.minA = min(p.minA, t.w * t.h); }
         if (p.t.empty()) { T t; t.w = 1; t.h = 1; t.c = {{0, 0}}; t.lo = {0}; t.hi = {0}; t.r = 0; t.f = 0; t.minx = 0; t.miny = 0; memset(t.rmask, 0, sizeof(t.rmask)); t.rmask[0] = 1; p.t.push_back(t); p.minW = 1; p.minH = 1; p.minA = 1; }
     }
