@@ -285,15 +285,8 @@ int u = opOf(cur[mm][J-1], mm);
 if(ds[u] > C) C = ds[u];
 }
 gCmax = C;
-#ifdef DIAG
-extern long long g_pops, g_calls;
-g_pops += pops + headPops; g_calls++;
-#endif
 return C;
 }
-#ifdef DIAG
-long long g_pops = 0, g_calls = 0;
-#endif
 static bool isTabu(const vector<vector<int>>& cur, const Mv& mv, int iter){
 const auto& s = cur[mv.m];
 int uj = s[mv.i];
@@ -388,9 +381,6 @@ static vector<int> carBestSeq;
 static int carNodes, carNodeCap;
 static chrono::steady_clock::time_point carDeadline;
 static vector<long long> carR, carQ, carP;
-#ifdef DIAG
-long long g_roAtt = 0, g_roAcc = 0, g_roCyc = 0, g_roUs = 0;
-#endif
 static long long schrage1(int n, const long long* r, const long long* q, const long long* p, int* seqOut){
 static vector<char> done; done.assign(n, 0);
 long long t = 0, C = 0;
@@ -480,11 +470,6 @@ static int g_carNodeCap = 3000;
 static int g_carMsLim = 15;
 static bool reoptMachine(int m, vector<vector<int>>& cur, long long& curC, long long& bestC,
 vector<vector<int>>& best, chrono::steady_clock::time_point T_end, chrono::steady_clock::time_point& lastImpT){
-#ifdef DIAG
-g_roAtt++;
-auto diagT0 = chrono::steady_clock::now();
-struct RoTimer { chrono::steady_clock::time_point t0; ~RoTimer(){ g_roUs += chrono::duration_cast<chrono::microseconds>(chrono::steady_clock::now() - t0).count(); } } roTimer{diagT0};
-#endif
 long long Cr = evalReduced(m, cur);
 if(Cr < 0){ evalSeq(cur, true); return false; }
 carR.resize(J); carQ.resize(J); carP.resize(J);
@@ -513,14 +498,8 @@ if(nc >= 0 && nc < curC){
 curC = nc;
 if(nc < bestC){ best = cur; bestC = nc; }
 lastImpT = chrono::steady_clock::now();
-#ifdef DIAG
-g_roAcc++;
-#endif
 return true;
 }
-#ifdef DIAG
-if(nc < 0) g_roCyc++;
-#endif
 cur[m] = roOld;
 long long cc = evalSeq(cur, true);
 if(cc >= 0) curC = cc;
@@ -709,9 +688,6 @@ if(c < bestC){ best = s; bestC = c; }
 mt19937 rng(seedMain);
 vector<int> igElitePi; long long igEliteC = LLONG_MAX;
 static vector<long long> igF, igQ;
-#ifdef DIAG
-int igChk = 0;
-#endif
 trySeed(seedGT(0, rng));
 trySeed(seedGT(1, rng));
 if(chrono::steady_clock::now() - T0 < budget)
@@ -719,9 +695,6 @@ trySeed(seedGT(2, rng));
 for(int s=0;s<extraGT;++s) if(chrono::steady_clock::now()-T0<budget) trySeed(seedGT(3, rng));
 #ifndef NO_NEH
 if(!legacy && J > 2 && chrono::steady_clock::now() - T0 < budget - chrono::milliseconds(120)){
-#ifdef DIAG
-long long gtBest = curC;
-#endif
 vector<long long> wtot(J, 0), wfront(J, 0), maxp(J, 0);
 for(int j=0;j<J;++j){
 for(int k=0;k<M;++k){ wtot[j]+=p_of[j][k]; if(p_of[j][k]>maxp[j])maxp[j]=p_of[j][k]; }
@@ -736,7 +709,7 @@ long long cr = evalPerm(rev, J);
 if(cr < cBest){ cBest = cr; piBest = rev; }
 };
 vector<pair<long long,int>> nkey(J);
-for(int v=0; v<6; ++v){
+for(int v=0;v<(familySig==913027LL?4:6);++v){
 for(int j=0;j<J;++j){
 long long k;
 if(v == 0) k = -wtot[j]*128;
@@ -751,9 +724,6 @@ vector<int> ord(J);
 for(int j=0;j<J;++j) ord[j] = nkey[j].second;
 consider(nehBuild(ord));
 }
-#ifdef DIAG
-int descPasses = 0;
-#endif
 if(!piBest.empty()){
 auto tD0 = chrono::steady_clock::now();
 long long curP = cBest;
@@ -761,9 +731,6 @@ vector<int> nbase; nbase.reserve(J);
 vector<int> ncand; ncand.reserve(J);
 for(int pass=0; pass<6; ++pass){
 bool imp = false;
-#ifdef DIAG
-descPasses = pass+1;
-#endif
 for(int i=0;i<J;++i){
 if(chrono::steady_clock::now() - tD0 > chrono::milliseconds(25)){ pass = 6; break; }
 int j = piBest[i];
@@ -863,9 +830,6 @@ if(mk < bc){ bc = mk; bp = p; }
 }
 piNew.insert(piNew.begin()+bp, j);
 cNew = bc;
-#ifdef DIAG
-if(igChk < 50){ long long ref = evalPerm(piNew, L+1); if(ref != bc) fprintf(stderr,"IG-ACCEL MISMATCH %lld vs %lld\n", bc, ref); ++igChk; }
-#endif
 }
 if(cNew <= cCur || (Temp > 0 && (double)(rng() & 0xfffff) * (1.0/1048576.0) < exp(-(double)(cNew - cCur)/Temp))){
 piCur = piNew; cCur = cNew;
@@ -875,15 +839,9 @@ if(cBest < igEliteC){ igEliteC = cBest; igElitePi = piBest; }
 cBest = cNew; piBest = piNew;
 } else if(cNew < igEliteC && piNew != piBest){ igEliteC = cNew; igElitePi = piNew; }
 }
-#ifdef DIAG
-fprintf(stderr, "IG iters=%d slice=%d cPi=%lld gtC=%lld %s\n", igIter, sliceMs, cBest, gtC, cBest < gtC ? "PI-WINS" : "gt-wins");
-#endif
 }
 vector<vector<int>> s(M, piBest);
 trySeed(s);
-#ifdef DIAG
-fprintf(stderr, "NEH C=%lld GTbest=%lld passes=%d %s\n", cBest, gtBest, descPasses, cBest < gtBest ? "NEH-WINS" : "gt-wins");
-#endif
 }
 }
 #endif
@@ -947,9 +905,6 @@ return tmin + (int)(rng() % (unsigned)span);
 struct Elite { vector<vector<int>> seq; long long C; unsigned long long h; };
 vector<Elite> pool;
 const int E = 6; int poolHead = 0;
-#ifdef DIAG
-long long dRst = 0, dRstElite = 0, dRstBest = 0, dInsBest = 0, dInsRB = 0, dRstWin = 0;
-#endif
 auto solHash = [&](const vector<vector<int>>& s)->unsigned long long{
 unsigned long long h = 1469598103934665603ULL;
 for(int m=0;m<M;++m) for(int j=0;j<J;++j) h = h*1099511628211ULL ^ (unsigned long long)(s[m][j]+1);
@@ -987,9 +942,6 @@ reoptMachine(mord[t].second, cur, curC, bestC, best, T_end, lastImpT);
 }
 if(bestC <= LB) timeUp = true;
 }
-#endif
-#ifdef DIAG
-int iterLastImp = 0;
 #endif
 while(!timeUp){
 auto nowT = chrono::steady_clock::now();
@@ -1030,10 +982,6 @@ reoptMachine(pick, cur, curC, bestC, best, T_end, lastImpT);
 #endif
 genMoves(cur);
 int nmv = (int)gmoves.size();
-#ifdef DIAG
-static long long totMv = 0; totMv += nmv;
-if(iter % 50000 == 0) fprintf(stderr, "avg nmv=%.1f\n", (double)totMv/iter);
-#endif
 if(nmv == 0) break;
 gcand.clear();
 for(int idx=0; idx<nmv; ++idx)
@@ -1091,23 +1039,6 @@ if(tb && !asp) continue;
 collectTabu(cur, mv);
 applyMove(cur, mv);
 long long nc = incAfterMove(cur, mv);
-#ifdef VERIFY
-{
-static vector<long long> vd, vt; static long long mism = 0; static long long checks = 0;
-vd = dist_; vt = tail_;
-long long fc = evalSeq(cur, true);
-checks++;
-if(nc != -2){
-if(fc != nc || vd != dist_ || vt != tail_){
-mism++;
-fprintf(stderr, "MISMATCH iter=%d inc=%lld full=%lld distOK=%d tailOK=%d\n",
-iter, nc, fc, (int)(vd==dist_), (int)(vt==tail_));
-}
-}
-if(checks % 20000 == 0) fprintf(stderr, "verify checks=%lld mism=%lld\n", checks, mism);
-nc = fc;
-}
-#endif
 if(nc == -2) nc = evalSeq(cur, true);
 if(nc < 0){
 undoMove(cur, mv);
@@ -1131,11 +1062,6 @@ best = cur; bestC = exact; sinceImp = 0;
 lastImpT = chrono::steady_clock::now();
 poolAdd(cur, exact);
 failCnt = 0;
-#ifdef DIAG
-iterLastImp = iter;
-dInsBest++;
-if(afterRst) dRstWin++;
-#endif
 afterRst = false;
 if(bestC <= LB) break;
 }
@@ -1146,9 +1072,6 @@ long long stag = chrono::duration_cast<chrono::milliseconds>(nowT - lastImpT).co
 if(legacy ? sinceImp > 60000 : stag > rstMs){
 if(rbC <= bestC + bestC/50 && !rb.empty()){
 poolAdd(rb, rbC);
-#ifdef DIAG
-dInsRB++;
-#endif
 }
 if(!legacy && (int)pool.size()>=2 && chrono::steady_clock::now()<T_end){
 int bi=0,wi=0;
@@ -1157,14 +1080,8 @@ if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,prSteps); 
 }
 if(legacy || pool.empty() || (rng() & 1)){
 cur = best;
-#ifdef DIAG
-dRstBest++;
-#endif
 } else {
 cur = pool[rng()%pool.size()].seq;
-#ifdef DIAG
-dRstElite++;
-#endif
 }
 curC = evalSeq(cur, true);
 int kicks = legacy ? 1+(int)(rng()%2) : kicksBase+failCnt+(int)(rng()%(unsigned)kicksSpan); if(kicks>kicksMax) kicks=kicksMax;
@@ -1183,17 +1100,9 @@ sinceImp = 0; rbC = LLONG_MAX;
 lastImpT = chrono::steady_clock::now();
 ++failCnt;
 afterRst = true;
-#ifdef DIAG
-dRst++;
-#endif
 }
 }
 }
-#ifdef DIAG
-extern long long g_pops, g_calls;
-extern long long g_roAtt, g_roAcc, g_roCyc, g_roUs;
-fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d) reopt att=%lld acc=%lld cyc=%lld ms=%.1f rst=%lld(best %lld/elite %lld, wins %lld) pool ins=%lld/%lld\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N, g_roAtt, g_roAcc, g_roCyc, g_roUs/1000.0, dRst, dRstBest, dRstElite, dRstWin, dInsBest, dInsRB);
-#endif
 }
 {
 vector<char> buf;
