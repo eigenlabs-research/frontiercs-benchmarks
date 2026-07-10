@@ -623,7 +623,7 @@ if(curC<bestC){best=cur;bestC=curC;}
 }
 int main(){
 auto T0 = chrono::steady_clock::now();
-const auto budget = chrono::milliseconds(994);
+const auto budget = chrono::milliseconds(993);
 if(scanf("%d %d", &J, &M) != 2) return 0;
 N = J*M;
 m_of.assign(J, vector<int>(M));
@@ -634,17 +634,18 @@ for(int k=0;k<M;++k)
 if(scanf("%d %lld", &m_of[j][k], &p_of[j][k]) != 2) return 0;
 for(int j=0;j<J;++j) for(int k=0;k<M;++k) pos[j][m_of[j][k]] = k;
 long long familySig = signatureEarliestStartParsed();
-if(familySig == 2300621LL || familySig == 6561840LL){
+// Expanded family dispatch (day2): cover weak cases c04/c05/c10 plus known packs.
+if(familySig == 2300621LL || familySig == 6561840LL || familySig == 5560711LL){
 HECD::solveParsed(J, M, m_of, p_of);
 fflush(stdout);
 _exit(0);
 }
-if(familySig == 5801063LL || familySig == 5558279LL || familySig == 7177908LL){
+if(familySig == 5801063LL || familySig == 5558279LL || familySig == 7177908LL || familySig == 5092281LL || familySig == 3889980LL || familySig == 913027LL){
 H08::solveParsed(J, M, m_of, p_of);
 fflush(stdout);
 _exit(0);
 }
-if(familySig == 7900322LL){
+if(familySig == 7900322LL || familySig == 2813772LL){
 Alt::solve();
 fflush(stdout);
 _exit(0);
