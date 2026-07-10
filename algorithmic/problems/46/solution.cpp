@@ -1000,7 +1000,7 @@ if(!legacy && (int)pool.size() >= 2){
 long long sbC = bestC; vector<vector<int>> sb = best;
 int bi=0,wi=0;
 for(int z=1;z<(int)pool.size();++z){ if(pool[z].C<pool[bi].C) bi=z; if(pool[z].C>pool[wi].C) wi=z; }
-if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,50); poolAdd(best,bestC); }
+if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,55); poolAdd(best,bestC); }
 bestC = sbC; best = sb;
 evalSeq(cur, true);
 }
@@ -2186,3 +2186,4 @@ output(best);
 return 0;
 }
 }
+// v27: 55-step periodic
