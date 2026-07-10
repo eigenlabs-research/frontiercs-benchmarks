@@ -638,7 +638,7 @@ for(int j=0;j<J;++j) for(int k=0;k<M;++k) pos[j][m_of[j][k]] = k;
 long long familySig = signatureEarliestStartParsed();
 bool legacy = familySig == 5558279LL;
 const auto budget = chrono::milliseconds(legacy ? 860 : 996);
-int rstMs = 400, reoptTrig = 150, reoptCd = 60, prSteps = 40;
+int rstMs = 400, reoptTrig = 150, reoptCd = 60, prSteps = 50;
 int carCap = 3000, carMsLim = 15;
 int kicksBase = 2, kicksSpan = 2, kicksMax = 8;
 unsigned seedMain = 777u;
@@ -2186,3 +2186,4 @@ output(best);
 return 0;
 }
 }
+// v26: prSteps=50, K=4, 50-step periodic
