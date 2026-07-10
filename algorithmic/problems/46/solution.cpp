@@ -335,7 +335,7 @@ return min(calc(false), calc(true));
 }
 int main(){
 auto T0 = chrono::steady_clock::now();
-const auto budget = chrono::milliseconds(994);
+const auto budget = chrono::milliseconds(993);
 if(scanf("%d %d", &J, &M) != 2) return 0;
 N = J*M;
 m_of.assign(J, vector<int>(M));
@@ -629,7 +629,7 @@ static vector<long long> dist_;
 static vector<long long> q_;
 static long long         Cmax_;
 static clock_t START;
-static const double TL = 0.94;
+static const double TL = 0.935;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
 static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
 static inline unsigned long long rnd(){
@@ -941,7 +941,7 @@ static vector<int>       indeg, mSucc, mPred, order_;
 static vector<long long> dist_, q_;
 static long long         Cmax_;
 static clock_t START;
-static const double TL = 0.94;
+static const double TL = 0.935;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
 static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
 static inline unsigned long long rnd(){
@@ -1246,7 +1246,7 @@ static vector<int>       indeg, mSucc, mPred, order_;
 static vector<long long> dist_, q_;
 static long long         Cmax_;
 static clock_t START;
-static const double TL = 0.94;
+static const double TL = 0.935;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
 static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
 static inline unsigned long long rnd(){
