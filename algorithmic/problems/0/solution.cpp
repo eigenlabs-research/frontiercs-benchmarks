@@ -1,4 +1,4 @@
-// v21.11: fix + crown5; portfolio trial 3
+// v21.11: fix + crown5
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -978,8 +978,7 @@ int main() {
     }
 
     vector<int> idx(n); iota(idx.begin(), idx.end(), 0);
-    bool alt = S < 1200 || (S >= 1400 && S < 1600) || (S >= 2000 && S < 6000);
-    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL) ^ (alt ? 123 : 0);
+    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL);
     RNG rng(seed);
     auto ord4 = [&]() {
         vector<int> res = idx;
@@ -1206,7 +1205,7 @@ int main() {
                 int Hcap = (int)(capA / W);
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
-                obuf = fromBest ? ilsOrd : ((((cntBLF & 1) != 0) ^ alt) ? ordBLF : ordB2);
+                obuf = fromBest ? ilsOrd : ((cntBLF & 1) ? ordBLF : ordB2);
                 int swaps = 1 + rng.rint(12);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
@@ -1290,45 +1289,15 @@ int main() {
     if (!useBF) crownRepack(bestR, TL_MS + 10.0);
     else if (bestR.ok) crownRepack(bestR, TL_MS + 10.0); // second pass if time
 
-    int maxX = -1, maxY = -1;
-    for (auto& p : bestR.pl) {
-        auto& t = ps[p.idx].t[p.ti];
-        for (auto& q : t.c) { int x = p.x + q.first, y = p.y + q.second; if (x > maxX) maxX = x; if (y > maxY) maxY = y; }
-    }
-    vector<int> mapx(max(0, maxX + 1), -1), mapy(max(0, maxY + 1), -1);
-    int Wc = 0, Hc = 0;
-    {
-        vector<char> ux(maxX + 1, false), uy(maxY + 1, false);
-        for (auto& p : bestR.pl) {
-            auto& t = ps[p.idx].t[p.ti];
-            for (auto& q : t.c) { ux[p.x + q.first] = true; uy[p.y + q.second] = true; }
-        }
-        for (int x = 0; x <= maxX; x++) if (ux[x]) mapx[x] = Wc++;
-        for (int y = 0; y <= maxY; y++) if (uy[y]) mapy[y] = Hc++;
-    }
-    if (Wc == 0) Wc = 1;
-    if (Hc == 0) Hc = 1;
-
-    vector<array<int,4>> ans(n, {0, 0, 0, 0});
-    for (auto& p : bestR.pl) {
-        auto& t = ps[p.idx].t[p.ti];
-        int bx = mapx[p.x];
-        int by = mapy[p.y];
-        int Xi = bx - t.minx;
-        int Yi = by - t.miny;
-        int Ri = (4 - (t.r % 4) + 4) % 4;
-        int Fi = t.f;
-        ans[p.idx] = {Xi, Yi, Ri, Fi};
-    }
-    string out;
-    out.reserve(16 * (n + 1));
-    out += to_string(Wc); out += ' '; out += to_string(Hc); out += '\n';
-    for (int i = 0; i < n; i++) {
-        out += to_string(ans[i][0]); out += ' ';
-        out += to_string(ans[i][1]); out += ' ';
-        out += to_string(ans[i][2]); out += ' ';
-        out += to_string(ans[i][3]); out += '\n';
-    }
+    int W=1,H=1;
+    vector<array<int,4>> ans(n),z;
+    vector<char> have(n);
+    for(auto&p:bestR.pl){auto&t=ps[p.idx].t[p.ti];ans[p.idx]={p.x-t.minx,p.y-t.miny,(4-t.r%4)%4,t.f};have[p.idx]=1;for(auto q:t.c){W=max(W,p.x+q.first+1);H=max(H,p.y+q.second+1);}}
+    auto valid=[&](int w,int h,vector<array<int,4>>&a){unordered_set<uint64_t> u;u.reserve(S*2);long long k=0;for(int i=0;i<n;i++){if(!have[i])return false;for(auto q:ps[i].b){if(a[i][3])q.first=-q.first;q=rotp(q,(4-a[i][2])%4);long long x=(long long)q.first+a[i][0],y=(long long)q.second+a[i][1];if(x<0||y<0||x>=w||y>=h||!u.insert((uint64_t)(uint32_t)x<<32|(uint32_t)y).second)return false;k++;}}return k==S;};
+    if(!valid(W,H,ans)){int c=0;H=1;fill(have.begin(),have.end(),1);for(int i=0;i<n;i++){int a=INT_MAX,b=INT_MIN,d=INT_MAX,e=INT_MIN;for(auto q:ps[i].b)a=min(a,q.first),b=max(b,q.first),d=min(d,q.second),e=max(e,q.second);ans[i]={c-a,-d,0,0};c+=b-a+2;H=max(H,e-d+1);}W=max(1,c-1);if(!valid(W,H,ans))return 0;}
+    string out=to_string(W)+" "+to_string(H)+"\n";
+    out.reserve(16*(n+1));
+    for(int i=0;i<n;i++)for(int j=0;j<4;j++)out+=to_string(ans[i][j])+(j==3?"\n":" ");
     fwrite(out.data(), 1, out.size(), stdout);
     fflush(stdout);
     _Exit(0); // skip destructor teardown of large heaps
