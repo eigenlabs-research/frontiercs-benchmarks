@@ -1,21 +1,288 @@
 #include <cstdio>
 #include <cstdint>
-#include <cstring>
-struct E{uint64_t h;const char*s;};static const E a[]={
-{1337409398582560185ULL,"I6ADPKSE120LBF9Q54COTM7JRN8HG3KAHLNOTS04EDRQP1IGF3J86BM7295CNGJA1L7Q9S3C05IFM4HO8RKBTE62PD15K0S4F9IORTQNECP2MAHJ8DBG73L64152LSHPTF763AEGODMNRBK9CI0J8QHEABG84MQJ102KSLOCRT56P7IDF93N29I8AM5LEGSTHKPCJ46N7F1RO0Q3DBQ751CDL0K4JSHP3A2I9ME6TN8GBFORTDE0P32JCQ1F7MOGRN5ILSK84HB69A97MGKJ0H2AI186LPSNOFE3R45TCDBQI7T4DJS9HQF23LA6GRP08M1NKBO5CEEDOMH1G0583RSPKI7A2J9NCBL4Q6TFT07D2M1KEI89LO64NH3BRC5SJAPGFQMJI5G8KC7A20EDL3H4NPOFB6RQT1S9JMBHS32QCP87KAERLO19045GI6FTND4BC5K01HM87AI3DR2TQP9OJLGFENS6A05QIKFRJL2783PC94HED1TGNSO6MB0B6ISM32JQ9LH1FOKN8GEDC4AR75PT78PEM0FDRC4529JG3LQBHTIK1A6NSOLRET0G62S17CBIM94KAOFJHND35Q8P"},
-{1097491252512501470ULL,"cQMF37P2UbDLIB05EJYN4RWdZA16KG8OT9VXCaSHMODU1cZP3IQ5YX2CEHb0a4RWFd7A6KG8T9VLBSJNE8LGPBZ37Q65O2CVSHXbMJ0NY4RWFdcA1KDUT9Ia3G57QODKdZ628PIBULaNYSHECbMJ4RWFcA1T9VX08CEUDdcP1bZM35QOGBINY0SH4RWF7A6K2T9VXLaJZU7QOc2JM0aSX5LEYNH4RWFdPA16K3DG8T9VBbCIaP4ZdOU7KN3L2I8QSB5HJYMRWFcA16DGT9VXEb0C4dDP3Z57XQO02UILBCYSaNHMRWFcA16KG8T9VEbJ52Q1cP68dZDIGEB30bMOYLS4RWF7AKUT9VXCaHJNR4WFd7cZA1P6K3DG8UTO29QVXEbBCI0LaJSHN5YM23OULD0ZB7MQP8X5bICSHY4RWFdcA16KGT9VEaJNP7F26T3LcDUN8OV5B0SEIYM4RWdZA1KGQ9XbCaHJEPKOG7U0D5S2Q6NCLabHBYM4RWFdZcA138T9VXIJ8XVTOcLJD3PUGE2C5IBHMYSN4RWFd7ZA16KQ9b0ab4cD8PGY5O3UL1X2N0IMCSHRWFd7ZA6KQT9VEBaJ"},
-{13064344411517067317ULL,"FS9LDPQ5ETIM7AK01RJ63G4OBN8HC22HSK68T05A94OB7CMLRDF3IJPQNE1G06NS89CDQ51LFMPAT43JBHEOG72IKRIJ25COTMG8BA9PFHRKLQ03D1NE67S48Q1IP2NS3AD4GMC57HLER9BKT0JO6FPEIKO75FTH3A4LMJGNCSQ29180R6DB63GACOBPEL4QMNJ8I51209HF7TDRSKH3DQOC6F84J7T1PLBE5K2S9N0MIRGAAC79BD30T28I6K1RNFH4Q5OGPJLSME8IC36EDKQA1S2MRBGJFPLH95OT4N077ON9AICF1GL3Q64SR0EBMKD285HJTPQ7AJ4605193COBTMRLFDHIG8S2NPEKMH01DFLIKR2AN83P74QOGBJ65T9SECEG1NJ4PA9KC28TH57DSL36MIQB0FRO21L3BN945KM67PES0JC8HQFGOTRADIJ5D2H190CTL48G6QKPRSBEFNIA3MO7D6O895JATS4NC1MKLIEP32FH7QRGB0CTGI7KO950ANHBMP8LREJF146SD32QALIO71JFHBSE90CN2R5QDM84KG6TP3N506Q489GMDSCTA213HORELIPJ7KBFSC54P3LHQRI9A6G1FNOE7JM20KB8DT39TA2C0NFLP7HBM5KQIRG6841DJSEO5FA79QL24DP3G0TONHCKRESMB1I8J61AL53BCKMI2F8H9PR6N0OE47SJGQDTARSGJ457BDTQ6PCL2FN0OHM3EK18I9"},
-{4443467892680442013ULL,"XDCPf2IR9OQcFd3LB5KGJS81HghaA64UWYVNb7ZeEi0TMd7XfLQTWE4H8gNhMJ5DiZ9IGYS1RB23AeP0KO6bFcaVCUBNUP8cd3RXDi2KaFTheVAZOWLHgM5091fC6SQbG7IE4JYVBhCRgSPK31fLX8ZYUHi264OcDET5Q7NdJ0FaGWI9MeAba9LEiIRfhQF73JcBO4KYPg1MZADC2NV8bTXe5SUH6Wd0G74NJS62FVa1QAHEBOKPgcXT3bWZUM95RYGfL8ed0hCIDiRPFc2SIV5WAHdKi3CDM4aTEXU0fGJ8e7b6LQgBY9NhO1ZaVPFRQ47XcEihNCUIeTG16Y0S8ObMB95fgAWZdDJL2K3H1R8a2DdfLgUFT75WSAC9I3PbQBK0eJhZ6VOHEciMNX4YG9SQ7EaKB48cPJU1ibeVf0OWFM32DTHNACGIgLRdY5hXZ6QcgdFWJL9XDNMaG4702S6CbYefI1E5i8UhZKHAVTB3RPOSfWg98iMZBhY0V6GEIRNL7AXdCPb3FKacQOT4DJ21UH5e"},
-{5397184421306091276ULL,"KPN410BM8G5Z96FE3DRIVQSJHA2XCOU7WLYTK1APJNW406BM8G5Z9FE3DRVIQSH2XCOLTY7UPKN1M40B8GZ569EF3DIVRQSJAH2OXCWLT7YUPKN104M8GBZ965EFD3RIVQJSAH2XCOWLT7YUPK1NM40GB8Z695ED3FRVQIJAH2XSCWOLT7YUPK1M4N0GBZ869EF5D3IRVQJAHS2XWOTCL7UYPK1NM0G4Z8B96E5DF3RVIQJAHS2XWOLCYT7UPKMN10G4Z869BE5DF3RVIQJAHSCX2OWTL7YUPK1NM0G4Z869BE5FD3RIJVAQH2SXWOCLT7YUPK1NM04GZ689BE5FD3VRQJAIH2SXOWCLT7YUPK1NMG40Z689BE5FD3RJVAIQHX2SOWLC7TYUPK1NM4G0Z869BEF5D3RJQAIVHSX2OWCL7TYUPK1NM4G08Z96BE5F3DJRIAQVH2XSOWCL7TYUPK1NM40G869BZE5F3RDJIQAVXH2WOSCL7YTUPK1NM4G06ZB89E5F3DRJIQAVXH2OWSCLT7UYPK1NM0G46B8Z9E5F3RJDIQVAXH2OWSCL7YTUPK1N4MG06B89ZE5F3RJIQDVAXOH2WSC7LTYUP1KNMG406B8Z9E5F3JIRQDVAOXHWS2C7LTYUP1KNM0G46B8ZE9F5RJ3IQDAVHOXWSC27LTYUPK1NGM06B89ZE5F3JRVIQDAOHX4WCSL27TYUK1NPM40G6B8ZE95FJ3RIQDVAXOHWCL27TYSUPK1NMG640B8ZE95FJ3QIDRVAXOHSWL27YTCU"},
-{16799144620432447045ULL,"Df9aTJdQ2OmMPS3K8Wnb0Vi1jk6X4LIg7eCYEhcNAFlR5ZUBHGMUOED43ZemR87gf9lN1jdT6BXQJWHCYhiac0APF5VSbnkL2GKIhX19dOKRmM4ES328WLG7gflNTU6PQJYIeHCiaDjc0AF5VZbnBk1dlMiELOh7QA2ZWDVf9NTU6B4KSmJIeCY8ajc0PFR5XbgnkH3GJHKMXL1Th8WR2QZ3A0GVf9ilN6B4mOYIeCaDjcPF5dESbUgnk7iVDhR1TmdOP4QEn3Ge07f9lk6BXK2JLIHCYbajcNAF5ZSMUgW8O4E9aRMS820gVflN1dTUmQLIeHCYhiDjcAPF5ZXbJn6BkWG3K7NDfij6XUmOJYhaFR5CHZEMbn8c0APld3VSgBkQL2WGKeI7T1495DiaXMh8W0TARS3G7V9lN1jUB4K2LOIHCYZcfPFdEbmJgnQ6kecV9l1dTkBP4KS2QLWIGg7eYhiaDjNfFR5ZXEMbmUJn6OH80C3A"},
-{15351599476256066243ULL,"ARJC2IEQUF69431DNO5M0H8KSLBV7PTGO3ARCFJ12IQU648M90NE5DKSHLPBV7TGAQRCJF2IU3416OMD95NE08KSHVLPB7TGARCJQF2I934U16MO05NED8KSLHVPB7GTRACJQF2IOU1346M5EN90D8KHSLVPB7TGRACJQ2I341FMUO9NE650D8KHSLBVP7TGRACJQ24IU31MONEF9D6058KHVSLPB7GTRAJCQ241UIE3FNMO690D5K8SHLVBP7GTRACJQ24U1NMOE3IF960D5K8HSLVBP7GTRACQ2J4UEN3FOM5I1608D9KSVPLH7BGTCJRQA24UEN3FOMI1506D9KSL8HVPB7GTJRACQ24UE3NOMF6I1509DKSLHV8PB7GTRCQAJ42E3NUOMF6I1509DSKLHVP8B7GTRQCAJ42U3NEFOIM165L0KV98HSPDB7GTRCQAJ423EUNOFIM16LH5SVKP9D08B7GTRCQAJ24N3EUFO6IM5L0H1SVKDP98B7GTRCQAJ243UENFIMOH6L5V10D98BSKGP7TRCQAJ243UENFMILO1SK65VHD098GP7TB"},
-{2769073518643703594ULL,"P2STBEY4b6GAI38VR1NMH95XODKa7JULF0WCZQ9RQZKVS2UTDYPH5X0M4BI6F8aWN7OCbJE1LG3AUJFMAXB0G7QE1bORTPY8DNKZ35a2WCLS6IVH94ALRPZbTC75JS1FIWVQ3XHK6ME8DGY09BNa24OU39Fa4BM5PXUZHJW18SQT0RYKA6EDbIV2CNOG7L4B3WMa68D7CQY9J10ZSVLEFbHNUI5XGPAKOT2RBIbDaLQEUR6TG345MKXA980SNWPJF1C2VHY7OZQJOP6BbKL3DY8ZSAH75MNEF2a0RC1XUG4VTW9IRLX2CAPH65DIBEYKWQGM831aTSZFNU074bOVJ9MU56SHXA73YBKIQTE1R9DZbFJCPNOVa4WG280LAPL3RQDEC1YK4MNHXF092SWOI56aJB78VTUbZGW2QA5F14OHSPNCVEK3TYDMXLBIJZ8b0a69RG7UTAU0ZFaXb7KHDL4Y3E1J865PIB9RQCMNSO2GWVDNAMHWQLaUbTRZXK38IGOS196B5PE70F2J4YCVCPRM8KQ3aWAE65DIUbJ4YNB9XG0LZVOTF7S21HXHU238GBaDRIJSbVAK50M76WPYECZOQLF9T4N1C0NHAMSKPU3B5RY8WJXLID6FZbV74GOQ1T29Ea2T6Z7BJaGCH8MS5VY0DARXO3K9PU4IELFNbQW1HXabM83KDSJ7EZCT906YL5PBIGUV4Q2NAO1RFW"},
-{15367604488868639828ULL,"EMNDLCJ2F4198567OH3KBAG0IEMNDLC2JF4195867OH3KBAG0IEMNDLC2JF4195867OH3KBAG0IEMNDLC2JF4198567OH3BKAG0IEMNDLCJF2418956O7H3BKGA0IEMNDLCJF2418956O7H3BGKI0AEMNDLCJF2418956O7H3GBK0AIEMNDLCJ2F418956O7H3GBKA0IEMNDLCJ2F489516O7H3GBKA0IEMNDLCJ2F485916O7H3GBKA0IEMNDLCJ2F458916O7H3GBKA0IEMNDLCJ2F458916O7H3GBKA0IEMNDLCJ2F459861O7H3GBKA0IEMNDLJCF2459861O7H3GBKA0IEMNDLJCF24958167OHG3BKA0IEMNDLJCF24985617OHG3BAK0IEMNDLJCF29845671OHG3BAK0IEMNDLJCF29845671OHG3BAK0IEMNDLJCF29845671OHG3BAK0IEMDNLCJF29846517OHG3BAK0IEMDNLCJF29846517OHG3BAK0IEMNDLCFJ29846517OHG3BAK0IEMNDLCFJ92846517OHG3BAK0IEMNDLCFJ29845617G3BOHAK0IEMNLDCFJ98256417G3BOHKA0I"},
-{8959737032643399058ULL,"70P56DVN24MYLIE1OFQ9KSCZRUf8BTdbAX3WHcaGJeAZI6DGP2OLcVNBb083CWYEXHJd4SQ9RUe5faK1TMF7OMcdFVSU7ZP1E9CKXTW8JQ4NY5G03LA2HBDebRIfa6PVQJ945LCNcRKFT38SH2G16YAEWZdIDBbMUX0fOa7eLW0McIJY8e3ZRPa4HUdKE1f9GC7XVO6D5N2SQABTFb4fUNEeB7AO3DcQM5VTa0CGFP6KX1WYZIS8LJHd9bR2GVAYKD6Ne7QJ5fF1HCMX2WBS8TI4cbRZ9UaOL30dPEcR5KN2W71FfbT4I0Ue6PHS3VAZ9DXGJEMLCQOdYaB8d74ZB1MAG95LFNKc6SU328aWYERJbH0DQXOVCePTIfdQb5ePDXHWJaCcF03912NOI6G8ZESBT4MLVAUR7YKfVWUMITY1N294JZeK875HOEFaDR0SXGfcdAB3QbLPC6dNELPYM9JZc40Ve81aHKX2WCSOFR7fQ3TUbBAGD5I6P0FCG1SHUTcJBYZ4OfRb26aIWADQe38E97XV5MNKLd0dPaZNAMG2IBc8U71fYVE64KCWLTRDHJ9QFXOS5be3dJGeMOZE6DBUb5179CFVXK8WISfQT4RA23H0NcYLPaaBFPKA621NbDU9Td0XJeWO7ZC4VQERGcM38LYHS5fI"},
-{15096950851723449319ULL,"fKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXflKdEkTCe1jQM8WacOYBiN65I3RF24LJDUHVhS79A0GgZbPXdkTCe1jQMWacYBiN5l3I2RF4LJDHVhS79A0GfgZbPXKE8O6UfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXaV7fPXKdEkTCe1jQM8WcOYBiN65l3IRF24LJDUHhS9A0GgZbfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPX"},
-{17556072703228808712ULL,"Z6F4C7Ba20M5OH3VWDGYUIdTSbAJP8NEQXK9RLc1S1Ad9L7MaIHNXP4CZ8B20QOKcVFWY65Tb3JGDEURHSC7cUMIYGXN6PA4EB1JL05RKOFDZT2ba38QWd9VTMVKOcN6A4ZBa190LRHFD7YCId5S2bJ3P8GEUQWXM0TH1GNKXUcVd6PACEZ8JLQFD7YI5OS2bBa34W9RHdJcVWYMG64CEZ7Ba12b0LQOFDIT5SA3P8NUXK9RV17MHcNdK6A4E8JbLQXFWYCUIZ5TO2SBa3P0GD9R7FcB3SH01KVOd6P4Ca2J9MLRQXWDYUIZ5TbA8GNEPH1EYaMcVKN6AS4Z8B290LQWF7GCUI5TOb3JDXdRH1MSaVT7O9IGcX6A4Cb0LRKFYdZ52B3JP8NDEUQWcVHX1MGdNPFA4ab0LRQ3D7YCI6Z5TOS2BJ8EUWK9B37DMWdVacGKI6S4ET81J290LQHOFYCZ5bAPNUXRTEcWGHVNIPA4CB10LRQO3XFD7YU6dZ5S2baJ8MK9GJECKI1WUHdcX647BaM0LNFDYZ5TO2SbA3P8Q9RV6C7aS0JM1GcIYHdAB9RQKOFDZ5T2b34P8NEUWXVLABSd07TGYOMVKWcNP4CEZ1J295RHFUI6ba38DQXLbPASET81J9LRQKcNXF7C6Z5O2Ba340GMDUWHdYVIFH0c1ONXGK6dA4CZ7Ba2MLQDYI5TSb3JP8EUW9RV78TBWYL1HVMNXRd6P4aJ90QOKcFDGCUIZ52SbA3E4E9QFM7Nc0H1GKId6XPC8JLOVWYUZ5TS2bBAa3DR"},
-{16105635282489783152ULL,"4PD1F8L6R3E92BVCI0GWOJQS5THXUAKNM77JP4F816RELND3BI2GWOQCSHXMV9TU5AK04PF8LD16RCEVWBG7N93OJSQTHXU5AKM0I24PF38WLDN1H6RCEVBG79OJSQTXU5AKM0I24PF8LD16RCEVWBG7N93OJSQTHXU5AKM0I24PF8LD16RCEWVGB7N93OJSQTHXUA5KM0I24PF8LD16RCEVWBG7N93OJSQTHX5UAKM0I24PF8DL16CREVWG7B9NOJ3SQTHX5UAKM0I24PFL8D16RECWVBG7N93OJSQTHX5UAK02MI4PFLD816RCEWVGB79N3OJSQXTH5UMA0K2I4FP8DL16RCEWVGB79N3OJSQTX5HUAK02MI4FPL8D16RCEWVGB79NO3SJQTHX5UAK02MI4FP8DL16RECWVGB79NO3SJQTX5HUAK0M2I4FP8LD16CREWVGB79NO3SJQXT5HUAK02MI4FPD8L16RCEWVGB79NO3SJQXT5HUAK02MI4FPD8L16RECWVG7B9NO3SJXQT5HUAK0M2I4FPDL816RCEWVGB79NO3SJQXT5HUAK02MI4FPD8L61RCEWGBV79NO3SJXQT5HUAK02MI4FPDL816RCEWVGB79NO3SJXQT5HUAK2M0I4FP8DL61RWCEVGB79NOS3JXQUH5TA02IKM4FPLD816RCWEVB9OG7NS3XQJTH5UAKM20I"},
-{9210720080051577033ULL,"R61JFKOS3B5A74TG0HCDM82PE9LQNIEIT5MQ3BP47ASF98JNG0D2KOL1R6HCRDBF7JMO86G4Q9T1NA3S0ECPHKL25IHSNRITAKOLD4B91EFP85703G2QCMJ62JQ57PC1IO8460NEDHB9MAFK3LRTSG1OBRH62I90JQ4K7G8PSTCNAEDFML359N0I315A6SRJPB274KFTOMECQGDH8L70AF9NDIKS65R2B1M3GQLEPJ8O4HCTDCIJO1E0RM682L5HQG4BNP79TA3FKSH07MBJE51LD6I3G28PQRS9FNAO4TCKH95JBC8OLR0FG473A2EMNDT6IKS1QPB324JOH8ELIR0D7A15CSGMKNT9F6PQDGH36JSCFQ0PE1OR7NMBK54T8I92LA2M4AT3HB1ILD0CRKF5J9OS76EQPNG8IQH9M8PNR520SK4G6CEBADLJOT7F13B6270N9GR81FEJHOMLPCAKI45DTS3QJP643M51IC8RF9OE7QB0LH2DAKNTGSNR9FOE5I13CAGHKBJ8627Q4TMSPDL06T13Q2K8PNFJ7DHR5M0E9ASI4OGBCLB17FSI28RQ6K4MOHG3LECTP95ND0JAQP9TDKFGCJ7EMN62405HLSA83BIRO1RS5D4QJ01HOB6IMPKLF3CTN87EAG924FT16J8ALBR2DMO79PSNEC5KHQI30GJFM7R9CT1SN63DK0PAO4GEQBL8I25H"},
-{4661888390002088212ULL,"FSHE7dWUPfAeDNiJL91GRcC4M2a6hK0bVXQg5O8BYI3TZAFS7EHWdeGP9fNDiJLcUR1C04MKa6h2bVXOQBgZ5I83TYFSEdAHWPf7eNDiJ9L1GURcC2Ma6Kh0bXVO5B8Q4T3gIYZSF7HEWdAP9fNiDJe1GUcLC4MRa62Kh0bVXO5B38QgITYZFSE7HdWAfePDi9JNLRUG14cCMa26Kh0bVX5BQ8Og3ITYZSFEdW7PAfeDiJ9GHU1NcLCM6R2abKhXV054BQT8gO3ZIYSFEWdA7PfeDiN9JRUH1cGLMC62ah0KbVOX4B58Qg3TIZYSFEdW7PfeDJi9AUN1cHGMLR62Ca0KbhXV4B5Q8O3gTIYZSFEd7WPefDiJ9AN1UHLcGMR62aKChb0VX4B5QgO3I8TYZSFEWd7fPeDJi9AU1cHLGNRMCa62bhVK04XBQ58gO3IYTZSFEdWP7feiDJ9A1UcHLMNGR6a2bChVXKB045QgO8Y3TIZEFSWd7PfeDiJ9A1UcHLMNGRK6a2bhCVXB045QgO8IT3ZYFEdSWfeiDP7U9cJ1ALGHRMa6N2hKCVX04bQ5gB8OYI3ZTFWSdE7fDieP91UJcHLGARa6bhMKVCXB04Qg825NO3TIYZ"}};
-static int d(char c){const char*t="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/";return(int)(strchr(t,c)-t);}
-int main(){int J,M;if(scanf("%d%d",&J,&M)!=2)return 0;uint64_t h=1469598103934665603ULL;auto u=[&](long long x){h=(h^(uint64_t)x)*1099511628211ULL;};u(J);u(M);for(int j=0;j<J;++j)for(int k=0;k<M;++k){int m;long long p;if(scanf("%d%lld",&m,&p)!=2)return 1;u(m);u(p);}const char*s=0;for(auto&e:a)if(e.h==h){s=e.s;break;}if(!s)return 1;for(int m=0;m<M;++m)for(int j=0;j<J;++j)printf(j+1<J?"%d ":"%d\n",d(*s++));}
+#include <vector>
+#include <algorithm>
+#include <chrono>
+#include <utility>
+using namespace std;
+typedef long long LL;
+
+int main(){
+    int J,M;
+    if(scanf("%d%d",&J,&M)!=2) return 0;
+    if(J<=0||M<=0) return 0;
+    int N=J*M;
+
+    // Operation o = (job j, rank k) encoded as o = j*M + k.
+    vector<int> macOf(N), rankK(N), jobOf(N);            // machine, rank, job of each op
+    vector<LL> proc(N);
+    vector<vector<int>> rankInJob(J, vector<int>(M));    // rankInJob[j][m] = rank of job j's op on machine m
+    vector<int> opIdx(N);                                // opIdx[j*M + m] = op index for (job j, machine m)
+    vector<LL> jobTotal(J,0);                            // total processing time per job
+    for(int j=0;j<J;j++) for(int k=0;k<M;k++){
+        int m; long long p;
+        if(scanf("%d%lld",&m,&p)!=2) return 1;
+        int o=j*M+k;
+        macOf[o]=m; rankK[o]=k; jobOf[o]=j; proc[o]=p;
+        rankInJob[j][m]=k;
+        opIdx[j*M+m]=o;
+        jobTotal[j]+=p;
+    }
+
+    // Machine orders (permutations of jobs) and their inverses.
+    vector<vector<int>> ord(M), pos(M);
+    for(int m=0;m<M;m++){
+        ord[m].resize(J); pos[m].resize(J);
+        for(int j=0;j<J;j++){ ord[m][j]=j; pos[m][j]=j; }
+    }
+
+    const LL SENT=4000000000000000000LL;
+
+    // Longest-path makespan via Kahn's algorithm over the disjunctive graph.
+    // Returns false if the current machine ordering induces a cycle (i.e. the
+    // implied schedule is infeasible), in which case mk is left unchanged. This
+    // is the ground-truth evaluation: every accept/reject decision and the
+    // final output are validated by it, so feasibility and the validity of every
+    // permutation are always guaranteed.
+    vector<int> inDeg(N), q(N);
+    vector<LL> fin(N);
+    auto evalFeas=[&](LL &mk)->bool{
+        for(int o=0;o<N;o++){
+            int m=macOf[o];
+            inDeg[o]=(rankK[o]>0?1:0)+(pos[m][jobOf[o]]>0?1:0);
+        }
+        int qs=0;
+        for(int o=0;o<N;o++) if(inDeg[o]==0) q[qs++]=o;
+        int processed=0; mk=0;
+        for(int f=0;f<qs;f++){
+            int o=q[f]; processed++;
+            int k=rankK[o], m=macOf[o], j=jobOf[o], p=pos[m][j];
+            LL mx=0;
+            if(k>0){ int pr=o-1; if(fin[pr]>mx) mx=fin[pr]; }                            // job-chain predecessor
+            if(p>0){ int nj=ord[m][p-1]; int pr=opIdx[nj*M+m]; if(fin[pr]>mx) mx=fin[pr]; } // machine predecessor
+            LL nv=mx+proc[o]; fin[o]=nv; if(nv>mk) mk=nv;
+            if(k+1<M){ int s=o+1; if(--inDeg[s]==0) q[qs++]=s; }                         // job successor
+            if(p+1<J){ int nj=ord[m][p+1]; int s=opIdx[nj*M+m]; if(--inDeg[s]==0) q[qs++]=s; } // machine successor
+        }
+        return processed==N;
+    };
+
+    LL bestMk=SENT;
+    vector<vector<int>> bestOrd;
+    auto consider=[&](){ LL mk; if(evalFeas(mk) && mk<bestMk){ bestMk=mk; bestOrd=ord; } };
+
+    // Deterministic xorshift PRNG seeded by instance dimensions (consistent per
+    // input, distinct sequences across sizes). Consumed by constructions and by
+    // the adjacent-move search; it is renewed to a clean state right before the
+    // local search so that construction diversity cannot perturb the search
+    // trajectory, keeping behavior deterministic for a given starting schedule.
+    uint64_t rng=88172645463325252ULL;
+    rng^=(uint64_t)J*1099511628211ULL;
+    rng^=(uint64_t)M*4294967311ULL;
+    rng^=(uint64_t)N*1099511628211ULL;
+    auto rnd=[&]()->unsigned{
+        rng^=rng<<13; rng^=rng>>7; rng^=rng<<17;
+        return (unsigned)(rng>>32);
+    };
+
+    auto t0=chrono::steady_clock::now();
+    const double LIMIT=0.85;
+    auto timeUp=[&]{ return chrono::duration<double>(chrono::steady_clock::now()-t0).count()>LIMIT; };
+
+    // Serial schedule generation scheme (list scheduling). Each step dispatches
+    // the next operation of exactly one job (advancing nextRank), so job
+    // precedence is satisfied by construction. Machine order = dispatch order,
+    // which yields an active, hence acyclic, schedule. `mode` selects the
+    // priority rule: 0=SPT, 1=LPT, 2=LRT(remaining job total), 3=EFT. When
+    // `randomized`, an occasionally-picked runner-up from a size-2 candidate
+    // list diversifies the construction.
+    auto build=[&](int mode, bool randomized){
+        vector<int> nextRank(J,0);
+        vector<LL> jobFin(J,0), machFree(M,0), doneProc(J,0);
+        for(int m=0;m<M;m++){ ord[m].clear(); pos[m].assign(J,-1); }
+        for(int step=0;step<N;step++){
+            int bj=-1, bj2=-1; LL bkey=0, bkey2=0;
+            for(int j=0;j<J;j++){
+                if(nextRank[j]>=M) continue;
+                int k=nextRank[j], m=macOf[j*M+k];
+                LL start = jobFin[j] > machFree[m] ? jobFin[j] : machFree[m];
+                LL key;
+                if(mode==0) key = proc[j*M+k];                       // SPT
+                else if(mode==1) key = -proc[j*M+k];                 // LPT
+                else if(mode==2) key = -(jobTotal[j]-doneProc[j]);   // LRT
+                else key = start + proc[j*M+k];                      // EFT
+                if(bj<0 || key<bkey){ bkey2=bkey; bj2=bj; bkey=key; bj=j; }
+                else if(bj2<0 || key<bkey2){ bkey2=key; bj2=j; }
+            }
+            int j = (randomized && bj2>=0 && (rnd()&1u)) ? bj2 : bj;
+            int k=nextRank[j], o=j*M+k, m=macOf[o];
+            LL start = jobFin[j] > machFree[m] ? jobFin[j] : machFree[m];
+            LL finV = start + proc[o];
+            jobFin[j]=finV; machFree[m]=finV; doneProc[j]+=proc[o];
+            pos[m][j]=(int)ord[m].size(); ord[m].push_back(j);
+            nextRank[j]++;
+        }
+    };
+
+    // Per-machine processing-time ordering. This directly targets bottleneck
+    // machines (SPT shortens a machine's cycle; LPT can balance heavy jobs).
+    // Independent per-machine sorts may in general induce cycles, so each is
+    // validated by evalFeas via consider() before being kept.
+    auto seedSort=[&](bool lpt){
+        for(int m=0;m<M;m++){
+            for(int j=0;j<J;j++) ord[m][j]=j;
+            sort(ord[m].begin(), ord[m].end(), [&](int x,int y){
+                LL px=proc[(LL)x*M+rankInJob[x][m]];
+                LL py=proc[(LL)y*M+rankInJob[y][m]];
+                return lpt ? (px>py) : (px<py);
+            });
+            for(int j=0;j<J;j++) pos[m][ord[m][j]]=j;
+        }
+    };
+
+    // Seed 0: identity machine order. Always acyclic because every machine arc
+    // then points from a lower job index to a higher one, so the job index is
+    // monotonically non-decreasing along any directed walk.
+    consider();
+
+    // Diverse feasible constructions; keep the best by makespan. Every result is
+    // validated by evalFeas, so only valid, acyclic orderings are ever retained.
+    if(J>1){
+        build(0,false); consider();          // SPT
+        build(1,false); consider();          // LPT
+        build(2,false); consider();          // LRT
+        build(3,false); consider();          // EFT
+        if(!timeUp()){ seedSort(false); consider(); }  // per-machine SPT
+        if(!timeUp()){ seedSort(true);  consider(); }  // per-machine LPT
+        if(!timeUp()){ build(0,true);  consider(); }   // randomized SPT
+        if(!timeUp()){ build(3,true);  consider(); }   // randomized EFT
+        if(!timeUp()){ build(3,true);  consider(); }
+        if(!timeUp()){ build(2,true);  consider(); }
+        if(!timeUp()){ build(1,true);  consider(); }
+    }
+    ord=bestOrd;
+    LL cur=bestMk;
+
+    // Adjacent transposition neighborhood: swap positions i,i+1 on machine m.
+    vector<pair<int,int>> moves;
+    if(J>1) for(int m=0;m<M;m++) for(int i=0;i+1<J;i++) moves.push_back({m,i});
+    int Nmoves=(int)moves.size();
+
+    // Self-inverse adjacent transposition.
+    auto swapAdj=[&](int m,int i){
+        int a=ord[m][i], b=ord[m][i+1];
+        swap(ord[m][i],ord[m][i+1]);
+        pos[m][a]=i+1; pos[m][b]=i;
+    };
+    // Self-inverse non-adjacent transposition of jobs at positions i,k on machine m.
+    auto swapRange=[&](int m,int i,int k){
+        int ai=ord[m][i], ak=ord[m][k];
+        swap(ord[m][i],ord[m][k]);
+        pos[m][ai]=k; pos[m][ak]=i;
+    };
+
+    // Renew the search PRNG to a clean, deterministic state so the local search
+    // trajectory depends only on the chosen starting order, not on how much
+    // randomness the constructions consumed.
+    rng=88172645463325252ULL;
+    rng^=(uint64_t)J*1099511628211ULL;
+    rng^=(uint64_t)M*4294967311ULL;
+    rng^=(uint64_t)N*1099511628211ULL;
+    // Independent stream for non-adjacent moves; kept separate so adjacent
+    // search shuffles and perturbations stay on the reference trajectory.
+    uint64_t rng2=rng^0x9e3779b97f4a7c15ULL;
+    auto rnd2=[&]()->unsigned{
+        rng2^=rng2<<13; rng2^=rng2>>7; rng2^=rng2<<17;
+        return (unsigned)(rng2>>32);
+    };
+
+    bestMk=cur; bestOrd=ord;
+
+    // Iterated local search: first-improvement descent over adjacent
+    // transpositions (the strong, well-behaved neighborhood), augmented at
+    // adjacent local optima with sampled non-adjacent swaps (an independent
+    // stream) to escape local optima of the adjacent-only neighborhood. A small
+    // random perturbation then kicks the schedule to a new region. Cyclic
+    // (infeasible) swaps are always reverted, so feasibility and the validity of
+    // every permutation are preserved at all times; the global best is retained
+    // monotonically.
+    if(Nmoves>0 && M>1){
+        while(!timeUp()){
+            bool improved=true;
+            while(improved && !timeUp()){
+                improved=false;
+                // Fisher-Yates shuffle of the move list to randomize first-improvement order.
+                for(int x=Nmoves-1;x>0;--x){
+                    unsigned y=rnd()%(unsigned)(x+1);
+                    if(y>(unsigned)x) y=(unsigned)x;
+                    swap(moves[x],moves[y]);
+                }
+                // Adjacent transpositions.
+                for(int xi=0;xi<Nmoves;xi++){
+                    if(timeUp()) break;
+                    int m=moves[xi].first, i=moves[xi].second;
+                    swapAdj(m,i);
+                    LL mk; bool ok=evalFeas(mk);
+                    if(ok && mk<cur){ cur=mk; improved=true; break; }
+                    else swapAdj(m,i); // revert (self-inverse)
+                }
+                if(timeUp()) break;
+                // Non-adjacent escape moves, only at an adjacent local optimum.
+                // Acceptance is improving-only, so these can only lower the
+                // makespan when they succeed.
+                if(J>=3 && !improved && (rnd2()&3)==0){
+                    int tries=4+N/200; if(tries>30) tries=30;
+                    for(int t=0;t<tries && !timeUp();t++){
+                        int m=(int)(rnd2()%(unsigned)M);
+                        int i=(int)(rnd2()%(unsigned)J);
+                        int k=(int)(rnd2()%(unsigned)J);
+                        if(i==k) continue;
+                        swapRange(m,i,k);
+                        LL mk; bool ok=evalFeas(mk);
+                        if(ok && mk<cur){ cur=mk; improved=true; break; }
+                        else swapRange(m,i,k); // revert (self-inverse)
+                    }
+                }
+            }
+            if(timeUp()) break;
+            if(cur<bestMk){ bestMk=cur; bestOrd=ord; }
+
+            // Perturbation: a focused burst of random adjacent transpositions to
+            // escape the current local optimum. Cyclic results are reverted;
+            // feasible results are accepted (iterated local search acceptance).
+            int P=5+N/200; if(P>40) P=40;
+            for(int z=0;z<P && !timeUp();z++){
+                unsigned idx=(unsigned)(rnd()%(unsigned)Nmoves); if(idx>(unsigned)(Nmoves-1)) idx=(unsigned)(Nmoves-1);
+                int m=moves[idx].first, i=moves[idx].second;
+                swapAdj(m,i);
+                LL mk; if(!evalFeas(mk)){ swapAdj(m,i); continue; }
+                cur=mk;
+            }
+            // Occasional non-adjacent perturbation for a larger step away from
+            // the adjacent-neighborhood basin.
+            if(!timeUp() && (rnd2()&7)==0){
+                int Q=2+N/200; if(Q>10) Q=10;
+                for(int z=0;z<Q && !timeUp();z++){
+                    int m=(int)(rnd2()%(unsigned)M);
+                    int i=(int)(rnd2()%(unsigned)J);
+                    int k=(int)(rnd2()%(unsigned)J);
+                    if(i==k) continue;
+                    swapRange(m,i,k);
+                    LL mk; if(!evalFeas(mk)){ swapRange(m,i,k); continue; }
+                    cur=mk;
+                }
+            }
+        }
+    }
+    if(cur<bestMk){ bestMk=cur; bestOrd=ord; }
+    ord=bestOrd;
+
+    // Emit exactly M lines, each a permutation of {0..J-1}.
+    for(int m=0;m<M;m++){
+        for(int j=0;j<J;j++){
+            printf("%d", ord[m][j]);
+            if(j+1<J) putchar(' '); else putchar('\n');
+        }
+    }
+    return 0;
+}
