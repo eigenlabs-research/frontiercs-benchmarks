@@ -697,9 +697,12 @@ if(J > 2 && chrono::steady_clock::now() - T0 < budget - chrono::milliseconds(120
 #ifdef DIAG
 long long gtBest = curC;
 #endif
-vector<long long> wtot(J, 0), wfront(J, 0);
+vector<long long> wtot(J, 0), wfront(J, 0), maxp(J, 0);
 for(int j=0;j<J;++j){
-for(int k=0;k<M;++k) wtot[j] += p_of[j][k];
+for(int k=0;k<M;++k){
+wtot[j] += p_of[j][k];
+if(p_of[j][k] > maxp[j]) maxp[j] = p_of[j][k];
+}
 for(int k=0;k<M/2;++k) wfront[j] += p_of[j][k];
 }
 vector<int> piBest; long long cBest = LLONG_MAX;
@@ -711,11 +714,13 @@ long long cr = evalPerm(rev, J);
 if(cr < cBest){ cBest = cr; piBest = rev; }
 };
 vector<pair<long long,int>> nkey(J);
-for(int v=0; v<4; ++v){
+for(int v=0; v<6; ++v){
 for(int j=0;j<J;++j){
 long long k;
 if(v == 0) k = -wtot[j]*128;
 else if(v == 3) k = wfront[j]*128;
+else if(v == 4) k = -maxp[j]*128;
+else if(v == 5) k = maxp[j]*128;
 else k = -wtot[j]*(108 + (long long)(rng()%41));
 nkey[j] = {k, j};
 }
@@ -1155,6 +1160,23 @@ extern long long g_pops, g_calls;
 extern long long g_roAtt, g_roAcc, g_roCyc, g_roUs;
 fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d) reopt att=%lld acc=%lld cyc=%lld ms=%.1f rst=%lld(best %lld/elite %lld, wins %lld) pool ins=%lld/%lld\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N, g_roAtt, g_roAcc, g_roCyc, g_roUs/1000.0, dRst, dRstBest, dRstElite, dRstWin, dInsBest, dInsRB);
 #endif
+}
+// Post-sweep: final Carlier reoptimization on all machines (most-loaded first)
+if(J > 2 && chrono::steady_clock::now() < T_end - chrono::milliseconds(100)){
+auto postImpT = chrono::steady_clock::now();
+cur = best; curC = bestC;
+evalSeq(cur, true);
+vector<pair<long long,int>> pmord(M);
+{
+vector<long long> pl(M,0);
+for(int j=0;j<J;++j) for(int k=0;k<M;++k) pl[m_of[j][k]] += p_of[j][k];
+for(int m=0;m<M;++m) pmord[m] = {-pl[m], m};
+sort(pmord.begin(), pmord.end());
+}
+for(int t=0;t<M;++t){
+if(chrono::steady_clock::now() >= T_end) break;
+reoptMachine(pmord[t].second, cur, curC, bestC, best, T_end, postImpT);
+}
 }
 {
 vector<char> buf;
