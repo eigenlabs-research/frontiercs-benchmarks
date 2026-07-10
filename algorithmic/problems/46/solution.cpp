@@ -26,7 +26,6 @@ static vector<int> msucc, mpred, indeg, qbuf;
 static vector<int> jsuc;
 static vector<char> jpre;
 static vector<long long> dist_, tail_;
-static vector<char> crit;
 static long long gCmax = 0;
 static long long evalSeq(const vector<vector<int>>& seq, bool fillCrit = false){
 const int n = N;
@@ -86,8 +85,6 @@ v = msu[u];
 if(v >= 0 && tl[v] > mx) mx = tl[v];
 tl[u] = pn[u] + mx;
 }
-fill(crit.begin(), crit.begin()+n, 0);
-for(int u=0;u<n;++u) if(ds[u] + tl[u] - pn[u] == C) crit[u] = 1;
 }
 return C;
 }
@@ -257,7 +254,6 @@ if(nd != ds[v]){ ds[v] = nd; pushH(jsuc[v]); pushH(msucc[v]); }
 gwl.clear();
 int loT = lo > 0 ? lo-1 : lo;
 for(int i=hi;i>=loT;--i){ int v = opOf(s[i], m); if(!ginq[v]){ ginq[v]=1; gwl.push_back(v); } }
-int headPops = pops;
 wh = 0; pops = 0;
 while(wh < (int)gwl.size()){
 int v = gwl[wh++]; ginq[v] = 0;
@@ -286,7 +282,7 @@ if(ds[u] > C) C = ds[u];
 gCmax = C;
 #ifdef DIAG
 extern long long g_pops, g_calls;
-g_pops += pops + headPops; g_calls++;
+g_pops += pops; g_calls++;
 #endif
 return C;
 }
@@ -595,7 +591,7 @@ return pi;
 #endif
 
 static void pathRelink(const vector<vector<int>>& src, const vector<vector<int>>& dst,
-long long& bestC, vector<vector<int>>& best, mt19937& rng,
+long long& bestC, vector<vector<int>>& best,
 chrono::steady_clock::time_point T_end, int maxSteps){
 vector<vector<int>> cur=src; long long curC=evalSeq(cur,true); if(curC<0) return;
 static vector<int> posT; posT.resize(J);
@@ -682,7 +678,7 @@ for(int u=0;u<N;++u){
 if(u % M != M-1) jsuc[u] = u+1;
 if(u % M != 0) jpre[u] = 1;
 }
-indeg.resize(N); dist_.resize(N); tail_.resize(N); crit.resize(N);
+indeg.resize(N); dist_.resize(N); tail_.resize(N);
 gwl.reserve(4*N); ginq.assign(N, 0);
 qbuf.reserve(N);
 gord.resize(J); gestC.resize(J);
@@ -806,9 +802,7 @@ long long cCur = cBest;
 int dMax = J-1 < 6 ? J-1 : 6;
 int rem[6];
 int d = dMax;
-int igIter = 0;
 while(d >= 1 && chrono::steady_clock::now() < igEnd){
-++igIter;
 d = 2 + (int)(rng() % (unsigned)(dMax >= 2 ? dMax - 1 : 1)); if(d > dMax) d = dMax; if(d < 1) d = 1;
 piNew = piCur;
 for(int t=0;t<d;++t){ int i = (int)(rng() % (unsigned)piNew.size()); rem[t] = piNew[i]; piNew.erase(piNew.begin()+i); }
@@ -872,7 +866,7 @@ cBest = cNew; piBest = piNew;
 } else if(cNew < igEliteC && piNew != piBest){ igEliteC = cNew; igElitePi = piNew; }
 }
 #ifdef DIAG
-fprintf(stderr, "IG iters=%d slice=%d cPi=%lld gtC=%lld %s\n", igIter, sliceMs, cBest, gtC, cBest < gtC ? "PI-WINS" : "gt-wins");
+fprintf(stderr, "IG slice=%d cPi=%lld gtC=%lld %s\n", sliceMs, cBest, gtC, cBest < gtC ? "PI-WINS" : "gt-wins");
 #endif
 }
 vector<vector<int>> s(M, piBest);
@@ -897,17 +891,13 @@ auto T_end = T0 + budget;
 if(bestC > LB){
 long long c = evalSeq(cur, true);
 if(c > 0) curC = c; else { cur = best; curC = evalSeq(cur, true); }
-int iter = 0, sinceImp = 0;
-#ifndef STUCK_LIM
-#define STUCK_LIM 1000000000
-#endif
+int iter = 0;
 #ifndef TEN_MIN
 #define TEN_MIN 15
 #endif
 #ifndef TEN_SPAN_DIV
 #define TEN_SPAN_DIV 2
 #endif
-const int stuckLim = STUCK_LIM;
 const int TENURE_MIN = TEN_MIN;
 const int TENURE_SPAN = max(4, J/TEN_SPAN_DIV);
 bool timeUp = false;
@@ -944,7 +934,7 @@ struct Elite { vector<vector<int>> seq; long long C; unsigned long long h; };
 vector<Elite> pool;
 const int E = 6; int poolHead = 0;
 #ifdef DIAG
-long long dRst = 0, dRstElite = 0, dRstBest = 0, dInsBest = 0, dInsRB = 0, dRstWin = 0;
+long long dRst = 0, dRstElite = 0, dRstBest = 0, dInsBest = 0, dInsRB = 0;
 #endif
 auto solHash = [&](const vector<vector<int>>& s)->unsigned long long{
 unsigned long long h = 1469598103934665603ULL;
@@ -959,7 +949,6 @@ else { pool[poolHead] = {s, C, h}; poolHead = (poolHead+1)%E; }
 };
 vector<vector<int>> rb; long long rbC = LLONG_MAX;
 int failCnt = 0;
-bool afterRst = false;
 auto lastReoptT = T0;
 int lastReoptM = -1;
 if(!igElitePi.empty()){
@@ -995,11 +984,10 @@ if((iter & 16383) == 0){
 long long fc = evalSeq(cur, true);
 if(fc >= 0) curC = fc;
 if((int)pool.size() >= 2){
-long long sbC = bestC; vector<vector<int>> sb = best;
-int bi=0,wi=0;
-for(int z=1;z<(int)pool.size();++z){ if(pool[z].C<pool[bi].C) bi=z; if(pool[z].C>pool[wi].C) wi=z; }
-if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,30); poolAdd(best,bestC); }
-bestC = sbC; best = sb;
+int bi=0,wi=0,bd=-1;
+for(int z=1;z<(int)pool.size();++z) if(pool[z].C<pool[bi].C) bi=z;
+for(int z=0;z<(int)pool.size();++z){ int d=0; for(int mm=0;mm<M;++mm) for(int j=0;j<J;++j) d+=pool[z].seq[mm][j]!=pool[bi].seq[mm][j]; if(z!=bi&&d>bd){bd=d;wi=z;} }
+if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,T_end,30); poolAdd(best,bestC); }
 evalSeq(cur, true);
 }
 }
@@ -1123,21 +1111,18 @@ if(curC < bestC){
 long long exact = evalSeq(cur, true);
 curC = exact;
 if(exact >= 0 && exact < bestC){
-best = cur; bestC = exact; sinceImp = 0;
+best = cur; bestC = exact;
 lastImpT = chrono::steady_clock::now();
 poolAdd(cur, exact);
 failCnt = 0;
 #ifdef DIAG
 iterLastImp = iter;
 dInsBest++;
-if(afterRst) dRstWin++;
 #endif
-afterRst = false;
 if(bestC <= LB) break;
 }
 }
 else {
-++sinceImp;
 long long stag = chrono::duration_cast<chrono::milliseconds>(nowT - lastImpT).count();
 if(stag > rstMs){
 if(rbC <= bestC + bestC/50 && !rb.empty()){
@@ -1147,9 +1132,10 @@ dInsRB++;
 #endif
 }
 if((int)pool.size()>=2 && chrono::steady_clock::now()<T_end){
-int bi=0,wi=0;
-for(int z=1;z<(int)pool.size();++z){ if(pool[z].C<pool[bi].C) bi=z; if(pool[z].C>pool[wi].C) wi=z; }
-if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,prSteps); poolAdd(best,bestC); }
+int bi=0,wi=0,bd=-1;
+for(int z=1;z<(int)pool.size();++z) if(pool[z].C<pool[bi].C) bi=z;
+for(int z=0;z<(int)pool.size();++z){ int d=0; for(int mm=0;mm<M;++mm) for(int j=0;j<J;++j) d+=pool[z].seq[mm][j]!=pool[bi].seq[mm][j]; if(z!=bi&&d>bd){bd=d;wi=z;} }
+if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,T_end,prSteps); poolAdd(best,bestC); }
 }
 if(pool.empty() || (rng() & 1)){
 cur = best;
@@ -1175,10 +1161,9 @@ if(nc < 0){ undoMove(cur, mv); evalSeq(cur, true); }
 else curC = nc;
 }
 fill(tabuTB.begin(), tabuTB.end(), 0);
-sinceImp = 0; rbC = LLONG_MAX;
+rbC = LLONG_MAX;
 lastImpT = chrono::steady_clock::now();
 ++failCnt;
-afterRst = true;
 #ifdef DIAG
 dRst++;
 #endif
@@ -1188,7 +1173,7 @@ dRst++;
 #ifdef DIAG
 extern long long g_pops, g_calls;
 extern long long g_roAtt, g_roAcc, g_roCyc, g_roUs;
-fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d) reopt att=%lld acc=%lld cyc=%lld ms=%.1f rst=%lld(best %lld/elite %lld, wins %lld) pool ins=%lld/%lld\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N, g_roAtt, g_roAcc, g_roCyc, g_roUs/1000.0, dRst, dRstBest, dRstElite, dRstWin, dInsBest, dInsRB);
+fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d) reopt att=%lld acc=%lld cyc=%lld ms=%.1f rst=%lld(best %lld/elite %lld) pool ins=%lld/%lld\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N, g_roAtt, g_roAcc, g_roCyc, g_roUs/1000.0, dRst, dRstBest, dRstElite, dInsBest, dInsRB);
 #endif
 }
 {
@@ -1375,7 +1360,7 @@ static void rebuildPos(const vector<vector<int>>& seq){
 for(int m = 0; m < M; ++m)
 for(int i = 0; i < J; ++i) pos[m][seq[m][i]] = i;
 }
-static inline void doSwap(vector<vector<int>>& seq, int a, int b){
+static inline void doSwap(vector<vector<int>>& seq, int a){
 int m = machOf[a];
 int i = pos[m][jobOf[a]];
 swap(seq[m][i], seq[m][i+1]);
@@ -1390,8 +1375,8 @@ int m = rndInt(M);
 int i = rndInt(J - 1);
 int a = opOnMachine(seq[m][i],   m);
 int b = opOnMachine(seq[m][i+1], m);
-doSwap(seq, a, b);
-if(evaluate(seq) < 0) doSwap(seq, b, a);
+doSwap(seq, a);
+if(evaluate(seq) < 0) doSwap(seq, b);
 }
 }
 static vector<long long> tabuUntil;
@@ -1439,7 +1424,7 @@ curMk = evaluate(cur);
 ++iter;
 continue;
 }
-doSwap(cur, ca, cb);
+doSwap(cur, ca);
 tabuUntil[tabIdx(machOf[ca], jobOf[ca], jobOf[cb])] = iter + tenure;
 curMk = evaluate(cur);
 if(curMk < bestMk){
@@ -1681,7 +1666,7 @@ static void rebuildPos(const vector<vector<int>>& seq){
 for(int m = 0; m < M; ++m)
 for(int i = 0; i < J; ++i) pos[m][seq[m][i]] = i;
 }
-static inline void doSwap(vector<vector<int>>& seq, int a, int b){
+static inline void doSwap(vector<vector<int>>& seq, int a){
 int m = machOf[a];
 int i = pos[m][jobOf[a]];
 swap(seq[m][i], seq[m][i+1]);
@@ -1696,8 +1681,8 @@ int m = rndInt(M);
 int i = rndInt(J - 1);
 int a = opOnMachine(seq[m][i],   m);
 int b = opOnMachine(seq[m][i+1], m);
-doSwap(seq, a, b);
-if(evaluate(seq) < 0) doSwap(seq, b, a);
+doSwap(seq, a);
+if(evaluate(seq) < 0) doSwap(seq, b);
 }
 }
 static vector<long long> tabuUntil;
@@ -1745,7 +1730,7 @@ curMk = evaluate(cur);
 ++iter;
 continue;
 }
-doSwap(cur, ca, cb);
+doSwap(cur, ca);
 tabuUntil[tabIdx(machOf[ca], jobOf[ca], jobOf[cb])] = iter + tenure;
 curMk = evaluate(cur);
 if(curMk < bestMk){
@@ -1912,8 +1897,8 @@ if(dist_[a1] == dist_[b1] - procOp[b1]) swaps.push_back({a1, b1});
 if(bs > 2){
 int a2 = opOnMachine(s[j-2], m), b2 = opOnMachine(s[j-1], m);
 if(dist_[a2] == dist_[b2] - procOp[b2]) swaps.push_back({a2, b2});
-inserts.push_back({m, i, j-1});
-inserts.push_back({m, j-1, i});
+for(int t=i+2;t<j;++t) inserts.push_back({m,t,i});
+for(int t=i;t+2<j;++t) inserts.push_back({m,t,j-1});
 }
 }
 i = j;
@@ -2021,7 +2006,7 @@ static void rebuildPos(const vector<vector<int>>& seq){
 for(int m = 0; m < M; ++m)
 for(int i = 0; i < J; ++i) pos[m][seq[m][i]] = i;
 }
-static inline void doSwap(vector<vector<int>>& seq, int a, int b){
+static inline void doSwap(vector<vector<int>>& seq, int a){
 int m = machOf[a];
 int i = pos[m][jobOf[a]];
 swap(seq[m][i], seq[m][i+1]);
@@ -2044,8 +2029,8 @@ int m = rndInt(M);
 int i = rndInt(J - 1);
 int a = opOnMachine(seq[m][i],   m);
 int b = opOnMachine(seq[m][i+1], m);
-doSwap(seq, a, b);
-if(evaluate(seq) < 0) doSwap(seq, b, a);
+doSwap(seq, a);
+if(evaluate(seq) < 0) doSwap(seq, b);
 }
 }
 static vector<long long> tabuUntil;
@@ -2097,7 +2082,7 @@ else if(asMode != -1)                       { useAsp = true;  useMode = asMode; 
 else { perturb(cur, 4); curMk = evaluate(cur); ++iter; continue; }
 if(useMode == 0){
 int a = useAsp ? asA : alA, b = useAsp ? asB : alB;
-doSwap(cur, a, b);
+doSwap(cur, a);
 tabuUntil[tabIdx(machOf[a], jobOf[a], jobOf[b])] = iter + tenure;
 }else{
 int m = useAsp ? asM : alM, f = useAsp ? asF : alF, t = useAsp ? asT : alT;
@@ -2107,7 +2092,9 @@ tabuJob[(size_t)m * J + job] = iter + tenure;
 }
 curMk = evaluate(cur);
 if(curMk < 0){
-cur = best; rebuildPos(cur); curMk = evaluate(cur);
+if(useMode==0){ int b=useAsp?asB:alB; doSwap(cur,b); }
+else { int m=useAsp?asM:alM,f=useAsp?asF:alF,t=useAsp?asT:alT; doInsert(cur,m,t,f); }
+curMk = evaluate(cur);
 }
 if(curMk < bestMk){ bestMk = curMk; best = cur; lastImprove = iter; tenure = 15 + rndInt(13); }
 ++iter;
@@ -2170,7 +2157,7 @@ long long mk = evaluate(seq);
 if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
 }
 for(int r = 0; r < 150; ++r){
-vector<vector<int>> seq = gifflerThompson(r % 5);
+vector<vector<int>> seq = gifflerThompson(4);
 long long mk = evaluate(seq);
 if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
 }
