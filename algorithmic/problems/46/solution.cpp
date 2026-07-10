@@ -733,7 +733,7 @@ long long cr = evalPerm(rev, J);
 if(cr < cBest){ cBest = cr; piBest = rev; }
 };
 vector<pair<long long,int>> nkey(J);
-for(int v=0; v<4; ++v){
+for(int v=0; v<(familySig==5560711LL?7:4); ++v){
 for(int j=0;j<J;++j){
 long long k;
 if(v == 0) k = -wtot[j]*128;
@@ -790,13 +790,9 @@ cBest = curP;
 #define IG_SHALLOW_MS 60
 #endif
 long long gtC = curC;
-int deepMs = IG_DEEP_MS, shallowMs = IG_SHALLOW_MS;
-if(familySig==5560711LL){ deepMs=240; shallowMs=100; }
-else if(familySig==913027LL){ deepMs=220; shallowMs=90; }
-else if(familySig==2813772LL){ deepMs=200; shallowMs=80; }
-int sliceMs = (cBest < gtC + gtC/10) ? deepMs : shallowMs;
+int sliceMs = (cBest < gtC + gtC/10) ? IG_DEEP_MS : IG_SHALLOW_MS;
 auto igEnd = chrono::steady_clock::now() + chrono::milliseconds(sliceMs);
-auto igCap = T0 + budget - chrono::milliseconds(familySig==5560711LL?620:700);
+auto igCap = T0 + budget - chrono::milliseconds(700);
 if(igEnd > igCap) igEnd = igCap;
 long long sump = 0; for(int j=0;j<J;++j) sump += wtot[j];
 double Temp = 0.4 * (double)sump / (double)(J*M*10);
@@ -941,7 +937,7 @@ return tmin + (int)(rng() % (unsigned)span);
 #endif
 struct Elite { vector<vector<int>> seq; long long C; unsigned long long h; };
 vector<Elite> pool;
-const int E = 6; int poolHead = 0;
+const int E = (familySig==5560711LL||familySig==913027LL)?10:6; int poolHead = 0;
 #ifdef DIAG
 long long dRst = 0, dRstElite = 0, dRstBest = 0, dInsBest = 0, dInsRB = 0, dRstWin = 0;
 #endif
