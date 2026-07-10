@@ -1,4 +1,3 @@
-// v21.11: fix + crown5; portfolio trial 3
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -897,19 +896,19 @@ static R bfSolve(int minW, int base, double deadline) {
 int main() {
     T0 = chrono::steady_clock::now();
     if (const char* e = getenv("POLYPACK_TL")) { double v = atof(e); if (v > 50 && v < 10000) TL_MS = v; }
-    int ffEnv = envInt("PP_FASTFIT", -1);    // -1 => auto-gate by S below; 0/1 => explicit override
-    int BIGBLF = envInt("PP_BIGBLF", 0);     // 1: big cases skip champion pack, BLF-only
-    int SMALLBLF = envInt("PP_SMALLBLF", 0); // 1: small cases skip champion sweep
-    int JUMP = envInt("PP_JUMP", 15);        // % chance of W jump in restarts
-    int BLF2 = envInt("PP_BLF2", 1);         // 1: restarts use blf2 (hole-aware window best-fit)
-    int BLF2SWEEP = envInt("PP_BLF2SWEEP", 0); // 1: small-case sweep uses blf2 instead of skyline
-    int BLF2ORD = envInt("PP_BLF2ORD", 1);   // 0: big-first order, 1: champion order
-    int B3 = envInt("PP_B3", 1);             // 1: use cached blf3 instead of blf2
-    int PHASE2 = envInt("PP_PHASE2", 1);     // 1: blf2 pass over best sweep Ws
-    double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;  // 0 => auto by size
-    double P2ENDF = envInt("PP_P2END", 0) / 100.0;   // 0 => auto by size
-    long long P2MAXS = envInt("PP_P2MAXS", 22000);   // phase2 only when S below this
-    long long B2RESTS = envInt("PP_B2RESTS", 50000);  // blf2 restarts when S below this (was 1300)
+    int ffEnv = envInt("PP_FASTFIT", -1);
+    int BIGBLF = envInt("PP_BIGBLF", 0);
+    int SMALLBLF = envInt("PP_SMALLBLF", 0);
+    int JUMP = envInt("PP_JUMP", 15);
+    int BLF2 = envInt("PP_BLF2", 1);
+    int BLF2SWEEP = envInt("PP_BLF2SWEEP", 0);
+    int BLF2ORD = envInt("PP_BLF2ORD", 1);
+    int B3 = envInt("PP_B3", 1);
+    int PHASE2 = envInt("PP_PHASE2", 1);
+    double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;
+    double P2ENDF = envInt("PP_P2END", 0) / 100.0;
+    long long P2MAXS = envInt("PP_P2MAXS", 22000);
+    long long B2RESTS = envInt("PP_B2RESTS", 50000);
 
     {
         size_t cap = 1 << 20; inbuf.resize(cap); size_t len = 0;
@@ -978,8 +977,7 @@ int main() {
     }
 
     vector<int> idx(n); iota(idx.begin(), idx.end(), 0);
-    bool alt = S < 1200 || (S >= 1400 && S < 1600) || (S >= 2000 && S < 6000);
-    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL) ^ (alt ? 123 : 0);
+    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL);
     RNG rng(seed);
     auto ord4 = [&]() {
         vector<int> res = idx;
@@ -1206,7 +1204,7 @@ int main() {
                 int Hcap = (int)(capA / W);
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
-                obuf = fromBest ? ilsOrd : ((((cntBLF & 1) != 0) ^ alt) ? ordBLF : ordB2);
+                obuf = fromBest ? ilsOrd : ((cntBLF & 1) ? ordBLF : ordB2);
                 int swaps = 1 + rng.rint(12);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
