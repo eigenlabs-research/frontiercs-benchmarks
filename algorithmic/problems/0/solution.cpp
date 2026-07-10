@@ -1,4 +1,4 @@
-// v21.11: fix + crown5
+// v21.20: fix + crown5 + bf_key 6-bit
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -776,7 +776,7 @@ static inline void bf_put(const T& o, int x, int y) {
     for (int dy = 0; dy < o.h; dy++) bf_occ[y + dy] |= ((uint64_t)o.rmask[dy]) << x;
     for (int j = 0; j < o.w; j++) { int top = y + o.hi[j] + 1; if (top > bf_colH[x + j]) bf_colH[x + j] = top; }
 }
-static inline uint64_t bf_key(int w, const int* v) { uint64_t k = (uint64_t)w << 52; for (int j = 0; j < w; j++) { int s = v[j] + 16; if (s < 0) s = 0; if (s > 31) s = 31; k |= (uint64_t)s << (5 * j); } return k; }
+static inline uint64_t bf_key(int w, const int* v) { uint64_t k = (uint64_t)w << 60; for (int j = 0; j < w; j++) { int s = v[j] + 32; if (s < 0) s = 0; if (s > 63) s = 63; k |= (uint64_t)s << (6 * j); } return k; }
 static int bf_pass(int W, const vector<int>& repr, const unordered_map<uint64_t, vector<pair<int,int>>>& idx,
                    vector<int>& avail, int total, vector<int>& outKind, vector<int>& outOri, vector<int>& outX, vector<int>& outY, int tie, RNG* rng=nullptr) {
     bf_W = W; bf_occ.assign(8, 0ULL); bf_colH.assign(W, 0);
