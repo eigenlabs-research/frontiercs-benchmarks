@@ -1,4 +1,4 @@
-
+// v21.2: fix orientation mismatch + skyline+BLF3 retry at spare time
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -1053,6 +1053,10 @@ int main() {
         if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < TL_MS - 100) {
             R sr = pack(bestR.packW, baseOrder, rng, true, max(1, n/4), false, 0.0, TL_MS - 150, TL_MS - 160);
             if (sr.ok && better(sr, bestR)) { crownRepack(sr, TL_MS - 5.0); if (better(sr, bestR)) bestR = move(sr); }
+            if (bestR.ok && bestR.packW <= 63 && elapsed_ms() < TL_MS - 80) {
+                R lr = pack_blf3(bestR.packW, idx, max(1, n/4), TL_MS - 50, rng, true);
+                if (lr.ok && better(lr, bestR)) { crownRepack(lr, TL_MS - 5.0); if (better(lr, bestR)) bestR = move(lr); }
+            }
         }
     }
     if (!bestR.ok) {
