@@ -125,6 +125,15 @@ inserts.push_back({m, i, j-1});
 inserts.push_back({m, j-1, i});
 for(int k=i+1;k<j-1;++k){inserts.push_back({m,k,i});inserts.push_back({m,k,j-1});inserts.push_back({m,i,k});inserts.push_back({m,j-1,k});}
 }
+// N8: allow a critical operation to leave its block.  The two longest-path
+// tests are the sufficient acyclicity conditions from Xie et al. (2021).
+for(int f=i;f<j;++f){
+int u=opOnMachine(s[f],m),js=jobSucc[u],jp=jobPred[u];
+long long rb=js<0?0:q_[js]-procOp[js];
+for(int t=j;t<J;++t){int v=opOnMachine(s[t],m);if(q_[v]>=rb)inserts.push_back({m,f,t});}
+long long lb=jp<0?0:dist_[jp]-procOp[jp];
+for(int t=0;t<i;++t){int v=opOnMachine(s[t],m);if(dist_[v]>=lb)inserts.push_back({m,f,t});}
+}
 }
 i = j;
 }
