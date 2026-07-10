@@ -1,4 +1,4 @@
-// v21.0: gap-directed BF selection (score = maxHeight - contact)
+// v21.1: fix orientation mismatch in bfSolve output mapping
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -856,10 +856,10 @@ static R bfSolve(int minW, int base, double deadline) {
     }
     long long bestA = LLONG_MAX; int bestW = 0, bestH = 0; vector<int> bK, bO, bX, bY, tK, tO, tX, tY;
     double lastPass = 0;
-    for (int tie = 1; tie >= 0; tie--) { // cover widths before alternate tie-break
-        for (int d = 0; d <= 30; d++) {
-            for (int sgn = (d ? -1 : 1); sgn <= 1; sgn += 2) {
-                int W = base + sgn * d; if (W < minW || W > 63) continue;
+    for (int d = 0; d <= 30; d++) { // v19.5: wider W only
+        for (int sgn = (d ? -1 : 1); sgn <= 1; sgn += 2) {
+            int W = base + sgn * d; if (W < minW || W > 63) continue;
+            for (int tie = 1; tie >= 0; tie--) {   // try both tie-break directions, keep best area
                 if (elapsed_ms() + lastPass * 1.3 > deadline) goto DONE;
                 vector<int> avail = kcnt; double t0 = elapsed_ms();
                 int H = bf_pass(W, repr, idx, avail, n, tK, tO, tX, tY, tie);
@@ -883,7 +883,14 @@ static R bfSolve(int minW, int base, double deadline) {
     r.W = bestW; r.H = bestH; r.A = bestA; r.ok = true; r.packW = bestW;
     vector<int> mcur(K, 0);
     r.pl.reserve(n);
-    for (size_t z = 0; z < bK.size(); z++) { int ki = bK[z]; int pi = members[ki][mcur[ki]++]; r.pl.push_back({pi, bO[z], bX[z], bY[z]}); }
+    for (size_t z = 0; z < bK.size(); z++) {
+        int ki = bK[z]; int pi = members[ki][mcur[ki]++];
+        int oi = bO[z];
+        if (ps[pi].t[oi].c != ps[repr[ki]].t[oi].c)
+            for (int t = 0; t < (int)ps[pi].t.size(); t++)
+                if (ps[pi].t[t].c == ps[repr[ki]].t[oi].c) { oi = t; break; }
+        r.pl.push_back({pi, oi, bX[z], bY[z]});
+    }
     return r;
 }
 
