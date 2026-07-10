@@ -1,48 +1,19 @@
-// v21.11: fix + crown5; portfolio trial 3
 #include <bits/stdc++.h>
 using namespace std;
+static chrono::steady_clock::time_point T0;static double TL_MS=1890.;
+static inline double elapsed_ms(){return chrono::duration<double,milli>(chrono::steady_clock::now()-T0).count();}
 
-static chrono::steady_clock::time_point T0;
-static double TL_MS = 1890.0;
-static inline double elapsed_ms() {
-    return chrono::duration<double, milli>(chrono::steady_clock::now() - T0).count();
-}
+struct T{int w,h;vector<pair<int,int>>c;vector<int>lo,hi;int r,f,minx,miny;unsigned short rmask[10];vector<pair<signed char,signed char>>nbr;};
+struct P{int id,k;vector<pair<int,int>>b;vector<T>t;int minW=1e9,minH=1e9,minA=1e9;};
+struct Pl{int idx,ti,x,y;};
+struct R{long long A;int W,H;vector<Pl>pl;bool ok=false;int packW=0;};
+struct RNG { unsigned long long s; RNG(unsigned long long x):s(x?x:1){} inline unsigned long long nxt(){s^=s<<7;s^=s>>9;return s;} inline int rint(int n){return nxt()%n;} inline bool coin(){return nxt()&1;} inline double uni(){return(double)(nxt()>>11)*(1.0/9007199254740992.0);} };
+static inline pair<int,int> rotp(pair<int,int>p,int r){if(!r)return p;if(r==1)return{-p.second,p.first};if(r==2)return{-p.first,-p.second};return{p.second,-p.first};}
 
-struct T { int w, h; vector<pair<int,int>> c; vector<int> lo, hi; int r, f, minx, miny;
-           unsigned short rmask[10]; vector<pair<signed char, signed char>> nbr; };
-struct P { int id, k; vector<pair<int,int>> b; vector<T> t; int minW = 1e9, minH = 1e9, minA = 1e9; };
-struct Pl { int idx, ti, x, y; };
-struct R { long long A; int W, H; vector<Pl> pl; bool ok = false; int packW = 0; };
-struct RNG {
-    unsigned long long s;
-    RNG(unsigned long long x) { s = x ? x : 1; }
-    inline unsigned long long nxt() { s ^= s << 7; s ^= s >> 9; return s; }
-    inline int rint(int n) { return (int)(nxt() % n); }
-    inline bool coin() { return nxt() & 1; }
-    inline double uni() { return (double)(nxt() >> 11) * (1.0 / 9007199254740992.0); }
-};
-static inline pair<int,int> rotp(pair<int,int> p, int r) {
-    if (r == 0) return p;
-    if (r == 1) return make_pair(-p.second, p.first);
-    if (r == 2) return make_pair(-p.first, -p.second);
-    return make_pair(p.second, -p.first);
-}
+static vector<char>inbuf;static size_t inpos=0;
+static inline int readInt(){while(inpos<inbuf.size()&&(inbuf[inpos]<'0'||inbuf[inpos]>'9')&&inbuf[inpos]!='-')inpos++;bool neg=false;if(inpos<inbuf.size()&&inbuf[inpos]=='-'){neg=true;inpos++;}int v=0;while(inpos<inbuf.size()&&inbuf[inpos]>='0'&&inbuf[inpos]<='9'){v=v*10+inbuf[inpos++]-'0';}return neg?-v:v;}
 
-static vector<char> inbuf;
-static size_t inpos = 0;
-static inline int readInt() {
-    while (inpos < inbuf.size() && (inbuf[inpos] < '0' || inbuf[inpos] > '9') && inbuf[inpos] != '-') inpos++;
-    bool neg = false;
-    if (inpos < inbuf.size() && inbuf[inpos] == '-') { neg = true; inpos++; }
-    int v = 0;
-    while (inpos < inbuf.size() && inbuf[inpos] >= '0' && inbuf[inpos] <= '9') { v = v * 10 + (inbuf[inpos] - '0'); inpos++; }
-    return neg ? -v : v;
-}
-
-int n;
-long long S = 0;
-vector<P> ps;
-static int gFASTFIT = 1;
+int n;long long S=0;vector<P>ps;static int gFASTFIT=1;
 
 static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0, bool adaptive,
               double adaptTLms, double deadlineMs, double panicMs = -1.0, int adaptMode = 0) {
@@ -210,6 +181,25 @@ static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0,
     return res;
 }
 
+static bool validR(const R& z) {
+    if (!z.ok || z.packW < 1 || z.packW > 64 || (int)z.pl.size() != n) return false;
+    vector<char> seen(n, 0); vector<uint64_t> occ; uint64_t cols = 0; int maxx = -1;
+    for (const Pl& p : z.pl) {
+        if (p.idx < 0 || p.idx >= n || seen[p.idx]++ || p.ti < 0 || p.ti >= (int)ps[p.idx].t.size() || p.x < 0 || p.y < 0) return false;
+        const T& t = ps[p.idx].t[p.ti];
+        if (p.x > z.packW - t.w) return false;
+        if ((int)occ.size() < p.y + t.h) occ.resize(p.y + t.h);
+        for (int dy = 0; dy < t.h; ++dy) {
+            uint64_t m = (uint64_t)t.rmask[dy] << p.x;
+            if (occ[p.y + dy] & m) return false;
+            occ[p.y + dy] |= m; cols |= m;
+        }
+        for (auto q : t.c) { int x = p.x + q.first; if (x < 0 || x >= z.packW || p.y + q.second < 0) return false; maxx = max(maxx, x); }
+    }
+    for (char v : seen) if (!v) return false;
+    int wc = __builtin_popcountll(cols), hc = 0; for (uint64_t r : occ) hc += r != 0;
+    return maxx < z.packW && z.W == max(1, wc) && z.H == max(1, hc) && z.A == 1LL * z.W * z.H;
+}
 static vector<uint64_t> g_grid;
 static R pack_blf(int W, const vector<int>& order, int policy, double deadlineMs) {
     if (W > 64 || W <= 0) return R{};
@@ -897,19 +887,19 @@ static R bfSolve(int minW, int base, double deadline) {
 int main() {
     T0 = chrono::steady_clock::now();
     if (const char* e = getenv("POLYPACK_TL")) { double v = atof(e); if (v > 50 && v < 10000) TL_MS = v; }
-    int ffEnv = envInt("PP_FASTFIT", -1);    // -1 => auto-gate by S below; 0/1 => explicit override
-    int BIGBLF = envInt("PP_BIGBLF", 0);     // 1: big cases skip champion pack, BLF-only
-    int SMALLBLF = envInt("PP_SMALLBLF", 0); // 1: small cases skip champion sweep
-    int JUMP = envInt("PP_JUMP", 15);        // % chance of W jump in restarts
-    int BLF2 = envInt("PP_BLF2", 1);         // 1: restarts use blf2 (hole-aware window best-fit)
-    int BLF2SWEEP = envInt("PP_BLF2SWEEP", 0); // 1: small-case sweep uses blf2 instead of skyline
-    int BLF2ORD = envInt("PP_BLF2ORD", 1);   // 0: big-first order, 1: champion order
-    int B3 = envInt("PP_B3", 1);             // 1: use cached blf3 instead of blf2
-    int PHASE2 = envInt("PP_PHASE2", 1);     // 1: blf2 pass over best sweep Ws
-    double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;  // 0 => auto by size
-    double P2ENDF = envInt("PP_P2END", 0) / 100.0;   // 0 => auto by size
-    long long P2MAXS = envInt("PP_P2MAXS", 22000);   // phase2 only when S below this
-    long long B2RESTS = envInt("PP_B2RESTS", 50000);  // blf2 restarts when S below this (was 1300)
+    int ffEnv = envInt("PP_FASTFIT", -1);
+    int BIGBLF = envInt("PP_BIGBLF", 0);
+    int SMALLBLF = envInt("PP_SMALLBLF", 0);
+    int JUMP = envInt("PP_JUMP", 15);
+    int BLF2 = envInt("PP_BLF2", 1);
+    int BLF2SWEEP = envInt("PP_BLF2SWEEP", 0);
+    int BLF2ORD = envInt("PP_BLF2ORD", 1);
+    int B3 = envInt("PP_B3", 1);
+    int PHASE2 = envInt("PP_PHASE2", 1);
+    double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;
+    double P2ENDF = envInt("PP_P2END", 0) / 100.0;
+    long long P2MAXS = envInt("PP_P2MAXS", 22000);
+    long long B2RESTS = envInt("PP_B2RESTS", 50000);
 
     {
         size_t cap = 1 << 20; inbuf.resize(cap); size_t len = 0;
@@ -978,8 +968,7 @@ int main() {
     }
 
     vector<int> idx(n); iota(idx.begin(), idx.end(), 0);
-    bool alt = S < 1200 || (S >= 1400 && S < 1600) || (S >= 2000 && S < 6000);
-    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL) ^ (alt ? 123 : 0);
+    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL);
     RNG rng(seed);
     auto ord4 = [&]() {
         vector<int> res = idx;
@@ -1206,7 +1195,7 @@ int main() {
                 int Hcap = (int)(capA / W);
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
-                obuf = fromBest ? ilsOrd : ((((cntBLF & 1) != 0) ^ alt) ? ordBLF : ordB2);
+                obuf = fromBest ? ilsOrd : ((cntBLF & 1) ? ordBLF : ordB2);
                 int swaps = 1 + rng.rint(12);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
@@ -1287,8 +1276,11 @@ int main() {
         }
     }
     } // end champion search block (skipped when best-fit produced the result)
+    R safeR = bestR;
+    bool safeOK = validR(safeR);
     if (!useBF) crownRepack(bestR, TL_MS + 10.0);
-    else if (bestR.ok) crownRepack(bestR, TL_MS + 10.0); // second pass if time
+    else if (bestR.ok) crownRepack(bestR, TL_MS + 10.0);
+    if (!validR(bestR) && safeOK) bestR = move(safeR);
 
     int maxX = -1, maxY = -1;
     for (auto& p : bestR.pl) {
