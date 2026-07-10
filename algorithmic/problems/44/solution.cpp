@@ -11,7 +11,7 @@
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 2480.0;
+static double TL_MS = 2490.0;
 static inline double el_ms(){ return chrono::duration<double,milli>(chrono::steady_clock::now()-T0).count(); }
 
 static int N;
@@ -60,7 +60,7 @@ int main(){
     vector<int> bucket(N); { vector<int> tmp=cnt; for(int i=0;i<N;i++) bucket[tmp[cellOf[i]]++]=i; }
 
     // ---- k nearest neighbors per city ----
-    int K=min(N-1, N>50000?13:(N>5000?52:10));
+    int K=min(N-1, N>50000?12:(N>5000?48:10));
     vector<int> nbr((size_t)N*K,-1);
     {
         vector<pair<double,int>> cand; cand.reserve(128);
@@ -138,19 +138,24 @@ int main(){
         if(hc<curCost){ for(int i=0;i<N;i++) order[i]=hoth[i], pos[hoth[i]]=i; }
     }
 
-    // Morton curve construction as alternative to NN
+    // Morton curve construction (2 orientations: normal + swapped axes)
     {   static const uint32_t HM=(1u<<21)-1u;
         double minx=X[0],maxx=X[0],miny=Y[0],maxy=Y[0];
         for(int i=1;i<N;i++){ minx=min(minx,X[i]);maxx=max(maxx,X[i]);miny=min(miny,Y[i]);maxy=max(maxy,Y[i]); }
         auto sc=[&](double v,double lo,double hi)->uint32_t{ return hi==lo?HM/2:(uint32_t)((__int128)(v-lo)*HM/(hi-lo)); };
-        vector<uint64_t> mval(N);
+        vector<uint64_t> mval(N),mval2(N);
         for(int i=0;i<N;i++){ uint32_t x=sc(X[i],minx,maxx),y=sc(Y[i],miny,maxy);
-            uint64_t d=0; for(int b=0;b<21;b++){ d|=uint64_t((x>>b)&1)<<(2*b); d|=uint64_t((y>>b)&1)<<(2*b+1); }
-            mval[i]=d; }
+            uint64_t d=0,d2=0;
+            for(int b=0;b<21;b++){ d|=uint64_t((x>>b)&1)<<(2*b); d|=uint64_t((y>>b)&1)<<(2*b+1);
+                                    d2|=uint64_t((y>>b)&1)<<(2*b); d2|=uint64_t((x>>b)&1)<<(2*b+1); }
+            mval[i]=d; mval2[i]=d2; }
         vector<int> moth(N); for(int i=0;i<N;i++) moth[i]=i;
         sort(moth.begin(),moth.end(),[&](int a,int b){ return mval[a]<mval[b]||(mval[a]==mval[b]&&a<b); });
-        double nnCost=0, mc=0; for(int i=0;i<N;i++){ nnCost+=dist(order[i],order[(i+1)%N]); mc+=dist(moth[i],moth[(i+1)%N]); }
-        if(mc<nnCost){ for(int i=0;i<N;i++) order[i]=moth[i], pos[moth[i]]=i; }
+        double curCost=0,mc=0; for(int i=0;i<N;i++){ curCost+=dist(order[i],order[(i+1)%N]); mc+=dist(moth[i],moth[(i+1)%N]); }
+        if(mc<curCost){ for(int i=0;i<N;i++) order[i]=moth[i],pos[moth[i]]=i; curCost=mc; }
+        sort(moth.begin(),moth.end(),[&](int a,int b){ return mval2[a]<mval2[b]||(mval2[a]==mval2[b]&&a<b); });
+        double mc2=0; for(int i=0;i<N;i++) mc2+=dist(moth[i],moth[(i+1)%N]);
+        if(mc2<curCost){ for(int i=0;i<N;i++) order[i]=moth[i], pos[moth[i]]=i; }
     }
 
     auto nextIdx=[&](int i){ return i+1<N?i+1:0; };
