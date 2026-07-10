@@ -147,29 +147,62 @@ static vector<int> gord;
 static vector<long long> gestC;
 static vector<int> tabuTB;
 static inline int opOf(int job, int m){ return job*M + posF[job*M + m]; }
+// Critical-path reconstruction + N5/N6 moves (classic TSAB geometry).
+// Key idea (Nowicki–Smutnicki): generate blocks on ONE critical path, not the
+// union of all critical ops. That smaller, structured neighborhood is the one
+// proven to make tabu search effective for JSSP under tight time limits.
+static int gUseAllCrit = 0; // 0 = single CP (TSAB), 1 = all critical ops (wider)
 static void genMoves(const vector<vector<int>>& cur){
 gmoves.clear();
 const long long* __restrict ds = dist_.data();
 const long long* __restrict tl = tail_.data();
 const long long* __restrict pn = pnode.data();
 const long long C = gCmax;
-#define ISCRIT_(u) (ds[u] + tl[u] - pn[u] == C)
+static vector<char> onCP;
+onCP.assign(N, 0);
+if(!gUseAllCrit){
+// Pick a sink on the critical path, walk back via critical predecessors.
+int sink = -1;
+for(int u=0;u<N;++u) if(ds[u]==C){ sink=u; break; }
+if(sink < 0){ for(int u=0;u<N;++u) if(ds[u]+tl[u]-pn[u]==C){ sink=u; break; } }
+int u = sink;
+while(u >= 0){
+onCP[u] = 1;
+long long need = ds[u] - pn[u];
+int pred = -1;
+// prefer machine predecessor when it is critical; else job predecessor
+int mp = mpred[u];
+if(mp >= 0 && ds[mp] == need) pred = mp;
+else if(jpre[u] && ds[u-1] == need) pred = u-1;
+else if(mp >= 0 && ds[mp] + pn[u] == ds[u]) pred = mp;
+else if(jpre[u] && ds[u-1] + pn[u] == ds[u]) pred = u-1;
+u = pred;
+}
+} else {
+for(int u=0;u<N;++u) if(ds[u]+tl[u]-pn[u]==C) onCP[u]=1;
+}
+// Map machine positions for ops on the chosen critical set
 for(int m=0;m<M;++m){
 const auto& s = cur[m];
 int i = 0;
 while(i < J){
-if(!ISCRIT_(opOf(s[i], m))){ i++; continue; }
+if(!onCP[opOf(s[i], m)]){ i++; continue; }
 int b = i;
-while(i+1 < J && ISCRIT_(opOf(s[i+1], m))) i++;
+while(i+1 < J && onCP[opOf(s[i+1], m)]) i++;
 int e = i; i++;
 if(e == b) continue;
-for(int t=b+1; t<=e; ++t) gmoves.push_back({m,b,e,t,true});
-for(int t=b; t<e; ++t)
-if(!(t==b && e==b+1))
+// N5: only ends of the block (classic TSAB) — always
+gmoves.push_back({m,b,e,b+1,true});          // second -> front (swap first pair)
+if(e > b+1) gmoves.push_back({m,b,e,e-1,false}); // second-last -> back
+// N6 interior (Zhang): only when using expanded mode or longer blocks
+if(gUseAllCrit || e - b >= 3){
+for(int t=b+2; t<=e; ++t) gmoves.push_back({m,b,e,t,true});
+for(int t=b; t<=e-2; ++t)
+if(t != b || e != b+1)
 gmoves.push_back({m,b,e,t,false});
 }
 }
-#undef ISCRIT_
+}
 }
 static long long estMove(const vector<vector<int>>& cur, const Mv& mv){
 const auto& s = cur[mv.m];
@@ -989,13 +1022,21 @@ reoptMachine(pick, cur, curC, bestC, best, T_end, lastImpT);
 }
 }
 #endif
+// Single critical path (TSAB) while improving; expand to all-critical/N6 when stuck
+{
+long long st = chrono::duration_cast<chrono::milliseconds>(nowT - lastImpT).count();
+gUseAllCrit = (st > 80) ? 1 : 0;
+}
 genMoves(cur);
 int nmv = (int)gmoves.size();
 #ifdef DIAG
 static long long totMv = 0; totMv += nmv;
 if(iter % 50000 == 0) fprintf(stderr, "avg nmv=%.1f\n", (double)totMv/iter);
 #endif
+if(nmv == 0){
+gUseAllCrit = 1; genMoves(cur); nmv = (int)gmoves.size();
 if(nmv == 0) break;
+}
 gcand.clear();
 for(int idx=0; idx<nmv; ++idx)
 gcand.push_back({estMove(cur, gmoves[idx]), idx});
