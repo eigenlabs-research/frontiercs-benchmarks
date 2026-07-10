@@ -1,13 +1,8 @@
-// v21.11: fix + crown5; portfolio trial 3
 #include <bits/stdc++.h>
 using namespace std;
-
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 1890.0;
-static inline double elapsed_ms() {
-    return chrono::duration<double, milli>(chrono::steady_clock::now() - T0).count();
-}
-
+static double TL_MS=1890.0;
+static inline double elapsed_ms(){return chrono::duration<double,milli>(chrono::steady_clock::now()-T0).count();}
 struct T { int w, h; vector<pair<int,int>> c; vector<int> lo, hi; int r, f, minx, miny;
            unsigned short rmask[10]; vector<pair<signed char, signed char>> nbr; };
 struct P { int id, k; vector<pair<int,int>> b; vector<T> t; int minW = 1e9, minH = 1e9, minA = 1e9; };
@@ -191,7 +186,7 @@ static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0,
         adapt();
         if (!panic && deadlineMs > 0 && elapsed_ms() > deadlineMs) return R{};
     }
-    if ((int)pl.size() != nm) return R{};  // validate all pieces placed
+    if((int)pl.size()!=nm)return R{};
     int H = (int)g + 1;
     int maxX = -1;
     for (auto& pp : pl) {
@@ -390,7 +385,7 @@ static R pack_blf2(int W, const vector<int>& order, int window, double deadlineM
     grid.assign(max<size_t>(64, estH), 0ULL);
     const uint64_t FULLROW = (W == 64) ? ~0ULL : ((1ULL << W) - 1);
     int y0full = 0, topY = 0;
-    long long g = -1; // current max occupied row index
+    long long g=-1;
     vector<int> o = order;
     vector<Pl> pl; pl.reserve(nm);
     int checkCnt = 0;
@@ -464,7 +459,7 @@ static R pack_blf2(int W, const vector<int>& order, int window, double deadlineM
 }
 
 struct B3Cache { int y, x, contact; bool valid; };
-static vector<B3Cache> b3cache; // [pieceId * 8 + orientIdx]
+static vector<B3Cache> b3cache;
 static R pack_blf3(int W, const vector<int>& order, int window, double deadlineMs, RNG& rng, bool randtie) {
     if (W > 64 || W <= 0) return R{};
     int nm = (int)order.size();
@@ -580,7 +575,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
     vector<Pl> pl; pl.reserve(nm);
     if ((int)b3cache.size() < nm * 8) b3cache.resize(nm * 8);
     for (int i = 0; i < nm * 8; i++) b3cache[i].valid = false;
-    static int REPAIR = envInt("PP_REPAIR", 25); // ejection-chain depth (0 = off)
+    static int REPAIR=envInt("PP_REPAIR",25);
     auto& own = g_own;
     auto& plSlot = g_plSlot;
     if (REPAIR > 0) {
@@ -761,7 +756,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
     return res;
 }
 
-static int BF_HD = envInt("PP_BFHD", 0); // 0=auto: smaller HD for larger S
+static int BF_HD=envInt("PP_BFHD",0);
 static vector<uint64_t> bf_occ; static vector<int> bf_colH; static int bf_W;
 static inline int bf_fit(const T& o, int x) {
     int ysky = 0; for (int j = 0; j < o.w; j++) { int v = bf_colH[x + j] - o.lo[j]; if (v > ysky) ysky = v; }
@@ -978,8 +973,7 @@ int main() {
     }
 
     vector<int> idx(n); iota(idx.begin(), idx.end(), 0);
-    bool alt = S < 1200 || (S >= 1400 && S < 1600) || (S >= 2000 && S < 6000);
-    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL) ^ (alt ? 123 : 0);
+    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL);
     RNG rng(seed);
     auto ord4 = [&]() {
         vector<int> res = idx;
@@ -1032,16 +1026,13 @@ int main() {
     bool useBF = (bfEnv < 0) ? (n >= BF_N && base <= 63 && minW <= 63) : (bfEnv > 0);
     if (useBF && !bestR.ok) {
         bestR = bfSolve(minW, min(base, 63), TL_MS - 40.0); // more leftover for GRASP
-        // BF path previously skipped final crown — multi-row crown can shave BF packings
         if (bestR.ok) crownRepack(bestR, TL_MS - 5.0);
     }
-    // Post-BF retry: use remaining time for capped packing at best width
     if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < TL_MS - 50) {
         int W = bestR.packW;
         long long tA = bestR.A - 1;
         int Hc = max(1, (int)(tA / W));
         if (Hc >= minW) {
-            // Try largest-first order (different from BF's shape-group order)
             vector<int> o1 = idx;
             stable_sort(o1.begin(), o1.end(), [&](int a, int b) {
                 if (ps[a].k != ps[b].k) return ps[a].k > ps[b].k;
@@ -1064,8 +1055,8 @@ int main() {
         bestR = move(r);
     }
 
-    const double SEARCH_END = TL_MS;           // hard abort for any pack
-    const double SOFT_END = TL_MS - 15.0;      // don't start new work after this
+    const double SEARCH_END=TL_MS;
+    const double SOFT_END=TL_MS-15.0;
     vector<int> ordBLF = idx;
     stable_sort(ordBLF.begin(), ordBLF.end(), [&](int a, int b) {
         if (ps[a].k != ps[b].k) return ps[a].k > ps[b].k;
@@ -1074,6 +1065,20 @@ int main() {
         return ps[a].id < ps[b].id;
     });
     const vector<int>& ordB2 = BLF2ORD ? baseOrder : ordBLF;
+    vector<int> hardOrd;
+    static int HCAP=envInt("PP_HCAP",1);
+    if(HCAP&&S<6000){
+        hardOrd=idx;
+        stable_sort(hardOrd.begin(),hardOrd.end(),[&](int a,int b){
+            int da=ps[a].minA-ps[a].k,db=ps[b].minA-ps[b].k;
+            if(da!=db)return da>db;
+            if(ps[a].minA!=ps[b].minA)return ps[a].minA>ps[b].minA;
+            if(ps[a].k!=ps[b].k)return ps[a].k>ps[b].k;
+            int ma=min(ps[a].minW,ps[a].minH),mb=min(ps[b].minW,ps[b].minH);
+            if(ma!=mb)return ma>mb;
+            return ps[a].id<ps[b].id;
+        });
+    }
 
     int swin = max(1, n / 4);
     if (!big && !((big && BIGBLF) || (!big && SMALLBLF))) {
@@ -1092,9 +1097,9 @@ int main() {
     bool skipSweep = (big && BIGBLF) || (!big && SMALLBLF);
     int expLIM = big ? min(max(1, n / 4), (int)(350000 / max(1LL, S - 3500))) : 0;
     double avg = 250.0; int cnt = 0;
-    vector<pair<long long,int>> sweepRes; // (area, W)
+    vector<pair<long long,int>> sweepRes;
     bool doPhase2 = (!big && PHASE2 && S < P2MAXS);
-    double SWFRAC = envInt("PP_SWFRAC", 100) / 100.0; // sweep cap for the no-phase2 small path
+    double SWFRAC=envInt("PP_SWFRAC",100)/100.0;
     double sweepEnd = doPhase2 ? min(SOFT_END, TL_MS * P2FRAC)
                                : (!big ? min(SOFT_END, TL_MS * SWFRAC) : SOFT_END);
     for (int wi = 0; wi < (skipSweep ? 0 : (int)Ws.size()); wi++) {
@@ -1172,7 +1177,7 @@ int main() {
 
     {
         vector<int> ilsOrd; int ilsW = 0; (void)ilsW;
-        double avgBLF = 10.0; int cntBLF = 0;
+        double avgBLF = 10.0; int cntBLF = 0, capTry = 0;
         double avgSky = avg;
         vector<int> obuf;
         while (true) {
@@ -1204,9 +1209,10 @@ int main() {
                 }
                 long long capA = bestR.A - 1;
                 int Hcap = (int)(capA / W);
-                if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
+                if(Hcap<minW||Hcap<=1)continue;
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
-                obuf = fromBest ? ilsOrd : ((((cntBLF & 1) != 0) ^ alt) ? ordBLF : ordB2);
+                obuf = fromBest ? ilsOrd : (HCAP && S < 6000 && (capTry & 1) ? hardOrd : ((cntBLF & 1) ? ordBLF : ordB2));
+                capTry++;
                 int swaps = 1 + rng.rint(12);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
@@ -1271,7 +1277,6 @@ int main() {
             }
         }
     }
-    // late restart: try shuffled orderings at best width for fresh diversification
     static int LATE = envInt("PP_LATE", 4);
     if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30 && LATE > 0) {
         int lateW = bestR.packW;
@@ -1286,9 +1291,9 @@ int main() {
             }
         }
     }
-    } // end champion search block (skipped when best-fit produced the result)
+    }
     if (!useBF) crownRepack(bestR, TL_MS + 10.0);
-    else if (bestR.ok) crownRepack(bestR, TL_MS + 10.0); // second pass if time
+    else if(bestR.ok)crownRepack(bestR,TL_MS+10.0);
 
     int maxX = -1, maxY = -1;
     for (auto& p : bestR.pl) {
@@ -1331,5 +1336,5 @@ int main() {
     }
     fwrite(out.data(), 1, out.size(), stdout);
     fflush(stdout);
-    _Exit(0); // skip destructor teardown of large heaps
+    _Exit(0);
 }
