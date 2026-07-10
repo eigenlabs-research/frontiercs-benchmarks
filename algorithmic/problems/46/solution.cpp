@@ -1,3 +1,6 @@
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC optimize("O3,unroll-loops")
+#endif
 #include <cstdio>
 #include <vector>
 #include <array>
@@ -24,6 +27,7 @@ static vector<int> jsuc;
 static vector<char> jpre;
 static vector<long long> dist_, tail_;
 static vector<char> crit;
+static long long gCmax = 0;
 static long long evalSeq(const vector<vector<int>>& seq, bool fillCrit = false){
 const int n = N;
 int* __restrict ind = indeg.data();
@@ -69,6 +73,7 @@ if(--ind[v]==0) qbuf.push_back(v);
 if(qh != n) return -1;
 long long C = 0;
 for(int u=0;u<n;++u) if(ds[u] > C) C = ds[u];
+gCmax = C;
 if(fillCrit){
 long long* __restrict tl = tail_.data();
 const int* __restrict qb = qbuf.data();
@@ -144,13 +149,18 @@ static vector<int> tabuTB;
 static inline int opOf(int job, int m){ return job*M + posF[job*M + m]; }
 static void genMoves(const vector<vector<int>>& cur){
 gmoves.clear();
+const long long* __restrict ds = dist_.data();
+const long long* __restrict tl = tail_.data();
+const long long* __restrict pn = pnode.data();
+const long long C = gCmax;
+#define ISCRIT_(u) (ds[u] + tl[u] - pn[u] == C)
 for(int m=0;m<M;++m){
 const auto& s = cur[m];
 int i = 0;
 while(i < J){
-if(!crit[opOf(s[i], m)]){ i++; continue; }
+if(!ISCRIT_(opOf(s[i], m))){ i++; continue; }
 int b = i;
-while(i+1 < J && crit[opOf(s[i+1], m)]) i++;
+while(i+1 < J && ISCRIT_(opOf(s[i+1], m))) i++;
 int e = i; i++;
 if(e == b) continue;
 for(int t=b+1; t<=e; ++t) gmoves.push_back({m,b,e,t,true});
@@ -159,6 +169,7 @@ if(!(t==b && e==b+1))
 gmoves.push_back({m,b,e,t,false});
 }
 }
+#undef ISCRIT_
 }
 static long long estMove(const vector<vector<int>>& cur, const Mv& mv){
 const auto& s = cur[mv.m];
@@ -268,8 +279,11 @@ if(mp >= 0 && !ginq[mp]){ ginq[mp]=1; gwl.push_back(mp); }
 }
 }
 long long C = 0;
-for(int u=0;u<N;++u) if(ds[u] > C) C = ds[u];
-for(int u=0;u<N;++u) crit[u] = (ds[u] + tl[u] - pn[u] == C);
+for(int mm=0;mm<M;++mm){
+int u = opOf(cur[mm][J-1], mm);
+if(ds[u] > C) C = ds[u];
+}
+gCmax = C;
 #ifdef DIAG
 extern long long g_pops, g_calls;
 g_pops += pops + headPops; g_calls++;
@@ -867,7 +881,7 @@ span = spanShort + (spanLong - spanShort)*f/100;
 return tmin + (int)(rng() % (unsigned)span);
 };
 #ifndef RST_MS
-#define RST_MS 200
+#define RST_MS 400
 #endif
 struct Elite { vector<vector<int>> seq; long long C; unsigned long long h; };
 vector<Elite> pool;
@@ -932,7 +946,7 @@ critW.assign(M, 0); loadW.assign(M, 0);
 for(int u=0;u<N;++u){
 int mm = m_of[u/M][u%M];
 loadW[mm] += pnode[u];
-if(crit[u]) critW[mm] += pnode[u];
+if(dist_[u] + tail_[u] - pnode[u] == gCmax) critW[mm] += pnode[u];
 }
 int pick = -1;
 for(int mm=0;mm<M;++mm){
