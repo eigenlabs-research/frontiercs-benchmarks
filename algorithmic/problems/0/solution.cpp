@@ -1,4 +1,4 @@
-// v21.1: fix orientation mismatch in bfSolve output mapping
+// v21.1: fix orientation mismatch in bfSolve, wider BF base for large S
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -998,8 +998,8 @@ int main() {
     else if (S < 3000) factor = 0.5;
     else if (S < 10000) factor = 0.27;
     else if (S < 30000) factor = 0.08;
-    else if (S < 50000) factor = 0.028;  // measured optimum W~33 at S~38k (was 0.01 -> W~19)
-    else factor = 0.009;                 // measured optimum W~24-28 at S~58-96k
+    else if (S < 50000) factor = 0.043;
+    else factor = 0.022;
     int base = max(minW, (int)floor(sqrt((double)S * factor)));
     if (const char* e = getenv("PP_BASEW")) { int v = atoi(e); if (v >= minW && v <= 4000) base = v; }
 
