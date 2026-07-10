@@ -994,14 +994,6 @@ iter++;
 if((iter & 16383) == 0){
 long long fc = evalSeq(cur, true);
 if(fc >= 0) curC = fc;
-if((int)pool.size() >= 2){
-long long sbC = bestC; vector<vector<int>> sb = best;
-int bi=0,wi=0;
-for(int z=1;z<(int)pool.size();++z){ if(pool[z].C<pool[bi].C) bi=z; if(pool[z].C>pool[wi].C) wi=z; }
-if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,30); poolAdd(best,bestC); }
-bestC = sbC; best = sb;
-evalSeq(cur, true);
-}
 }
 #ifndef NO_TRIG
 if(J > 2 && nowT - lastImpT > chrono::milliseconds(reoptTrig) && nowT - lastReoptT > chrono::milliseconds(reoptCd)){
@@ -1032,89 +1024,33 @@ if(iter % 50000 == 0) fprintf(stderr, "avg nmv=%.1f\n", (double)totMv/iter);
 #endif
 if(nmv == 0) break;
 gcand.clear();
-for(int idx=0; idx<nmv; ++idx)
-gcand.push_back({estMove(cur, gmoves[idx]), idx});
-int K = nmv < 24 ? nmv : 24;
-partial_sort(gcand.begin(), gcand.begin()+K, gcand.end());
-bool sorted_all = (K == nmv);
+for(int idx=0; idx<nmv; ++idx) gcand.push_back({estMove(cur, gmoves[idx]), idx});
 bool applied = false;
-#ifndef EVAL_TOP
-#define EVAL_TOP 1
-#endif
-#if EVAL_TOP > 1
-{
-int bestIdx = -1; long long bestNC = -1; int evald = 0;
-for(int t=0; t<nmv && evald<EVAL_TOP; ++t){
-if((t & 7)==7 && chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
-if(t >= K && !sorted_all){ sort(gcand.begin(), gcand.end()); sorted_all = true; }
-const Mv& mv = gmoves[gcand[t].second];
-bool tb = isTabu(cur, mv, iter);
-bool asp = gcand[t].first < bestC;
-if(tb && !asp) continue;
-applyMove(cur, mv);
-long long nc = evalSeq(cur, false);
-undoMove(cur, mv);
-if(nc < 0) continue;
-evald++;
-if(bestIdx < 0 || nc < bestNC){ bestNC = nc; bestIdx = gcand[t].second; }
-}
-if(bestIdx >= 0){
-const Mv& mv = gmoves[bestIdx];
-collectTabu(cur, mv);
-applyMove(cur, mv);
-long long nc = evalSeq(cur, true);
-if(nc >= 0){
-int tenure = dynTen(nowT);
-for(size_t id : gpend) tabuTB[id] = iter + tenure;
-curC = nc; applied = true;
-} else { undoMove(cur, mv); evalSeq(cur, true); }
-}
-}
-#endif
+static vector<char> triedMove;
+triedMove.assign(nmv, 0);
 for(int pass=0; pass<2 && !applied && !timeUp; ++pass){
-for(int t=0; t<nmv; ++t){
-if((t & 7)==7 && chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
-if(t >= K && !sorted_all){
-sort(gcand.begin(), gcand.end());
-sorted_all = true;
+fill(triedMove.begin(), triedMove.end(), 0);
+for(int attempt=0; attempt<nmv && !applied; ++attempt){
+if((attempt & 7)==7 && chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
+int pick = -1;
+for(int q=0; q<nmv; ++q){
+if(triedMove[q]) continue;
+const Mv& qm = gmoves[gcand[q].second];
+if(pass==0){ bool tb=isTabu(cur,qm,iter); bool asp=gcand[q].first<bestC; if(tb&&!asp) continue; }
+if(pick<0 || gcand[q] < gcand[pick]) pick=q;
 }
-const Mv& mv = gmoves[gcand[t].second];
-if(pass==0){
-bool tb = isTabu(cur, mv, iter);
-bool asp = gcand[t].first < bestC;
-if(tb && !asp) continue;
-}
+if(pick<0) break;
+triedMove[pick]=1;
+const Mv& mv = gmoves[gcand[pick].second];
 collectTabu(cur, mv);
 applyMove(cur, mv);
 long long nc = incAfterMove(cur, mv);
-#ifdef VERIFY
-{
-static vector<long long> vd, vt; static long long mism = 0; static long long checks = 0;
-vd = dist_; vt = tail_;
-long long fc = evalSeq(cur, true);
-checks++;
-if(nc != -2){
-if(fc != nc || vd != dist_ || vt != tail_){
-mism++;
-fprintf(stderr, "MISMATCH iter=%d inc=%lld full=%lld distOK=%d tailOK=%d\n",
-iter, nc, fc, (int)(vd==dist_), (int)(vt==tail_));
-}
-}
-if(checks % 20000 == 0) fprintf(stderr, "verify checks=%lld mism=%lld\n", checks, mism);
-nc = fc;
-}
-#endif
 if(nc == -2) nc = evalSeq(cur, true);
-if(nc < 0){
-undoMove(cur, mv);
-evalSeq(cur, true);
-continue;
-}
+if(nc < 0){ undoMove(cur, mv); evalSeq(cur, true); continue; }
 int tenure = dynTen(nowT);
 for(size_t id : gpend) tabuTB[id] = iter + tenure;
 curC = nc;
 applied = true;
-break;
 }
 }
 if(!applied) break;
