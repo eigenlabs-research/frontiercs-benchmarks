@@ -790,8 +790,9 @@ static int bf_pass(int W, const vector<int>& repr, const unordered_map<uint64_t,
         long long aw = 0; for (int j = 0; j < o.w; j++) { int pb = y + o.lo[j]; if (pb > bf_colH[x + j]) aw += pb - bf_colH[x + j]; }
         int ct = 0; for (auto& nb : o.nbr) { int cx = x + nb.first, cy = y + nb.second; if (cx < 0 || cx >= W || cy < 0) { ct++; continue; } if (cy < (int)bf_occ.size() && ((bf_occ[cy] >> cx) & 1ULL)) ct++; }
         static int BF_GAPW = envInt("PP_BFGAPW", 1);
+        static int BF_AW = envInt("PP_BFAW", S < 30000 ? 1 : 0);
         if (BF_GAPW > 0) {
-            long long sc = rH * (long long)BF_GAPW - ct;
+            long long sc = rH * (long long)BF_GAPW - ct + aw * BF_AW;
             bool better = (sc < bS) || (sc == bS && tie && ct >= bC) || (sc == bS && !tie && ct > bC);
             if (better) { bS = sc; bC = ct; bk = ki; bo = oi; bx = x; by = y; }
         } else {
