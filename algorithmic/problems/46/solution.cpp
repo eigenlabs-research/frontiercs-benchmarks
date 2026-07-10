@@ -1152,7 +1152,7 @@ static vector<long long> dist_;
 static vector<long long> q_;
 static long long         Cmax_;
 static clock_t START;
-static const double TL = 0.94;
+static const double TL = 0.93;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
 static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
 static inline unsigned long long rnd(){
@@ -1464,7 +1464,7 @@ static vector<int>       indeg, mSucc, mPred, order_;
 static vector<long long> dist_, q_;
 static long long         Cmax_;
 static clock_t START;
-static const double TL = 0.94;
+static const double TL = 0.93;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
 static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
 static inline unsigned long long rnd(){
@@ -1740,7 +1740,7 @@ vector<vector<int>> seq = gifflerThompson(rule);
 long long mk = evaluate(seq);
 if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
 }
-for(int r = 0; r < 150; ++r){
+for(int r = 0; r < 200; ++r){
 vector<vector<int>> seq = gifflerThompson(r % 5);
 long long mk = evaluate(seq);
 if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
@@ -1769,7 +1769,7 @@ static vector<int>       indeg, mSucc, mPred, order_;
 static vector<long long> dist_, q_;
 static long long         Cmax_;
 static clock_t START;
-static const double TL = 0.94;
+static const double TL = 0.93;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
 static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
 static inline unsigned long long rnd(){
@@ -2098,7 +2098,7 @@ vector<vector<int>> seq = gifflerThompson(rule);
 long long mk = evaluate(seq);
 if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
 }
-for(int r = 0; r < 150; ++r){
+for(int r = 0; r < 200; ++r){
 vector<vector<int>> seq = gifflerThompson(r % 5);
 long long mk = evaluate(seq);
 if(mk >= 0 && mk < bestMk){ bestMk = mk; best = seq; }
