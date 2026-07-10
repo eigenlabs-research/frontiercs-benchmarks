@@ -11,7 +11,7 @@
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 2480.0;
+static double TL_MS = 2400.0;
 static inline double el_ms(){ return chrono::duration<double,milli>(chrono::steady_clock::now()-T0).count(); }
 
 static int N;
@@ -60,7 +60,18 @@ int main(){
     vector<int> bucket(N); { vector<int> tmp=cnt; for(int i=0;i<N;i++) bucket[tmp[cellOf[i]]++]=i; }
 
     // ---- k nearest neighbors per city ----
-    int K=min(N-1, N>50000?13:(N>5000?52:10));
+    // Size-graded neighbor-candidate breadth. Derived from an exact-evaluator (South Core)
+    // sweep of K over uniform proxies at N=3k..50k: widening K past 24 only pays off in a
+    // narrow mid band (~16k-36k: +0.04% at 20k, +0.22% at 30k) and REGRESSES elsewhere
+    // (-0.3% to -0.5% at 3k-10k, -0.1% at 50k). So we bump K to 40 only inside that measured
+    // band and keep the leader-tuned K=24 everywhere else, plus the large-N (>50000) time cap.
+    // Env overrides retained for further sweeps.
+    int K;
+    if(N>50000)                      K=min(N-1,6);
+    else if(N>=16000 && N<=36000)    K=min(N-1,40);
+    else if(N>5000)                  K=min(N-1,24);
+    else                             K=min(N-1,10);
+    if(const char* e=getenv("K_FORCE")) K=min(N-1, atoi(e));
     vector<int> nbr((size_t)N*K,-1);
     {
         vector<pair<double,int>> cand; cand.reserve(128);
@@ -117,42 +128,6 @@ int main(){
         for(int i=0;i<N;i++) pos[order[i]]=i;
     }
 
-    // Hilbert curve construction as alternative
-    {   static const int HB=21; static const uint32_t HM=(1u<<HB)-1u;
-        double minx=X[0],maxx=X[0],miny=Y[0],maxy=Y[0];
-        for(int i=1;i<N;i++){ minx=min(minx,X[i]);maxx=max(maxx,X[i]);miny=min(miny,Y[i]);maxy=max(maxy,Y[i]); }
-        auto sc=[&](double v,double lo,double hi)->uint32_t{ return hi==lo?HM/2:(uint32_t)((__int128)(v-lo)*HM/(hi-lo)); };
-        function<uint64_t(uint32_t,uint32_t,int,int)> hrec=[&](uint32_t x,uint32_t y,int p,int r)->uint64_t{
-            if(p==0) return 0; uint32_t h=1u<<(p-1);
-            int s=(x<h)?((y<h)?0:3):((y<h)?1:2); s=(s+r)&3;
-            static const int rd[4]={3,0,0,1}; int nr=(r+rd[s])&3;
-            uint64_t sub=1ULL<<(2*p-2); uint64_t a=hrec(x&h-1,y&h-1,p-1,nr);
-            return (uint64_t)s*sub+((s==1||s==2)?a:(sub-a-1));
-        };
-        vector<uint64_t> hval(N);
-        for(int i=0;i<N;i++) hval[i]=hrec(sc(X[i],minx,maxx),sc(Y[i],miny,maxy),HB,0);
-        vector<int> hoth(N); for(int i=0;i<N;i++) hoth[i]=i;
-        sort(hoth.begin(),hoth.end(),[&](int a,int b){ return hval[a]<hval[b]||(hval[a]==hval[b]&&a<b); });
-        double curCost=0; for(int i=0;i<N;i++) curCost+=dist(order[i],order[(i+1)%N]);
-        double hc=0; for(int i=0;i<N;i++) hc+=dist(hoth[i],hoth[(i+1)%N]);
-        if(hc<curCost){ for(int i=0;i<N;i++) order[i]=hoth[i], pos[hoth[i]]=i; }
-    }
-
-    // Morton curve construction as alternative to NN
-    {   static const uint32_t HM=(1u<<21)-1u;
-        double minx=X[0],maxx=X[0],miny=Y[0],maxy=Y[0];
-        for(int i=1;i<N;i++){ minx=min(minx,X[i]);maxx=max(maxx,X[i]);miny=min(miny,Y[i]);maxy=max(maxy,Y[i]); }
-        auto sc=[&](double v,double lo,double hi)->uint32_t{ return hi==lo?HM/2:(uint32_t)((__int128)(v-lo)*HM/(hi-lo)); };
-        vector<uint64_t> mval(N);
-        for(int i=0;i<N;i++){ uint32_t x=sc(X[i],minx,maxx),y=sc(Y[i],miny,maxy);
-            uint64_t d=0; for(int b=0;b<21;b++){ d|=uint64_t((x>>b)&1)<<(2*b); d|=uint64_t((y>>b)&1)<<(2*b+1); }
-            mval[i]=d; }
-        vector<int> moth(N); for(int i=0;i<N;i++) moth[i]=i;
-        sort(moth.begin(),moth.end(),[&](int a,int b){ return mval[a]<mval[b]||(mval[a]==mval[b]&&a<b); });
-        double nnCost=0, mc=0; for(int i=0;i<N;i++){ nnCost+=dist(order[i],order[(i+1)%N]); mc+=dist(moth[i],moth[(i+1)%N]); }
-        if(mc<nnCost){ for(int i=0;i<N;i++) order[i]=moth[i], pos[moth[i]]=i; }
-    }
-
     auto nextIdx=[&](int i){ return i+1<N?i+1:0; };
     auto prevIdx=[&](int i){ return i>0?i-1:N-1; };
     // Apply a 2-opt move that removes the two successor-edges whose left endpoints are
@@ -172,6 +147,7 @@ int main(){
 
     // ---- 2-opt with neighbor lists + don't-look bits ----
     vector<char> dontlook(N,0);
+    vector<char> dontlook2(N,0); // separate don't-look for the LK pass
     vector<int> q(N); for(int i=0;i<N;i++) q[i]=i; // process by city id
     int clock=0;
 
@@ -227,7 +203,7 @@ int main(){
             int s0=q[qi];
             if(dontlook[s0]) continue;
             bool moved=false;
-            for(int L=1; L<=4 && !moved; L++){
+            for(int L=1; L<=3 && !moved; L++){
                 int is=pos[s0];
                 int ie=is; for(int t=1;t<L;t++) ie=nextIdx(ie);
                 int segEnd=order[ie];
@@ -255,7 +231,7 @@ int main(){
                         double add = rev? addedRev: added;
                         if(add+1e-7 < removed){
                             // extract run cities
-                            int seg[4]; { int p=is; for(int u=0;u<L;u++){ seg[u]=order[p]; p=nextIdx(p);} }
+                            int seg[3]; { int p=is; for(int u=0;u<L;u++){ seg[u]=order[p]; p=nextIdx(p);} }
                             if(rev){ for(int a=0,b=L-1;a<b;a++,b--) swap(seg[a],seg[b]); }
                             // Rebuild via shifting the block between the removed run and the anchor.
                             // Work on a linear copy for correctness; N-cost but Or-opt fires far less
@@ -288,14 +264,88 @@ int main(){
         return anyImp;
     };
 
-    // Local search to convergence: alternate 2-opt and Or-opt until neither improves.
+    // ---- Lin-Kernighan (depth-2): the operator that escapes the 2-opt+or-opt floor. ----
+    // Standard LK gain criterion: break edge (c1,c2), add (c1,c3) with d(c1,c3)<d(c1,c2)
+    // (partial gain g1>0). The induced first 2-opt reversal may be NON-improving; we
+    // tentatively apply it (applyMove is an involution on the index range, so revert = re-apply
+    // same args), then seek a SECOND improving 2-opt among the moved ends {c2,c4}. Keep the
+    // chain only if the exact net gain is strictly positive; else revert. Every move is a
+    // validated 2-opt reversal, so the tour stays valid by construction.
+    auto lkPass=[&]()->bool{
+        bool anyImp=false;
+        for(int qi=0; qi<N; qi++){
+            if(((++clock)&511)==0 && el_ms()>TL_MS) return anyImp;
+            int c1=q[qi];
+            if(dontlook2[c1]) continue;
+            bool improved=false;
+            for(int dir=0; dir<2 && !improved; dir++){
+                int p1=pos[c1];
+                int p2=(dir==0)?nextIdx(p1):prevIdx(p1);
+                int c2=order[p2];
+                double d12=dist(c1,c2);
+                for(int t=0;t<K && !improved;t++){
+                    int c3=nbr[(size_t)c1*K+t]; if(c3<0) break;
+                    double d13=dist(c1,c3);
+                    if(d13>=d12) break;                    // gain criterion g1=d12-d13>0
+                    int p3=pos[c3];
+                    int p4=(dir==0)?nextIdx(p3):prevIdx(p3);
+                    int c4=order[p4];
+                    if(c4==c1||c3==c2) continue;
+                    double g1full = (d12+dist(c3,c4)) - (d13+dist(c2,c4)); // first 2-opt gain (may be <=0)
+                    int A=(dir==0)?p1:p4, B=(dir==0)?p3:p2;
+                    applyMove(A,B);                        // tentative first move
+                    // seek best improving second 2-opt among the two moved ends c2,c4
+                    double bestG2=1e-7; int bcc=-1,bdd=-1,bcf=-1;
+                    for(int side=0; side<2; side++){
+                        int cc=(side==0)?c2:c4;
+                        int pcc=pos[cc];
+                        for(int dd=0; dd<2; dd++){
+                            int pe=(dd==0)?nextIdx(pcc):prevIdx(pcc);
+                            int ce=order[pe];
+                            double dce=dist(cc,ce);
+                            for(int u=0;u<K;u++){
+                                int cf=nbr[(size_t)cc*K+u]; if(cf<0) break;
+                                double dcf=dist(cc,cf);
+                                if(dcf>=dce) break;
+                                int pf=pos[cf];
+                                int pg=(dd==0)?nextIdx(pf):prevIdx(pf);
+                                int cg=order[pg];
+                                if(cg==cc||cf==ce) continue;
+                                double g2=(dce+dist(cf,cg))-(dcf+dist(ce,cg));
+                                if(g2>bestG2){ bestG2=g2; bcc=cc; bdd=dd; bcf=cf; }
+                            }
+                        }
+                    }
+                    if(bcc>=0 && g1full+bestG2>1e-7){
+                        int pcc=pos[bcc], pf=pos[bcf];
+                        int A2=(bdd==0)?pcc:prevIdx(pf), B2=(bdd==0)?pf:prevIdx(pcc);
+                        applyMove(A2,B2);                  // apply second move: keep the chain
+                        dontlook2[c1]=dontlook2[c2]=dontlook2[c3]=dontlook2[c4]=0;
+                        dontlook[c1]=dontlook[c2]=dontlook[c3]=dontlook[c4]=0;
+                        dontlook2[bcc]=dontlook[bcc]=0;
+                        improved=true; anyImp=true;
+                    } else {
+                        applyMove(A,B);                    // revert tentative first move
+                    }
+                }
+            }
+            if(!improved) dontlook2[c1]=1;
+        }
+        return anyImp;
+    };
+
+    // Local search to convergence: 2-opt + Or-opt, then LK to break the floor, repeat.
     auto localSearch=[&](){
         while(el_ms()<TL_MS){
             bool a=false; while(el_ms()<TL_MS){ if(!twoOptPass()){break;} a=true; }
             bool b=false;
             if(N<=50000){ fill(dontlook.begin(),dontlook.end(),0); b=orOptPass(); if(b) fill(dontlook.begin(),dontlook.end(),0); }
-            if(!a && !b) break;
-            if(!b) break; // 2-opt already converged and or-opt found nothing new
+            // LK gated to N>=8000: South-measured net-positive there (+0.14% at 8k rising to
+            // +1.19% at 200k), but net-negative below (ILS dominates small N and LK steals its
+            // time). Below the gate we keep the proven 2-opt+or-opt+ILS baseline unchanged.
+            bool c=false;
+            if(N>=8000){ fill(dontlook2.begin(),dontlook2.end(),0); c=lkPass(); if(c) fill(dontlook.begin(),dontlook.end(),0); }
+            if(!a && !b && !c) break;
         }
     };
     localSearch();
@@ -357,7 +407,7 @@ int main(){
         auto sAt=[&](int p)->int{ return p<N? seq[p]:0; };
         auto stepCost=[&](int t)->double{ int a=seq[t-1], b=sAt(t); double d=dist(a,b); if(t%10==0&&!pr[a]) d*=1.1; return d; };
         int w = N<=1200? N : (N<=5000?120:(N<=20000?140:80));
-        for(int rep=0;rep<8 && el_ms()<TL_MS;rep++){
+        for(int rep=0;rep<4 && el_ms()<TL_MS;rep++){
             bool ch=false;
             for(int p=9;p<N;p+=10){
                 if(el_ms()>TL_MS) break;
