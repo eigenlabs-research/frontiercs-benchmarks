@@ -51,17 +51,12 @@ int main(){
     for(int i=1;i<N;i++){ minx=min(minx,X[i]);maxx=max(maxx,X[i]);miny=min(miny,Y[i]);maxy=max(maxy,Y[i]); }
     double w=max(1.0,maxx-minx), h=max(1.0,maxy-miny);
     int G=max(1,(int)floor(sqrt((double)N/2.0)));
-    int GX=G, GY=G;
-    // Case-isolated aspect grid: official all-case aspect probe improved the small weak case
-    // by one rounded bucket but hurt a larger case. Only change the small path; keep the
-    // original clipped-ring scan semantics so N>5000 remains behavior-identical.
-    if(N<=5000){ int cells=max(1,N/2); GX=max(1,min(cells,(int)llround(sqrt((double)cells*w/h)))); GY=max(1,cells/GX); }
-    double cw=w/GX, ch=h/GY;
-    auto gx=[&](double x){ int c=(int)((x-minx)/cw); return c<0?0:(c>=GX?GX-1:c); };
-    auto gy=[&](double y){ int c=(int)((y-miny)/ch); return c<0?0:(c>=GY?GY-1:c); };
-    vector<int> cellOf(N), cnt(GX*GY+1,0);
-    for(int i=0;i<N;i++){ int c=gx(X[i])*GY+gy(Y[i]); cellOf[i]=c; cnt[c+1]++; }
-    for(int i=0;i<GX*GY;i++) cnt[i+1]+=cnt[i];
+    double cw=w/G, ch=h/G;
+    auto gx=[&](double x){ int c=(int)((x-minx)/cw); return c<0?0:(c>=G?G-1:c); };
+    auto gy=[&](double y){ int c=(int)((y-miny)/ch); return c<0?0:(c>=G?G-1:c); };
+    vector<int> cellOf(N), cnt(G*G+1,0);
+    for(int i=0;i<N;i++){ int c=gx(X[i])*G+gy(Y[i]); cellOf[i]=c; cnt[c+1]++; }
+    for(int i=0;i<G*G;i++) cnt[i+1]+=cnt[i];
     vector<int> bucket(N); { vector<int> tmp=cnt; for(int i=0;i<N;i++) bucket[tmp[cellOf[i]]++]=i; }
 
     // ---- k nearest neighbors per city ----
@@ -84,14 +79,14 @@ int main(){
             int cx=gx(X[i]),cy=gy(Y[i]); cand.clear();
             int ring=0, extra=1;
             while(true){
-                int x0=max(0,cx-ring),x1=min(GX-1,cx+ring),y0=max(0,cy-ring),y1=min(GY-1,cy+ring);
+                int x0=max(0,cx-ring),x1=min(G-1,cx+ring),y0=max(0,cy-ring),y1=min(G-1,cy+ring);
                 for(int xx=x0;xx<=x1;xx++) for(int yy=y0;yy<=y1;yy++){
                     if(ring>0 && xx>x0 && xx<x1 && yy>y0 && yy<y1) continue;
-                    int c=xx*GY+yy;
+                    int c=xx*G+yy;
                     for(int b=cnt[c];b<cnt[c+1];b++){ int j=bucket[b]; if(j!=i) cand.push_back({dist(i,j),j}); }
                 }
                 if((int)cand.size()>=K){ if(extra--<=0) break; }
-                if(x0==0&&y0==0&&x1==GX-1&&y1==GY-1) break;
+                if(x0==0&&y0==0&&x1==G-1&&y1==G-1) break;
                 ring++;
             }
             int kk=min((int)cand.size(),K);
@@ -109,18 +104,18 @@ int main(){
             for(int t=0;t<K;t++){ int j=nbr[(size_t)cur*K+t]; if(j>=0&&!used[j]){ best=j; break; } }
             if(best<0){
                 int cx=gx(X[cur]),cy=gy(Y[cur]);
-                for(int ring=0; ring<2*max(GX,GY) && best<0; ring++){
-                    int x0=max(0,cx-ring),x1=min(GX-1,cx+ring),y0=max(0,cy-ring),y1=min(GY-1,cy+ring);
+                for(int ring=0; ring<2*G && best<0; ring++){
+                    int x0=max(0,cx-ring),x1=min(G-1,cx+ring),y0=max(0,cy-ring),y1=min(G-1,cy+ring);
                     for(int xx=x0;xx<=x1;xx++) for(int yy=y0;yy<=y1;yy++){
                         if(ring>0 && xx>x0 && xx<x1 && yy>y0 && yy<y1) continue;
-                        int c=xx*GY+yy;
+                        int c=xx*G+yy;
                         for(int b=cnt[c];b<cnt[c+1];b++){ int j=bucket[b]; if(!used[j]){ double d=dist(cur,j); if(d<bd){bd=d;best=j;} } }
                     }
                     if(best>=0){ // safety: scan one more ring for a possibly-closer point
-                        int r2=ring+1,a0=max(0,cx-r2),a1=min(GX-1,cx+r2),b0=max(0,cy-r2),b1=min(GY-1,cy+r2);
+                        int r2=ring+1,a0=max(0,cx-r2),a1=min(G-1,cx+r2),b0=max(0,cy-r2),b1=min(G-1,cy+r2);
                         for(int xx=a0;xx<=a1;xx++) for(int yy=b0;yy<=b1;yy++){
                             if(xx>a0&&xx<a1&&yy>b0&&yy<b1) continue;
-                            int c=xx*GY+yy;
+                            int c=xx*G+yy;
                             for(int bb=cnt[c];bb<cnt[c+1];bb++){ int j=bucket[bb]; if(!used[j]){ double d=dist(cur,j); if(d<bd){bd=d;best=j;} } }
                         }
                         break;
@@ -406,6 +401,67 @@ int main(){
     TL_MS += RESERVE;
     vector<int> seq(N);
     { int z=pos[0]; for(int i=0;i<N;i++) seq[i]= bestDir==0? order[(z+i)%N] : order[(z-i+N)%N]; }
+
+    // ---- exact paired-layer tour DP ----
+    // Detect inputs that arrive as two tight x-neighbors per layer. Within the
+    // two-strand cycle class, choose the strand assignment at every layer exactly,
+    // including the global step number and prime-source carrot multiplier.
+    if(N>=4 && N%2==0 && el_ms()<TL_MS-12.0){
+        vector<double> within,between;
+        within.reserve(N/2); between.reserve(N/2);
+        for(int i=0;i<N;i+=2){
+            within.push_back(X[i+1]-X[i]);
+            if(i+2<N) between.push_back(X[i+2]-X[i+1]);
+        }
+        auto median=[](vector<double> v){ nth_element(v.begin(),v.begin()+v.size()/2,v.end()); return v[v.size()/2]; };
+        double wi=median(within), be=between.empty()?0.0:median(between);
+        int tight=0; for(double g:within) if(g*4.0<=max(1.0,be)) tight++;
+        if(be>4.0*max(1.0,wi) && tight*10>=(int)within.size()*9){
+            int L=N/2;
+            auto W=[&](int step,int a,int b){ double d=dist(a,b); return step%10==0&&!pr[a]?1.1*d:d; };
+            auto fullCost=[&](const vector<int>&v){ double z=0;for(int t=1;t<=N;t++)z+=W(t,v[t-1],t<N?v[t]:0);return z; };
+            vector<int> keep=seq; double keepCost=fullCost(seq);
+            for(int mode=0;mode<2;mode++){
+                const double INF=numeric_limits<double>::infinity();
+                array<double,2> dp={0.0,INF},ndp;
+                vector<array<signed char,2>> par(L);
+                for(int i=0;i+1<L;i++){
+                    ndp={INF,INF};
+                    for(int a=0;a<2;a++) if(isfinite(dp[a])) for(int b=0;b<2;b++){
+                        int fa=2*i+a, fb=2*(i+1)+b;
+                        int ra=2*i+(1-a), rb=2*(i+1)+(1-b);
+                        double add;
+                        if(mode==0) add=W(i+1,fa,fb)+W(N-i-1,rb,ra);
+                        else add=W(i+2,ra,rb)+W(N-i,fb,fa);
+                        if(dp[a]+add<ndp[b]){ndp[b]=dp[a]+add;par[i+1][b]=(signed char)a;}
+                    }
+                    dp=ndp;
+                }
+                int last=0; double value=INF;
+                for(int a=0;a<2;a++){
+                    double z=dp[a];
+                    if(mode==0) z+=W(L,2*(L-1)+a,2*(L-1)+(1-a))+W(N,1,0);
+                    else z+=W(1,0,1)+W(L+1,2*(L-1)+(1-a),2*(L-1)+a);
+                    if(z<value){value=z;last=a;}
+                }
+                vector<int> side(L); side[L-1]=last;
+                for(int i=L-1;i>0;i--) side[i-1]=par[i][side[i]];
+                vector<int> candidate; candidate.reserve(N);
+                if(mode==0){
+                    for(int i=0;i<L;i++) candidate.push_back(2*i+side[i]);
+                    for(int i=L-1;i>=0;i--) candidate.push_back(2*i+(1-side[i]));
+                } else {
+                    candidate.push_back(0);
+                    for(int i=0;i<L;i++) candidate.push_back(2*i+(1-side[i]));
+                    for(int i=L-1;i>=1;i--) candidate.push_back(2*i+side[i]);
+                }
+                if((int)candidate.size()!=N || candidate[0]!=0) continue;
+                double z=fullCost(candidate);
+                if(z<keepCost){keepCost=z;keep.swap(candidate);}
+            }
+            seq.swap(keep);
+        }
+    }
 
     // ---- endgame touch-up: swap a nearby prime into each penalized source slot (exact delta) ----
     if(N>=12){
