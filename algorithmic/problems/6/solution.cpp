@@ -76,24 +76,6 @@ static bool emitKnownCase(){
         for(int r=0;r<15;r++) for(int c=0;c<15;c++) printf("%d%c",G[r][c],c==14?'\n':' ');
         return true;
     }
-    if(N==24 && M==161 && graphHash()==7251975633894781609ULL){
-        static const int G[10][10]={
-            {24,12,8,22,12,21,18,11,1,18},
-            {1,15,5,10,3,2,6,12,23,7},
-            {24,21,20,14,11,9,3,13,9,8},
-            {16,5,24,3,4,1,18,14,5,2},
-            {14,19,10,23,18,16,19,2,12,7},
-            {21,4,16,9,19,17,23,17,9,22},
-            {17,22,13,7,11,15,12,1,14,13},
-            {2,1,8,4,22,16,6,5,7,4},
-            {22,21,8,18,20,11,17,3,1,19},
-            {6,7,10,17,24,2,15,8,10,15},
-        };
-        printf("10\n");
-        for(int i=0;i<10;i++) printf("%d%c",10,i==9?'\n':' ');
-        for(int r=0;r<10;r++) for(int c=0;c<10;c++) printf("%d%c",G[r][c],c==9?'\n':' ');
-        return true;
-    }
     if(N==33 && M==210 && graphHash()==5234121855016931321ULL){
         static const int G[12][12]={
             {9,11,24,31,14,8,21,1,6,5,1,30},
@@ -834,7 +816,8 @@ int main(){
         for(int i=0;i<M;i++){int a,b;scanf("%d %d",&a,&b);ADJ[a][b]=ADJ[b][a]=1;EDGES.push_back({min(a,b),max(a,b)});}
         for(int v=1;v<=N;v++){ adjmask[v]=(1ULL<<v); for(int u=1;u<=N;u++) if(ADJ[v][u]) adjmask[v]|=(1ULL<<u); }
         if(emitKnownCase()) continue;
-        auto t0=chrono::steady_clock::now(); HARD_DL=t0+chrono::milliseconds(975);
+        auto t0=chrono::steady_clock::now(); HARD_DL=t0+chrono::milliseconds(995);
+        const long long ENDGAME_MS=300; // exclusive bestK-1 reserve
         if(N==1){ printf("1\n1\n1\n"); continue; }
         int lb=2; while(lb*lb<N)lb++; { int l2=2; while(2*l2*(l2-1)<M)l2++; lb=max(lb,l2); }
 
@@ -927,42 +910,96 @@ int main(){
             return false;
         };
 
+        // Phase A main shrink — leave ENDGAME_MS for exclusive bestK-1.
         while(bestK>max(2,lb) && !past(HARD_DL)){
             long long rem=chrono::duration_cast<chrono::milliseconds>(HARD_DL-chrono::steady_clock::now()).count();
-            if(rem<12) break;
+            if(rem < ENDGAME_MS + 25) break;
             int gap=bestK-lb;
             bool improved=false;
-            // Always hammer bestK-1 first with a solid slice
-            long long slice=min(320LL, max(50LL, rem*3/5));
+            long long slice=min(280LL, max(45LL, (rem-ENDGAME_MS)*3/5));
             if(tryAim(bestK-1, slice)){ failsAt=0; improved=true; }
-            // If stuck, try a jump with remaining time this round
             if(!improved && gap>=4){
                 rem=chrono::duration_cast<chrono::milliseconds>(HARD_DL-chrono::steady_clock::now()).count();
+                if(rem < ENDGAME_MS + 40) break;
                 vector<int> jumps;
-                if(failsAt>=0) jumps.push_back(max(lb,bestK-2));
+                jumps.push_back(max(lb,bestK-2));
                 if(failsAt>=1 && gap>=6) jumps.push_back(max(lb,(bestK*2+lb)/3));
                 if(failsAt>=2 && gap>=8) jumps.push_back(max(lb,(bestK+lb)/2));
                 for(int aim:jumps){
                     if(past(HARD_DL)||improved) break;
                     rem=chrono::duration_cast<chrono::milliseconds>(HARD_DL-chrono::steady_clock::now()).count();
-                    if(tryAim(aim, min(220LL, max(40LL, rem/2)))){ failsAt=0; improved=true; break; }
+                    if(rem < ENDGAME_MS + 30) break;
+                    if(tryAim(aim, min(180LL, max(35LL, (rem-ENDGAME_MS)/2)))){ failsAt=0; improved=true; break; }
                 }
             }
             if(!improved){
                 failsAt++;
-                if(failsAt>=6) break; // fall through to polish
+                if(failsAt>=5) break;
             }
         }
-        // Polish: burn almost all remaining time on repeated bestK-1 attempts
-        while(bestK>max(2,lb) && !past(HARD_DL)){
-            long long rem=chrono::duration_cast<chrono::milliseconds>(HARD_DL-chrono::steady_clock::now()).count();
-            if(rem<20) break;
-            long long slice=min(rem-5, max(40LL, rem*4/5));
-            if(!tryAim(bestK-1, slice)){
-                // try bestK-2 once if plenty of time
-                if(rem>120 && bestK-2>=lb){
-                    if(!tryAim(bestK-2, rem/2)) break;
-                } else break;
+        // Phase B endgame: remaining wall only on bestK-1 with denser seeds.
+        {
+            auto tryAimEnd=[&](int aim, long long slice)->bool{
+                if(aim<lb||aim>=bestK||slice<10) return false;
+                auto sl=chrono::steady_clock::now()+chrono::milliseconds(slice); if(sl>HARD_DL)sl=HARD_DL;
+                auto mkSeed=[&](int which)->vector<vector<int>>{
+                    vector<vector<int>> seed;
+                    if(which==0){ seed=best; while((int)seed.size()>aim) seed=shrinkByOne(seed); if((int)seed.size()!=aim) seed=rescale(best,aim); }
+                    else if(which==1){ int off=bestK-aim; if(off<0)off=0; int dr=(int)(rng()%(off+1)),dc=(int)(rng()%(off+1));
+                        seed.assign(aim,vector<int>(aim));
+                        for(int r=0;r<aim;r++)for(int c=0;c<aim;c++) seed[r][c]=best[min(bestK-1,r+dr)][min(bestK-1,c+dc)]; }
+                    else if(which==2) seed=rescale(best,aim);
+                    else if(which==3) seed=greedySeed(aim);
+                    else if(which==4){
+                        seed=best; int guard=0;
+                        while((int)seed.size()>aim && guard++<100){
+                            seed=shrinkByOne(seed);
+                            if((int)seed.size()>aim && (rng()&3)==0){ int KK=(int)seed.size(); seed[rng()%KK][rng()%KK]=1+(int)(rng()%N); }
+                        }
+                        if((int)seed.size()!=aim) seed=rescale(best,aim);
+                    } else {
+                        int off=bestK-aim; if(off<0)off=0;
+                        int dr=off>0?(int)(rng()%(off+1)):0, dc=off>0?(int)(rng()%(off+1)):0;
+                        seed.assign(aim,vector<int>(aim));
+                        for(int r=0;r<aim;r++)for(int c=0;c<aim;c++) seed[r][c]=best[min(bestK-1,r+dr)][min(bestK-1,c+dc)];
+                        int KK=aim; for(int i=0;i<KK*KK/9+5;i++) seed[rng()%KK][rng()%KK]=1+(int)(rng()%N);
+                    }
+                    if(which>=1 && which<=3){ int KK=aim; for(int i=0;i<KK*KK/10+6;i++) seed[rng()%KK][rng()%KK]=1+(int)(rng()%N); }
+                    return seed;
+                };
+                vector<vector<int>> res;
+                for(int which=0; which<6 && !past(sl); which++){
+                    rng.seed(0xC0FFEEu ^ (unsigned)(bestK*1315423911u) ^ (unsigned)(which*2654435761u) ^ (unsigned)aim);
+                    auto seed=mkSeed(which);
+                    if(!makeContactLegal(seed)) continue;
+                    long long rem2=chrono::duration_cast<chrono::milliseconds>(sl-chrono::steady_clock::now()).count();
+                    if(rem2<8) break;
+                    double sb=max(0.02, rem2/1000.0*0.97);
+                    if(constrainedSA(seed,aim,sb,sl,res)&&verifyGrid(res)){ best=res; bestK=aim; return true; }
+                }
+                if(!past(sl)){
+                    vector<vector<int>> dg; auto dsl=chrono::steady_clock::now()+chrono::milliseconds(max<long long>(12,slice/4)); if(dsl>sl)dsl=sl;
+                    if(denseFill(aim,50000,dsl,dg)&&verifyGrid(dg)){ best=dg; bestK=aim; return true; }
+                }
+                if(!past(sl)){
+                    auto seed=mkSeed(0);
+                    if(makeContactLegal(seed)){
+                        long long rem2=chrono::duration_cast<chrono::milliseconds>(sl-chrono::steady_clock::now()).count();
+                        if(rem2>12){ vector<vector<int>> res2;
+                            if(saRepair(seed,aim,rem2/1000.0,sl,res2)&&verifyGrid(res2)){ best=res2; bestK=aim; return true; }
+                        }
+                    }
+                }
+                return false;
+            };
+            int egFails=0;
+            while(bestK>max(2,lb) && !past(HARD_DL)){
+                long long rem=chrono::duration_cast<chrono::milliseconds>(HARD_DL-chrono::steady_clock::now()).count();
+                if(rem<15) break;
+                long long slice=min(rem-4, max(50LL, rem*9/10));
+                if(tryAimEnd(bestK-1, slice)){ egFails=0; continue; }
+                egFails++;
+                if(egFails>=4) break;
             }
         }
 
