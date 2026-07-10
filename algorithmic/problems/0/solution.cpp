@@ -1,4 +1,3 @@
-// v21.11: fix + crown5; portfolio trial 3
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -10,7 +9,7 @@ static inline double elapsed_ms() {
 
 struct T { int w, h; vector<pair<int,int>> c; vector<int> lo, hi; int r, f, minx, miny;
            unsigned short rmask[10]; vector<pair<signed char, signed char>> nbr; };
-struct P { int id, k; vector<pair<int,int>> b; vector<T> t; int minW = 1e9, minH = 1e9, minA = 1e9; };
+struct P { int id, k; long long ox,oy; vector<pair<int,int>> b; vector<T> t; int minW=1e9,minH=1e9,minA=1e9; };
 struct Pl { int idx, ti, x, y; };
 struct R { long long A; int W, H; vector<Pl> pl; bool ok = false; int packW = 0; };
 struct RNG {
@@ -30,13 +29,11 @@ static inline pair<int,int> rotp(pair<int,int> p, int r) {
 
 static vector<char> inbuf;
 static size_t inpos = 0;
-static inline int readInt() {
-    while (inpos < inbuf.size() && (inbuf[inpos] < '0' || inbuf[inpos] > '9') && inbuf[inpos] != '-') inpos++;
-    bool neg = false;
-    if (inpos < inbuf.size() && inbuf[inpos] == '-') { neg = true; inpos++; }
-    int v = 0;
-    while (inpos < inbuf.size() && inbuf[inpos] >= '0' && inbuf[inpos] <= '9') { v = v * 10 + (inbuf[inpos] - '0'); inpos++; }
-    return neg ? -v : v;
+static inline long long readInt() {
+    while(inpos<inbuf.size()&&(inbuf[inpos]<'0'||inbuf[inpos]>'9')&&inbuf[inpos]!='-')inpos++;
+    bool neg=false;if(inpos<inbuf.size()&&inbuf[inpos]=='-'){neg=true;inpos++;}
+    long long v=0;while(inpos<inbuf.size()&&inbuf[inpos]>='0'&&inbuf[inpos]<='9'){v=v*10+(inbuf[inpos]-'0');inpos++;}
+    return neg?-v:v;
 }
 
 int n;
@@ -897,19 +894,19 @@ static R bfSolve(int minW, int base, double deadline) {
 int main() {
     T0 = chrono::steady_clock::now();
     if (const char* e = getenv("POLYPACK_TL")) { double v = atof(e); if (v > 50 && v < 10000) TL_MS = v; }
-    int ffEnv = envInt("PP_FASTFIT", -1);    // -1 => auto-gate by S below; 0/1 => explicit override
-    int BIGBLF = envInt("PP_BIGBLF", 0);     // 1: big cases skip champion pack, BLF-only
-    int SMALLBLF = envInt("PP_SMALLBLF", 0); // 1: small cases skip champion sweep
-    int JUMP = envInt("PP_JUMP", 15);        // % chance of W jump in restarts
-    int BLF2 = envInt("PP_BLF2", 1);         // 1: restarts use blf2 (hole-aware window best-fit)
-    int BLF2SWEEP = envInt("PP_BLF2SWEEP", 0); // 1: small-case sweep uses blf2 instead of skyline
-    int BLF2ORD = envInt("PP_BLF2ORD", 1);   // 0: big-first order, 1: champion order
-    int B3 = envInt("PP_B3", 1);             // 1: use cached blf3 instead of blf2
-    int PHASE2 = envInt("PP_PHASE2", 1);     // 1: blf2 pass over best sweep Ws
-    double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;  // 0 => auto by size
-    double P2ENDF = envInt("PP_P2END", 0) / 100.0;   // 0 => auto by size
-    long long P2MAXS = envInt("PP_P2MAXS", 22000);   // phase2 only when S below this
-    long long B2RESTS = envInt("PP_B2RESTS", 50000);  // blf2 restarts when S below this (was 1300)
+    int ffEnv=envInt("PP_FASTFIT",-1);
+    int BIGBLF=envInt("PP_BIGBLF",0);
+    int SMALLBLF=envInt("PP_SMALLBLF",0);
+    int JUMP=envInt("PP_JUMP",15);
+    int BLF2=envInt("PP_BLF2",1);
+    int BLF2SWEEP=envInt("PP_BLF2SWEEP",0);
+    int BLF2ORD=envInt("PP_BLF2ORD",1);
+    int B3=envInt("PP_B3",1);
+    int PHASE2=envInt("PP_PHASE2",1);
+    double P2FRAC=envInt("PP_P2FRAC",0)/100.0;
+    double P2ENDF=envInt("PP_P2END",0)/100.0;
+    long long P2MAXS=envInt("PP_P2MAXS",22000);
+    long long B2RESTS=envInt("PP_B2RESTS",50000);
 
     {
         size_t cap = 1 << 20; inbuf.resize(cap); size_t len = 0;
@@ -921,14 +918,16 @@ int main() {
         }
         inbuf.resize(len);
     }
-    n = readInt();
-    if (n <= 0) return 0;
+    n=(int)readInt();
+    if(n<=0)return 0;
     ps.resize(n);
-    for (int i = 0; i < n; i++) {
-        int k = readInt();
-        ps[i].id = i + 1; ps[i].k = k; ps[i].b.resize(k);
-        for (int j = 0; j < k; j++) { int x = readInt(), y = readInt(); ps[i].b[j] = {x, y}; }
-        S += k;
+    for(int i=0;i<n;i++){
+        int k=(int)readInt();vector<pair<long long,long long>> raw(k);
+        long long ox=LLONG_MAX,oy=LLONG_MAX;
+        for(int j=0;j<k;j++){auto x=readInt(),y=readInt();raw[j]={x,y};ox=min(ox,x);oy=min(oy,y);}
+        ps[i].id=i+1;ps[i].k=k;ps[i].ox=ox;ps[i].oy=oy;ps[i].b.resize(k);
+        for(int j=0;j<k;j++)ps[i].b[j]={(int)(raw[j].first-ox),(int)(raw[j].second-oy)};
+        S+=k;
     }
     gFASTFIT = (ffEnv < 0) ? (S >= 12000 ? 1 : 0) : ffEnv;
     if (P2FRAC <= 0.0) P2FRAC = (S < 6000) ? 0.25 : 0.55;
@@ -978,8 +977,7 @@ int main() {
     }
 
     vector<int> idx(n); iota(idx.begin(), idx.end(), 0);
-    bool alt = S < 1200 || (S >= 1400 && S < 1600) || (S >= 2000 && S < 6000);
-    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL) ^ (alt ? 123 : 0);
+    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL);
     RNG rng(seed);
     auto ord4 = [&]() {
         vector<int> res = idx;
@@ -1206,7 +1204,7 @@ int main() {
                 int Hcap = (int)(capA / W);
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
-                obuf = fromBest ? ilsOrd : ((((cntBLF & 1) != 0) ^ alt) ? ordBLF : ordB2);
+                obuf = fromBest ? ilsOrd : ((cntBLF & 1) ? ordBLF : ordB2);
                 int swaps = 1 + rng.rint(12);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
@@ -1309,16 +1307,13 @@ int main() {
     if (Wc == 0) Wc = 1;
     if (Hc == 0) Hc = 1;
 
-    vector<array<int,4>> ans(n, {0, 0, 0, 0});
-    for (auto& p : bestR.pl) {
-        auto& t = ps[p.idx].t[p.ti];
-        int bx = mapx[p.x];
-        int by = mapy[p.y];
-        int Xi = bx - t.minx;
-        int Yi = by - t.miny;
-        int Ri = (4 - (t.r % 4) + 4) % 4;
-        int Fi = t.f;
-        ans[p.idx] = {Xi, Yi, Ri, Fi};
+    vector<array<long long,4>> ans(n,{0,0,0,0});
+    for(auto& p:bestR.pl){
+        auto& t=ps[p.idx].t[p.ti];int bx=mapx[p.x],by=mapy[p.y];
+        int Ri=(4-t.r%4+4)%4,Fi=t.f;long long x=ps[p.idx].ox,y=ps[p.idx].oy;
+        if(Fi)x=-x;long long dx,dy;
+        if(Ri==0)dx=x,dy=y;else if(Ri==1)dx=y,dy=-x;else if(Ri==2)dx=-x,dy=-y;else dx=-y,dy=x;
+        ans[p.idx]={(long long)bx-t.minx-dx,(long long)by-t.miny-dy,Ri,Fi};
     }
     string out;
     out.reserve(16 * (n + 1));
