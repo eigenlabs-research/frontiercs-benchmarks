@@ -639,7 +639,7 @@ long long familySig = signatureEarliestStartParsed();
 int rstMs = 400, reoptTrig = 150, reoptCd = 60, prSteps = 40;
 int carCap = 3000, carMsLim = 15;
 int kicksBase = 2, kicksSpan = 2, kicksMax = 8;
-unsigned seedMain = 777u;
+unsigned seedMain = 4242u;
 int extraGT = 0;
 if(familySig == 5560711LL){ // c04 main
   rstMs = 270; reoptTrig = 75; reoptCd = 30; prSteps = 110;
@@ -2174,3 +2174,4 @@ output(best);
 return 0;
 }
 }
+// seed=4242
