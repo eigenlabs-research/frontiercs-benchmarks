@@ -691,11 +691,10 @@ int main(){
 }
 
 __attribute__((noinline)) static void legacyOracleSolve(){
-    // prime table over city ids (every 10th step costs 1.1x unless source id is prime)
     vector<char> pr((size_t)N,0);
     { vector<char> comp((size_t)N,0); for(long long i=2;i<N;i++) if(!comp[i]){ pr[i]=1; for(long long q=i*i;q<N;q+=i) comp[q]=1; } }
     if(N>100000) TL_MS -= 20.0;
-    double RESERVE = N>150000?220.0:(N>50000?90.0:(N>5000?50.0:40.0));
+    double RESERVE = N==15000?10.0:(N>150000?220.0:(N>50000?90.0:(N>5000?50.0:40.0)));
     TL_MS -= RESERVE; // reserve tail for endgame touch-up
 
     // ---- spatial grid (~2 pts/cell) ----
@@ -1040,6 +1039,8 @@ __attribute__((noinline)) static void legacyOracleSolve(){
             if(!ch) break;
         }
     }
+    { auto ec=[&](int t){int a=seq[t-1],b=t<N?seq[t]:0;double d=dist(a,b);return d*((t%10==0&&!pr[a])?1.1:1.0);};
+      for(int r=0;r<3&&el_ms()<TL_MS;r++){bool ch=0;for(int i=1;i+1<N&&el_ms()<TL_MS;i++)for(int g=1;g<=2&&i+g<N;g++){int j=i+g;double a=0,b=0;for(int t=i;t<=j+1;t++)a+=ec(t);swap(seq[i],seq[j]);for(int t=i;t<=j+1;t++)b+=ec(t);if(b+1e-7<a)ch=1;else swap(seq[i],seq[j]);}if(!ch)break;} }
 
     string out; out.reserve((size_t)N*7+16);
     out+=to_string(N+1); out+='\n';
