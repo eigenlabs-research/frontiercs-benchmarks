@@ -1,3 +1,6 @@
+// Number Loop Construction - problem 145
+// Mode 0: 46 ones, 1 solution -> score 0.911
+// Mode 1: 42 ones, 1 solution -> score 0.875
 #include <iostream>
 #include <string>
 #include <vector>
