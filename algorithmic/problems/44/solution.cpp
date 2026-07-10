@@ -11,7 +11,7 @@
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 2400.0;
+static double TL_MS = 2480.0;
 static inline double el_ms(){ return chrono::duration<double,milli>(chrono::steady_clock::now()-T0).count(); }
 
 static int N;
@@ -203,7 +203,7 @@ int main(){
             int s0=q[qi];
             if(dontlook[s0]) continue;
             bool moved=false;
-            for(int L=1; L<=3 && !moved; L++){
+            for(int L=1; L<=4 && !moved; L++){
                 int is=pos[s0];
                 int ie=is; for(int t=1;t<L;t++) ie=nextIdx(ie);
                 int segEnd=order[ie];
@@ -231,7 +231,7 @@ int main(){
                         double add = rev? addedRev: added;
                         if(add+1e-7 < removed){
                             // extract run cities
-                            int seg[3]; { int p=is; for(int u=0;u<L;u++){ seg[u]=order[p]; p=nextIdx(p);} }
+                            int seg[4]; { int p=is; for(int u=0;u<L;u++){ seg[u]=order[p]; p=nextIdx(p);} }
                             if(rev){ for(int a=0,b=L-1;a<b;a++,b--) swap(seg[a],seg[b]); }
                             // Rebuild via shifting the block between the removed run and the anchor.
                             // Work on a linear copy for correctness; N-cost but Or-opt fires far less
@@ -407,7 +407,7 @@ int main(){
         auto sAt=[&](int p)->int{ return p<N? seq[p]:0; };
         auto stepCost=[&](int t)->double{ int a=seq[t-1], b=sAt(t); double d=dist(a,b); if(t%10==0&&!pr[a]) d*=1.1; return d; };
         int w = N<=1200? N : (N<=5000?120:(N<=20000?140:80));
-        for(int rep=0;rep<4 && el_ms()<TL_MS;rep++){
+        for(int rep=0;rep<8 && el_ms()<TL_MS;rep++){
             bool ch=false;
             for(int p=9;p<N;p+=10){
                 if(el_ms()>TL_MS) break;
