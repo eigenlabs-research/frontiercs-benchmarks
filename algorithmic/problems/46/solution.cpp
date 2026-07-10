@@ -591,6 +591,36 @@ pi.insert(pi.begin()+bp, j);
 return pi;
 }
 #endif
+
+static void pathRelink(const vector<vector<int>>& src, const vector<vector<int>>& dst,
+long long& bestC, vector<vector<int>>& best, mt19937& rng,
+chrono::steady_clock::time_point T_end, int maxSteps){
+vector<vector<int>> cur=src; long long curC=evalSeq(cur,true); if(curC<0) return;
+static vector<int> posT; posT.resize(J);
+for(int step=0;step<maxSteps;++step){
+if(chrono::steady_clock::now()>=T_end) break;
+struct Cand{long long est;int m,i;}; vector<Cand> cands; cands.reserve(M*J/2);
+for(int m=0;m<M;++m){
+for(int i=0;i<J;++i) posT[dst[m][i]]=i;
+const auto& s=cur[m];
+for(int i=0;i+1<J;++i) if(posT[s[i]]>posT[s[i+1]]){
+Mv mv{m,i,i+1,i+1,true}; cands.push_back({estMove(cur,mv),m,i});
+}}
+if(cands.empty()) break;
+int K=(int)min((size_t)8,cands.size());
+partial_sort(cands.begin(),cands.begin()+K,cands.end(),[](const Cand&a,const Cand&b){return a.est<b.est;});
+int bm=-1,bi=-1; long long bnc=LLONG_MAX;
+for(int t=0;t<min(K,2);++t){
+int m=cands[t].m,i=cands[t].i; swap(cur[m][i],cur[m][i+1]);
+long long nc=evalSeq(cur,false); swap(cur[m][i],cur[m][i+1]);
+if(nc>=0&&nc<bnc){bnc=nc;bm=m;bi=i;}
+}
+if(bm<0){bm=cands[0].m;bi=cands[0].i;}
+swap(cur[bm][bi],cur[bm][bi+1]); curC=evalSeq(cur,true);
+if(curC<0){swap(cur[bm][bi],cur[bm][bi+1]);evalSeq(cur,true);break;}
+if(curC<bestC){best=cur;bestC=curC;}
+}
+}
 int main(){
 auto T0 = chrono::steady_clock::now();
 const auto budget = chrono::milliseconds(994);
@@ -1080,6 +1110,11 @@ poolAdd(rb, rbC);
 #ifdef DIAG
 dInsRB++;
 #endif
+}
+if((int)pool.size()>=2 && chrono::steady_clock::now()<T_end){
+int bi=0,wi=0;
+for(int z=1;z<(int)pool.size();++z){ if(pool[z].C<pool[bi].C) bi=z; if(pool[z].C>pool[wi].C) wi=z; }
+if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,40); poolAdd(best,bestC); }
 }
 if(pool.empty() || (rng() & 1)){
 cur = best;
