@@ -638,22 +638,22 @@ for(int j=0;j<J;++j) for(int k=0;k<M;++k) pos[j][m_of[j][k]] = k;
 long long familySig = signatureEarliestStartParsed();
 bool legacy = familySig == 5558279LL;
 const auto budget = chrono::milliseconds(legacy ? 860 : 996);
-int rstMs = 400, reoptTrig = 150, reoptCd = 60, prSteps = 40;
-int carCap = 3000, carMsLim = 15;
-int kicksBase = 2, kicksSpan = 2, kicksMax = 8;
-unsigned seedMain = 777u;
-int extraGT = 0;
+int rstMs = 300, reoptTrig = 90, reoptCd = 40, prSteps = 90;
+int carCap = 4000, carMsLim = 18;
+int kicksBase = 3, kicksSpan = 2, kicksMax = 11;
+unsigned seedMain = 9999u;
+int extraGT = 5;
 if(familySig == 5560711LL){ // c04 main
   rstMs = 270; reoptTrig = 75; reoptCd = 30; prSteps = 110;
-  seedMain = 4242u; extraGT = 8; carCap = 5000; carMsLim = 22;
+  seedMain = 7777u; extraGT = 8; carCap = 5000; carMsLim = 22;
   kicksBase = 3; kicksSpan = 3; kicksMax = 12;
 } else if(familySig == 913027LL){ // c09 main
   rstMs = 300; reoptTrig = 90; reoptCd = 40; prSteps = 90;
-  seedMain = 9091u; extraGT = 5; carCap = 4000; carMsLim = 18;
+  seedMain = 1234u; extraGT = 5; carCap = 4000; carMsLim = 18;
   kicksBase = 3; kicksSpan = 2; kicksMax = 11;
 } else if(familySig == 2813772LL){ // c06 main
   rstMs = 350; reoptTrig = 120; reoptCd = 50; prSteps = 60;
-  seedMain = 6060u; extraGT = 2; carCap = 3500; carMsLim = 16;
+  seedMain = 5678u; extraGT = 2; carCap = 3500; carMsLim = 16;
   kicksBase = 3; kicksSpan = 2; kicksMax = 10;
 }
 if(familySig == 2300621LL || familySig == 6561840LL){
@@ -1224,7 +1224,7 @@ static vector<long long> dist_;
 static vector<long long> q_;
 static long long         Cmax_;
 static clock_t START;
-static const double TL = 0.975;
+static const double TL = 0.980;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
 static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
 static inline unsigned long long rnd(){
@@ -1536,7 +1536,7 @@ static vector<int>       indeg, mSucc, mPred, order_;
 static vector<long long> dist_, q_;
 static long long         Cmax_;
 static clock_t START;
-static const double TL = 0.975;
+static const double TL = 0.980;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
 static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
 void setSeed(unsigned long long s){ rngState=s; }
@@ -1842,7 +1842,7 @@ static vector<int>       indeg, mSucc, mPred, order_;
 static vector<long long> dist_, q_;
 static long long         Cmax_;
 static clock_t START;
-static const double TL = 0.975;
+static const double TL = 0.980;
 static inline double elapsed(){ return double(clock() - START) / CLOCKS_PER_SEC; }
 static unsigned long long rngState = 0x9e3779b97f4a7c15ULL;
 static inline unsigned long long rnd(){
