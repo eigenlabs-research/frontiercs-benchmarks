@@ -1,4 +1,4 @@
-// v21.11: fix + crown5
+// v21.12: fix + crown5 + skyline50
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -1050,6 +1050,7 @@ int main() {
             R rr = pack_capped(W, Hc, o1, max(1, n/4), TL_MS - 10, rng);
             if (rr.ok && rr.A < bestR.A) { crownRepack(rr, TL_MS - 5.0); if (better(rr, bestR)) bestR = move(rr); }
         }
+        if(bestR.ok&&bestR.packW>0&&bestR.packW<=64&&elapsed_ms()<TL_MS-100){double skE=min(TL_MS-50.0,elapsed_ms()+50);R sr=pack(bestR.packW,baseOrder,rng,true,max(1,n/4),false,0.0,skE,skE-10);if(sr.ok&&better(sr,bestR)){crownRepack(sr,TL_MS-5.0);if(better(sr,bestR))bestR=move(sr);}}
     }
     if (!bestR.ok) {
     double tFB0 = elapsed_ms();
