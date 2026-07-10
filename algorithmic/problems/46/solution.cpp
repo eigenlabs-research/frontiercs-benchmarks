@@ -612,7 +612,7 @@ if(cands.empty()) break;
 int K=(int)min((size_t)8,cands.size());
 partial_sort(cands.begin(),cands.begin()+K,cands.end(),[](const Cand&a,const Cand&b){return a.est<b.est;});
 int bm=-1,bi=-1; long long bnc=LLONG_MAX;
-for(int t=0;t<min(K,3);++t){
+for(int t=0;t<min(K,2);++t){
 int m=cands[t].m,i=cands[t].i; swap(cur[m][i],cur[m][i+1]);
 long long nc=evalSeq(cur,false); swap(cur[m][i],cur[m][i+1]);
 if(nc>=0&&nc<bnc){bnc=nc;bm=m;bi=i;}
@@ -998,7 +998,7 @@ if((int)pool.size() >= 2){
 long long sbC = bestC; vector<vector<int>> sb = best;
 int bi=0,wi=0;
 for(int z=1;z<(int)pool.size();++z){ if(pool[z].C<pool[bi].C) bi=z; if(pool[z].C>pool[wi].C) wi=z; }
-if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,50); poolAdd(best,bestC); }
+if(bi!=wi){ pathRelink(pool[bi].seq,pool[wi].seq,bestC,best,rng,T_end,familySig==913027LL?40:50); poolAdd(best,bestC); }
 bestC = sbC; best = sb;
 evalSeq(cur, true);
 }
@@ -2186,4 +2186,3 @@ return 0;
 }
 // v17: 16K iters, 40 steps
 // v18: 16K iters, 50 steps
-// v20: K=3 eval in pathRelink
