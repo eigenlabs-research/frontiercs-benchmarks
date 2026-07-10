@@ -2,6 +2,8 @@
 #include <bits/stdc++.h>
 using namespace std;
 
+static const char* VERSION = "poolside-v21.17";
+
 static chrono::steady_clock::time_point T0;
 static double TL_MS = 1890.0;
 static inline double elapsed_ms() {
