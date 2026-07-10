@@ -1205,7 +1205,7 @@ int main() {
                 int Hcap = (int)(capA / W);
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
-                obuf = fromBest ? ilsOrd : ((cntBLF & 1) ? ordBLF : ordB2);
+                obuf = fromBest ? ilsOrd : ((cntBLF & 1) ? ordB2 : ordBLF);
                 int swaps = 1 + rng.rint(12);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
