@@ -11,7 +11,7 @@
 using namespace std;
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 2400.0;
+static double TL_MS = 2490.0;
 static inline double el_ms(){ return chrono::duration<double,milli>(chrono::steady_clock::now()-T0).count(); }
 
 static int N;
@@ -128,6 +128,47 @@ int main(){
         for(int i=0;i<N;i++) pos[order[i]]=i;
     }
 
+    // Hilbert curve construction as alternative
+    {   static const int HB=21; static const uint32_t HM=(1u<<HB)-1u;
+        double minx=X[0],maxx=X[0],miny=Y[0],maxy=Y[0];
+        for(int i=1;i<N;i++){ minx=min(minx,X[i]);maxx=max(maxx,X[i]);miny=min(miny,Y[i]);maxy=max(maxy,Y[i]); }
+        auto sc=[&](double v,double lo,double hi)->uint32_t{ return hi==lo?HM/2:(uint32_t)((__int128)(v-lo)*HM/(hi-lo)); };
+        function<uint64_t(uint32_t,uint32_t,int,int)> hrec=[&](uint32_t x,uint32_t y,int p,int r)->uint64_t{
+            if(p==0) return 0; uint32_t h=1u<<(p-1);
+            int s=(x<h)?((y<h)?0:3):((y<h)?1:2); s=(s+r)&3;
+            static const int rd[4]={3,0,0,1}; int nr=(r+rd[s])&3;
+            uint64_t sub=1ULL<<(2*p-2); uint64_t a=hrec(x&h-1,y&h-1,p-1,nr);
+            return (uint64_t)s*sub+((s==1||s==2)?a:(sub-a-1));
+        };
+        vector<uint64_t> hval(N);
+        for(int i=0;i<N;i++) hval[i]=hrec(sc(X[i],minx,maxx),sc(Y[i],miny,maxy),HB,0);
+        vector<int> hoth(N); for(int i=0;i<N;i++) hoth[i]=i;
+        sort(hoth.begin(),hoth.end(),[&](int a,int b){ return hval[a]<hval[b]||(hval[a]==hval[b]&&a<b); });
+        double curCost=0; for(int i=0;i<N;i++) curCost+=dist(order[i],order[(i+1)%N]);
+        double hc=0; for(int i=0;i<N;i++) hc+=dist(hoth[i],hoth[(i+1)%N]);
+        if(hc<curCost){ for(int i=0;i<N;i++) order[i]=hoth[i], pos[hoth[i]]=i; }
+    }
+
+    // Morton curve construction as alternative
+    {   static const uint32_t HM=(1u<<21)-1u;
+        double minx=X[0],maxx=X[0],miny=Y[0],maxy=Y[0];
+        for(int i=1;i<N;i++){ minx=min(minx,X[i]);maxx=max(maxx,X[i]);miny=min(miny,Y[i]);maxy=max(maxy,Y[i]); }
+        auto sc=[&](double v,double lo,double hi)->uint32_t{ return hi==lo?HM/2:(uint32_t)((__int128)(v-lo)*HM/(hi-lo)); };
+        vector<uint64_t> mval(N),mval2(N);
+        for(int i=0;i<N;i++){ uint32_t x=sc(X[i],minx,maxx),y=sc(Y[i],miny,maxy);
+            uint64_t d=0,d2=0;
+            for(int b=0;b<21;b++){ d|=uint64_t((x>>b)&1)<<(2*b); d|=uint64_t((y>>b)&1)<<(2*b+1);
+                                    d2|=uint64_t((y>>b)&1)<<(2*b); d2|=uint64_t((x>>b)&1)<<(2*b+1); }
+            mval[i]=d; mval2[i]=d2; }
+        vector<int> moth(N); for(int i=0;i<N;i++) moth[i]=i;
+        sort(moth.begin(),moth.end(),[&](int a,int b){ return mval[a]<mval[b]||(mval[a]==mval[b]&&a<b); });
+        double curCost=0,mc=0; for(int i=0;i<N;i++){ curCost+=dist(order[i],order[(i+1)%N]); mc+=dist(moth[i],moth[(i+1)%N]); }
+        if(mc<curCost){ for(int i=0;i<N;i++) order[i]=moth[i],pos[moth[i]]=i; curCost=mc; }
+        sort(moth.begin(),moth.end(),[&](int a,int b){ return mval2[a]<mval2[b]||(mval2[a]==mval2[b]&&a<b); });
+        double mc2=0; for(int i=0;i<N;i++) mc2+=dist(moth[i],moth[(i+1)%N]);
+        if(mc2<curCost){ for(int i=0;i<N;i++) order[i]=moth[i], pos[moth[i]]=i; }
+    }
+
     auto nextIdx=[&](int i){ return i+1<N?i+1:0; };
     auto prevIdx=[&](int i){ return i>0?i-1:N-1; };
     // Apply a 2-opt move that removes the two successor-edges whose left endpoints are
@@ -203,7 +244,7 @@ int main(){
             int s0=q[qi];
             if(dontlook[s0]) continue;
             bool moved=false;
-            for(int L=1; L<=3 && !moved; L++){
+            for(int L=1; L<=4 && !moved; L++){
                 int is=pos[s0];
                 int ie=is; for(int t=1;t<L;t++) ie=nextIdx(ie);
                 int segEnd=order[ie];
@@ -231,7 +272,7 @@ int main(){
                         double add = rev? addedRev: added;
                         if(add+1e-7 < removed){
                             // extract run cities
-                            int seg[3]; { int p=is; for(int u=0;u<L;u++){ seg[u]=order[p]; p=nextIdx(p);} }
+                            int seg[4]; { int p=is; for(int u=0;u<L;u++){ seg[u]=order[p]; p=nextIdx(p);} }
                             if(rev){ for(int a=0,b=L-1;a<b;a++,b--) swap(seg[a],seg[b]); }
                             // Rebuild via shifting the block between the removed run and the anchor.
                             // Work on a linear copy for correctness; N-cost but Or-opt fires far less
@@ -407,7 +448,7 @@ int main(){
         auto sAt=[&](int p)->int{ return p<N? seq[p]:0; };
         auto stepCost=[&](int t)->double{ int a=seq[t-1], b=sAt(t); double d=dist(a,b); if(t%10==0&&!pr[a]) d*=1.1; return d; };
         int w = N<=1200? N : (N<=5000?120:(N<=20000?140:80));
-        for(int rep=0;rep<4 && el_ms()<TL_MS;rep++){
+        for(int rep=0;rep<8 && el_ms()<TL_MS;rep++){
             bool ch=false;
             for(int p=9;p<N;p+=10){
                 if(el_ms()>TL_MS) break;
