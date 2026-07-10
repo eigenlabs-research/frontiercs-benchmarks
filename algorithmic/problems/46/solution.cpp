@@ -142,15 +142,28 @@ static vector<int> gord;
 static vector<long long> gestC;
 static vector<int> tabuTB;
 static inline int opOf(int job, int m){ return job*M + posF[job*M + m]; }
-static void genMoves(const vector<vector<int>>& cur){
+static vector<vector<int>> curOp;
+static void rebuildOps(const vector<vector<int>>& cur){
+curOp.assign(M, vector<int>(J));
+for(int m=0;m<M;++m) for(int i=0;i<J;++i) curOp[m][i] = opOf(cur[m][i], m);
+}
+static inline void rebuildOpRow(int m, const vector<int>& s){
+for(int i=0;i<J;++i) curOp[m][i] = opOf(s[i], m);
+}
+static void genMoves(const vector<vector<int>>& cur, long long gC){
+(void)cur;
 gmoves.clear();
+const long long* __restrict ds = dist_.data();
+const long long* __restrict tl = tail_.data();
+const long long* __restrict pn = pnode.data();
 for(int m=0;m<M;++m){
-const auto& s = cur[m];
+const int* o = curOp[m].data();
 int i = 0;
 while(i < J){
-if(!crit[opOf(s[i], m)]){ i++; continue; }
+int u = o[i];
+if(ds[u] + tl[u] - pn[u] != gC){ i++; continue; }
 int b = i;
-while(i+1 < J && crit[opOf(s[i+1], m)]) i++;
+while(i+1 < J){ int v = o[i+1]; if(ds[v] + tl[v] - pn[v] != gC) break; i++; }
 int e = i; i++;
 if(e == b) continue;
 for(int t=b+1; t<=e; ++t) gmoves.push_back({m,b,e,t,true});
@@ -161,35 +174,41 @@ gmoves.push_back({m,b,e,t,false});
 }
 }
 static long long estMove(const vector<vector<int>>& cur, const Mv& mv){
-const auto& s = cur[mv.m];
+(void)cur;
+const int* o = curOp[mv.m].data();
+const long long* __restrict ds = dist_.data();
+const long long* __restrict tl_ = tail_.data();
+const long long* __restrict pn = pnode.data();
+const int* __restrict jsu = jsuc.data();
+const char* __restrict jpr = jpre.data();
 int lo, hi;
 if(mv.front){
 lo = mv.b; hi = mv.i;
-gord[0] = s[mv.i];
-for(int t=lo; t<hi; ++t) gord[t-lo+1] = s[t];
+gord[0] = o[mv.i];
+for(int t=lo; t<hi; ++t) gord[t-lo+1] = o[t];
 } else {
 lo = mv.i; hi = mv.e;
-for(int t=lo+1; t<=hi; ++t) gord[t-lo-1] = s[t];
-gord[hi-lo] = s[mv.i];
+for(int t=lo+1; t<=hi; ++t) gord[t-lo-1] = o[t];
+gord[hi-lo] = o[mv.i];
 }
 int L = hi - lo + 1;
 long long prevC = 0;
-if(lo > 0) prevC = dist_[opOf(s[lo-1], mv.m)];
+if(lo > 0) prevC = ds[o[lo-1]];
 for(int t=0; t<L; ++t){
-int v = gord[t]; int u = opOf(v, mv.m); int k = pos[v][mv.m];
-long long jp = (k>0) ? dist_[u-1] : 0;
+int u = gord[t];
+long long jp = jpr[u] ? ds[u-1] : 0;
 long long st = prevC > jp ? prevC : jp;
-gestC[t] = st + pnode[u];
+gestC[t] = st + pn[u];
 prevC = gestC[t];
 }
 long long prevT = 0;
-if(hi+1 < J) prevT = tail_[opOf(s[hi+1], mv.m)];
+if(hi+1 < J) prevT = tl_[o[hi+1]];
 long long bestLen = 0;
 for(int t=L-1; t>=0; --t){
-int v = gord[t]; int u = opOf(v, mv.m); int k = pos[v][mv.m];
-long long js = (k<M-1) ? tail_[u+1] : 0;
-long long tl = pnode[u] + (prevT > js ? prevT : js);
-long long len = gestC[t] - pnode[u] + tl;
+int u = gord[t];
+long long js = (jsu[u] >= 0) ? tl_[u+1] : 0;
+long long tl = pn[u] + (prevT > js ? prevT : js);
+long long len = gestC[t] - pn[u] + tl;
 if(len > bestLen) bestLen = len;
 prevT = tl;
 }
@@ -197,28 +216,41 @@ return bestLen;
 }
 static inline void applyMove(vector<vector<int>>& cur, const Mv& mv){
 auto& s = cur[mv.m];
-if(mv.front) rotate(s.begin()+mv.b, s.begin()+mv.i, s.begin()+mv.i+1);
-else         rotate(s.begin()+mv.i, s.begin()+mv.i+1, s.begin()+mv.e+1);
+auto& o = curOp[mv.m];
+if(mv.front){
+rotate(s.begin()+mv.b, s.begin()+mv.i, s.begin()+mv.i+1);
+rotate(o.begin()+mv.b, o.begin()+mv.i, o.begin()+mv.i+1);
+} else {
+rotate(s.begin()+mv.i, s.begin()+mv.i+1, s.begin()+mv.e+1);
+rotate(o.begin()+mv.i, o.begin()+mv.i+1, o.begin()+mv.e+1);
+}
 }
 static inline void undoMove(vector<vector<int>>& cur, const Mv& mv){
 auto& s = cur[mv.m];
-if(mv.front) rotate(s.begin()+mv.b, s.begin()+mv.b+1, s.begin()+mv.i+1);
-else         rotate(s.begin()+mv.i, s.begin()+mv.e,   s.begin()+mv.e+1);
+auto& o = curOp[mv.m];
+if(mv.front){
+rotate(s.begin()+mv.b, s.begin()+mv.b+1, s.begin()+mv.i+1);
+rotate(o.begin()+mv.b, o.begin()+mv.b+1, o.begin()+mv.i+1);
+} else {
+rotate(s.begin()+mv.i, s.begin()+mv.e,   s.begin()+mv.e+1);
+rotate(o.begin()+mv.i, o.begin()+mv.e,   o.begin()+mv.e+1);
+}
 }
 static vector<int> gwl;
 static vector<char> ginq;
 static long long incAfterMove(const vector<vector<int>>& cur, const Mv& mv){
 const int m = mv.m;
-const auto& s = cur[m];
+(void)cur;
+const int* o = curOp[m].data();
 const int lo = mv.front ? mv.b : mv.i;
 const int hi = mv.front ? mv.i : mv.e;
 {
 int from = lo>0 ? lo-1 : 0;
 int to   = hi<J-1 ? hi+1 : J-1;
 for(int i=from;i<=to;++i){
-int u = opOf(s[i], m);
-msucc[u] = (i<J-1) ? opOf(s[i+1], m) : -1;
-mpred[u] = (i>0)   ? opOf(s[i-1], m) : -1;
+int u = o[i];
+msucc[u] = (i<J-1) ? o[i+1] : -1;
+mpred[u] = (i>0)   ? o[i-1] : -1;
 }
 }
 const int cap = 16*N;
@@ -228,7 +260,7 @@ const long long* __restrict pn = pnode.data();
 gwl.clear();
 auto pushH = [&](int v){ if(v>=0 && !ginq[v]){ ginq[v]=1; gwl.push_back(v); } };
 int hiH = hi < J-1 ? hi+1 : hi;
-for(int i=lo;i<=hiH;++i) pushH(opOf(s[i], m));
+for(int i=lo;i<=hiH;++i) pushH(o[i]);
 int wh = 0, pops = 0;
 while(wh < (int)gwl.size()){
 int v = gwl[wh++]; ginq[v] = 0;
@@ -245,7 +277,7 @@ if(nd != ds[v]){ ds[v] = nd; pushH(jsuc[v]); pushH(msucc[v]); }
 }
 gwl.clear();
 int loT = lo > 0 ? lo-1 : lo;
-for(int i=hi;i>=loT;--i){ int v = opOf(s[i], m); if(!ginq[v]){ ginq[v]=1; gwl.push_back(v); } }
+for(int i=hi;i>=loT;--i){ int v = o[i]; if(!ginq[v]){ ginq[v]=1; gwl.push_back(v); } }
 int headPops = pops;
 wh = 0; pops = 0;
 while(wh < (int)gwl.size()){
@@ -268,8 +300,7 @@ if(mp >= 0 && !ginq[mp]){ ginq[mp]=1; gwl.push_back(mp); }
 }
 }
 long long C = 0;
-for(int u=0;u<N;++u) if(ds[u] > C) C = ds[u];
-for(int u=0;u<N;++u) crit[u] = (ds[u] + tl[u] - pn[u] == C);
+for(int j=0;j<J;++j){ long long v = ds[j*M + M-1]; if(v > C) C = v; }
 #ifdef DIAG
 extern long long g_pops, g_calls;
 g_pops += pops + headPops; g_calls++;
@@ -281,14 +312,15 @@ long long g_pops = 0, g_calls = 0;
 #endif
 static bool isTabu(const vector<vector<int>>& cur, const Mv& mv, int iter){
 const auto& s = cur[mv.m];
+const int* o = curOp[mv.m].data();
 int uj = s[mv.i];
 if(mv.front){
 for(int t=mv.b; t<mv.i; ++t){
-int xop = opOf(s[t], mv.m);
+int xop = o[t];
 if(tabuTB[(size_t)xop*J + uj] > iter) return true;
 }
 } else {
-int uop = opOf(uj, mv.m);
+int uop = o[mv.i];
 for(int t=mv.i+1; t<=mv.e; ++t)
 if(tabuTB[(size_t)uop*J + s[t]] > iter) return true;
 }
@@ -298,13 +330,14 @@ static vector<size_t> gpend;
 static void collectTabu(const vector<vector<int>>& cur, const Mv& mv){
 gpend.clear();
 const auto& s = cur[mv.m];
+const int* o = curOp[mv.m].data();
 int uj = s[mv.i];
-int uop = opOf(uj, mv.m);
+int uop = o[mv.i];
 if(mv.front){
 for(int t=mv.b; t<mv.i; ++t) gpend.push_back((size_t)uop*J + s[t]);
 } else {
 for(int t=mv.i+1; t<=mv.e; ++t)
-gpend.push_back((size_t)opOf(s[t], mv.m)*J + uj);
+gpend.push_back((size_t)o[t]*J + uj);
 }
 }
 static long long evalReduced(int mExcl, const vector<vector<int>>& seq){
@@ -396,7 +429,9 @@ return C;
 }
 static void carlier(int n, long long* r, long long* q, const long long* p, int depth){
 if(carNodes >= carNodeCap || depth > 400) return;
+#ifndef TRACE
 if((carNodes & 63) == 0 && chrono::steady_clock::now() >= carDeadline){ carNodes = carNodeCap; return; }
+#endif
 carNodes++;
 int seq[64];
 long long C = schrage1(n, r, q, p, seq);
@@ -491,6 +526,7 @@ return false;
 }
 roOld = cur[m];
 cur[m] = carBestSeq;
+rebuildOpRow(m, cur[m]);
 long long nc = evalSeq(cur, true);
 if(nc >= 0 && nc < curC){
 curC = nc;
@@ -505,6 +541,7 @@ return true;
 if(nc < 0) g_roCyc++;
 #endif
 cur[m] = roOld;
+rebuildOpRow(m, cur[m]);
 long long cc = evalSeq(cur, true);
 if(cc >= 0) curC = cc;
 return false;
@@ -694,7 +731,9 @@ bool imp = false;
 descPasses = pass+1;
 #endif
 for(int i=0;i<J;++i){
+#ifndef TRACE
 if(chrono::steady_clock::now() - tD0 > chrono::milliseconds(25)){ pass = 6; break; }
+#endif
 int j = piBest[i];
 nbase.clear();
 for(int t=0;t<J;++t) if(t != i) nbase.push_back(piBest[t]);
@@ -734,14 +773,18 @@ vector<int> piCur = piBest, piNew;
 long long cCur = cBest;
 int dMax = J-1 < 6 ? J-1 : 6;
 int rem[6];
-int d = dMax;
 int igIter = 0;
+int d = dMax;
+#ifdef TRACE
+while(d >= 1 && igIter < 2000){
+#else
 while(d >= 1 && chrono::steady_clock::now() < igEnd){
+#endif
 ++igIter;
 d = 2 + (int)(rng() % (unsigned)(dMax >= 2 ? dMax - 1 : 1)); if(d > dMax) d = dMax; if(d < 1) d = 1;
 piNew = piCur;
 for(int t=0;t<d;++t){ int i = (int)(rng() % (unsigned)piNew.size()); rem[t] = piNew[i]; piNew.erase(piNew.begin()+i); }
-long long cNew = LLONG_MAX;
+long long lastBc = 0;
 for(int t=0;t<d;++t){
 int j = rem[t]; int L = (int)piNew.size();
 igF.assign((size_t)(L+1)*M, 0);
@@ -749,12 +792,10 @@ for(int p=0;p<L;++p){
 long long* Fp = &igF[(size_t)p*M]; long long* Fn = &igF[(size_t)(p+1)*M];
 for(int m=0;m<M;++m) Fn[m] = Fp[m];
 int jj = piNew[p]; long long cur2 = 0;
-const int* mo = m_of[jj].data();
-const long long* po = p_of[jj].data();
 for(int k=0;k<M;++k){
-int m = mo[k];
+int m = m_of[jj][k];
 long long s = cur2 > Fn[m] ? cur2 : Fn[m];
-cur2 = s + po[k]; Fn[m] = cur2;
+cur2 = s + p_of[jj][k]; Fn[m] = cur2;
 }
 }
 long long CL = 0; { long long* FL=&igF[(size_t)L*M]; for(int m=0;m<M;++m) if(FL[m]>CL) CL=FL[m]; }
@@ -763,35 +804,31 @@ for(int p=L-1;p>=0;--p){
 long long* Qp = &igQ[(size_t)p*M]; long long* Qn = &igQ[(size_t)(p+1)*M];
 for(int m=0;m<M;++m) Qp[m] = Qn[m];
 int jj = piNew[p]; long long cur2 = 0;
-const int* mo = m_of[jj].data();
-const long long* po = p_of[jj].data();
 for(int k=M-1;k>=0;--k){
-int m = mo[k];
+int m = m_of[jj][k];
 long long tt = cur2 > Qp[m] ? cur2 : Qp[m];
-cur2 = tt + po[k]; Qp[m] = cur2;
+cur2 = tt + p_of[jj][k]; Qp[m] = cur2;
 }
 }
 int bp = 0; long long bc = LLONG_MAX;
-const int* moj = m_of[j].data();
-const long long* poj = p_of[j].data();
 for(int p=0;p<=L;++p){
 const long long* Fp = &igF[(size_t)p*M];
 const long long* Qp = &igQ[(size_t)p*M];
 long long cur2 = 0, mk = CL;
 for(int k=0;k<M;++k){
-int m = moj[k];
+int m = m_of[j][k];
 long long s = cur2 > Fp[m] ? cur2 : Fp[m];
-cur2 = s + poj[k];
+cur2 = s + p_of[j][k];
 long long v = cur2 + Qp[m]; if(v > mk) mk = v;
 }
 if(mk < bc){ bc = mk; bp = p; }
 }
-piNew.insert(piNew.begin()+bp, j);
-cNew = bc;
+piNew.insert(piNew.begin()+bp, j); lastBc = bc;
 #ifdef DIAG
 if(igChk < 50){ long long ref = evalPerm(piNew, L+1); if(ref != bc) fprintf(stderr,"IG-ACCEL MISMATCH %lld vs %lld\n", bc, ref); ++igChk; }
 #endif
 }
+long long cNew = lastBc;
 if(cNew <= cCur || (Temp > 0 && (double)(rng() & 0xfffff) * (1.0/1048576.0) < exp(-(double)(cNew - cCur)/Temp))){
 piCur = piNew; cCur = cNew;
 }
@@ -826,6 +863,7 @@ auto T_end = T0 + budget;
 if(bestC > LB){
 long long c = evalSeq(cur, true);
 if(c > 0) curC = c; else { cur = best; curC = evalSeq(cur, true); }
+rebuildOps(cur);
 int iter = 0, sinceImp = 0;
 #ifndef STUCK_LIM
 #define STUCK_LIM 1000000000
@@ -923,6 +961,9 @@ iter++;
 if((iter & 16383) == 0){
 long long fc = evalSeq(cur, true);
 if(fc >= 0) curC = fc;
+#ifdef DIAG
+for(int m=0;m<M;++m) for(int i=0;i<J;++i) if(curOp[m][i] != opOf(cur[m][i], m)) fprintf(stderr, "CUROP MISMATCH m=%d i=%d\n", m, i);
+#endif
 }
 #ifndef NO_TRIG
 if(J > 2 && nowT - lastImpT > chrono::milliseconds(150) && nowT - lastReoptT > chrono::milliseconds(60)){
@@ -932,7 +973,7 @@ critW.assign(M, 0); loadW.assign(M, 0);
 for(int u=0;u<N;++u){
 int mm = m_of[u/M][u%M];
 loadW[mm] += pnode[u];
-if(crit[u]) critW[mm] += pnode[u];
+if(dist_[u] + tail_[u] - pnode[u] == curC) critW[mm] += pnode[u];
 }
 int pick = -1;
 for(int mm=0;mm<M;++mm){
@@ -945,16 +986,16 @@ reoptMachine(pick, cur, curC, bestC, best, T_end, lastImpT);
 }
 }
 #endif
-genMoves(cur);
+genMoves(cur, curC);
 int nmv = (int)gmoves.size();
 #ifdef DIAG
 static long long totMv = 0; totMv += nmv;
 if(iter % 50000 == 0) fprintf(stderr, "avg nmv=%.1f\n", (double)totMv/iter);
 #endif
 if(nmv == 0) break;
-gcand.clear();
+gcand.resize(nmv);
 for(int idx=0; idx<nmv; ++idx)
-gcand.push_back({estMove(cur, gmoves[idx]), idx});
+gcand[idx] = {estMove(cur, gmoves[idx]), idx};
 int K = nmv < 24 ? nmv : 24;
 partial_sort(gcand.begin(), gcand.begin()+K, gcand.end());
 bool sorted_all = (K == nmv);
@@ -1031,10 +1072,18 @@ undoMove(cur, mv);
 evalSeq(cur, true);
 continue;
 }
+#ifdef TRACE
+int tenure = TENURE_MIN + (int)(rng() % (unsigned)TENURE_SPAN);
+#else
 int tenure = dynTen(nowT);
+#endif
 for(size_t id : gpend) tabuTB[id] = iter + tenure;
 curC = nc;
 applied = true;
+#ifdef TRACE
+fprintf(stderr, "T %d %d %d %d %d %d %lld\n", iter, mv.m, mv.b, mv.e, mv.i, (int)mv.front, nc);
+if(iter >= 2000) _exit(0);
+#endif
 break;
 }
 }
@@ -1079,10 +1128,11 @@ dRstElite++;
 #endif
 }
 curC = evalSeq(cur, true);
+rebuildOps(cur);
 int kicks = 2 + failCnt + (int)(rng() % 2); if(kicks > 8) kicks = 8;
 for(int r=0; r<kicks; ++r){
 if(chrono::steady_clock::now() >= T_end){ timeUp = true; break; }
-genMoves(cur);
+genMoves(cur, curC);
 if(gmoves.empty()) break;
 const Mv& mv = gmoves[rng() % gmoves.size()];
 applyMove(cur, mv);
@@ -1104,7 +1154,8 @@ dRst++;
 #ifdef DIAG
 extern long long g_pops, g_calls;
 extern long long g_roAtt, g_roAcc, g_roCyc, g_roUs;
-fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d) reopt att=%lld acc=%lld cyc=%lld ms=%.1f rst=%lld(best %lld/elite %lld, wins %lld) pool ins=%lld/%lld\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N, g_roAtt, g_roAcc, g_roCyc, g_roUs/1000.0, dRst, dRstBest, dRstElite, dRstWin, dInsBest, dInsRB);
+double elMs = chrono::duration_cast<chrono::microseconds>(chrono::steady_clock::now() - T0).count()/1000.0;
+fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d) reopt att=%lld acc=%lld cyc=%lld ms=%.1f rst=%lld(best %lld/elite %lld, wins %lld) pool ins=%lld/%lld el=%.0fms rate=%.0f/s\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N, g_roAtt, g_roAcc, g_roCyc, g_roUs/1000.0, dRst, dRstBest, dRstElite, dRstWin, dInsBest, dInsRB, elMs, elMs > 0 ? iter*1000.0/elMs : 0.0);
 #endif
 }
 {
