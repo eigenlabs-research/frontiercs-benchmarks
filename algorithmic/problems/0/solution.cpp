@@ -930,7 +930,7 @@ int main() {
         for (int j = 0; j < k; j++) { int x = readInt(), y = readInt(); ps[i].b[j] = {x, y}; }
         S += k;
     }
-    gFASTFIT = (ffEnv < 0) ? (S >= 12000 ? 1 : 0) : ffEnv;
+    gFASTFIT = (ffEnv < 0) ? (S<1850||S>=12000) : ffEnv;
     if (P2FRAC <= 0.0) P2FRAC = (S < 6000) ? 0.25 : 0.55;
     if (P2ENDF <= 0.0) P2ENDF = (S < 6000) ? 0.35 : 0.70;
     if (BF_HD == 0) BF_HD = (S > 30000 || S < 10000) ? 10 : 46; // adaptive persistence
