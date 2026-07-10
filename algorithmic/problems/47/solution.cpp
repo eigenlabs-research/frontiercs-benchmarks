@@ -1287,10 +1287,10 @@ int main(){
         double oldA = g_msAlpha; g_msAlpha = 0.94;
         auto cutsE = [&](int L){
             vector<int> v; auto add=[&](int x){ if(x>20&&x<L-20&&find(v.begin(),v.end(),x)==v.end()) v.push_back(x); };
-            add(L/3); add(L/2); add((2*L)/3); add(L/4); add((3*L)/4);
+            add(L/3); add(L/2); add((2*L)/3); add(L/4); add((3*L)/4); add(L/6); add((5*L)/6);
             for(int z=0; z<M && z<3; ++z){ const ItemType& it=g_items[ordDens[z]]; int d[2]={it.w,it.h};
                 for(int q=0;q<2;++q) for(int k=1;k<=3;++k){ add(d[q]*k); add(L-d[q]*k);} }
-            if((int)v.size()>10) v.resize(10); return v;
+            if((int)v.size()>14) v.resize(14); return v;
         };
         int pe=0;
         for(int sh:cutsE(g_bin.H))for(int mask=0;mask<8&&pe<80&&elapsed()<TIME_LIMIT*0.55;++mask,++pe)
