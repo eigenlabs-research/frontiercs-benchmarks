@@ -943,16 +943,35 @@ evalSeq(cur, true);
 }
 #ifndef NO_SWEEP
 if(J > 2){
+// Pass 1: load-ordered full sweep (classic SB seed), hard-capped to 120ms.
 vector<pair<long long,int>> mord(M);
-{
 vector<long long> mload(M, 0);
 for(int j=0;j<J;++j) for(int k=0;k<M;++k) mload[m_of[j][k]] += p_of[j][k];
 for(int m=0;m<M;++m) mord[m] = {-mload[m], m};
 sort(mord.begin(), mord.end());
-}
+auto sbEnd = chrono::steady_clock::now() + chrono::milliseconds(120);
+if(sbEnd > T_end) sbEnd = T_end;
 for(int t=0;t<M;++t){
-if(chrono::steady_clock::now() >= T_end) break;
-reoptMachine(mord[t].second, cur, curC, bestC, best, T_end, lastImpT);
+if(chrono::steady_clock::now() >= sbEnd) break;
+reoptMachine(mord[t].second, cur, curC, bestC, best, sbEnd, lastImpT);
+}
+// Pass 2: only top-3 critical machines (time-safe; avoids M*25ms blowups).
+if(chrono::steady_clock::now() < T_end && bestC > LB){
+evalSeq(cur, true);
+vector<long long> cw(M,0);
+for(int u=0;u<N;++u){
+int mm=m_of[u/M][u%M];
+if(dist_[u]+tail_[u]-pnode[u]==gCmax) cw[mm]+=pnode[u];
+}
+for(int m=0;m<M;++m) mord[m]={-cw[m],m};
+sort(mord.begin(), mord.end());
+int n2 = min(3, M);
+auto sb2 = chrono::steady_clock::now() + chrono::milliseconds(40);
+if(sb2 > T_end) sb2 = T_end;
+for(int t=0;t<n2;++t){
+if(chrono::steady_clock::now() >= sb2) break;
+reoptMachine(mord[t].second, cur, curC, bestC, best, sb2, lastImpT);
+}
 }
 if(bestC <= LB) timeUp = true;
 }
