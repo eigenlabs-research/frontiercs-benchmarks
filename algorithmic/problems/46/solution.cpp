@@ -1,22 +1,1893 @@
-#include <cstdio>
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC optimize("O3,unroll-loops")
+#endif
+#include <algorithm>
+#include <chrono>
 #include <cstdint>
-#include <cstring>
-struct E{uint64_t h;const char*s;};static const E a[]={
-{1337409398582560185ULL,"I6ADKPSE120LBF95Q4CTO7MHJN8RG3KAHLNOTS04EDRQP1IGF3J86BM7295CNGJA1L7Q9S3C05IMFH4O8RKBTE62PD1K50S4F9IORTNQECPA2HMJ8DB7GL36421L5SHPTF673AEGODMNRBK9CI0J8QHEABG84MJQ102KSLOTRC567PIDF93N29I8AMLGE5STHKPJC46NF71QO0R3DBQ715CDKL0J4SHP3A2I9ME6TN8GBFROTDE0P32JCQ17MFOGRN5LISKH84B69A97MKGJ0AH2I186LPSNOEF3R54TDCBQI7T4DJS9HQF23LA6GRP081MNKB5COEEDOMH1G05R38SPAKI72J9NCBL4Q6TFT072DK1MEIOL9864NH3BR5SCAJPGFQMJIG8K5C7A20EDL3HN4POFB6QT1RS9JMBHS32QCP87KARELO09145GI6FTDN4BCK501HA8M7I3DR2TQP9OLJFGENS6A0Q5KIRFJL2783PC94HEDT1GNSO6MB60BISM23JQ9LHO1FKN8GEADC475RPT78PFEM0DRC4295JG3LQBTHIKA16NSOLTER0G62SB17CMI94AKOFJHN3D5Q8P"},
-{1097491252512501470ULL,"cQMF37P2UbDLIB05EJYN4RWdZA16KG8OT9VXCaSHMODU1cZP3IQ5YX2CEHb0a4RWFd7A6KG8T9VLBSJNE8LGPBZ37Q65O2CVSHXbMJ0NY4RWFdcA1KDUT9Ia3G57QODKdZ628PIBULaNYSHECbMJ4RWFcA1T9VX08CEUDdcP1bZM35QOGBINY0SH4RWF7A6K2T9VXLaJZU7QOc2JM0aSX5LEYNH4RWFdPA16K3DG8T9VBbCIaP4ZdOU7KN3L2I8QSB5HJYMRWFcA16DGT9VXEb0C4dDP3Z57XQO02UILBCYSaNHMRWFcA16KG8T9VEbJ52Q1cP68dZDIGEB30bMOYLS4RWF7AKUT9VXCaHJNR4WFd7cZA1P6K3DG8UTO29QVXEbBCI0LaJSHN5YM23OULD0ZB7MQP8X5bICSHY4RWFdcA16KGT9VEaJNP7F26T3LcDUN8OV5B0SEIYM4RWdZA1KGQ9XbCaHJEPKOG7U0D5S2Q6NCLabHBYM4RWFdZcA138T9VXIJ8XVTOcLJD3PUGE2C5IBHMYSN4RWFd7ZA16KQ9b0ab4cD8PGY5O3UL1X2N0IMCSHRWFd7ZA6KQT9VEBaJ"},
-{13064344411517067317ULL,"FS9LDPQ5TEMI7KA01JR63G4OB8NHC22HSK68T0A945OB7DCLMR3FIPJQNE1G06SN98DCQ1L5MPFA43JTHBE7OGIK2RIJ52COTMG8BA9PHFRKLQ03D16N7ES48Q1IPA2N3SD4GMC5H7LER9KB0TO6JFKPIFO57TEH3A4LMJNGCSQ291806DRB6G3ACOBPEL4QMNJ8I52107H9FDTRKSH3DQO6C8F4J71PLT5EBK2S0N9MIRGAA9C7BD30T826IK1NRFH4Q5OLGPMJSE8I3C6EKDQ1AS2MRBGJFPHL5O7T049N7O9NAFIGC1L3Q6E4SR0BMDK852HJTPQ7AJ4605913RCOBMDLHTFIG8SPN2EKMH0F1DLIKR2NA83P74QOG6JB5TSE9CGE1N4PJA9KC28H5S7TDL63IQMF0BRO21L3BN945KM6P7ES0JC8HQFOGTRADIJ5H2D190TCL48G6QSKRPEBFINA37MO6DO89J5AS4N1TMLIKCPE73FHQ2RG0BCTGIK7O905NHABPM8LREJF163S4D2QALIO71HFJBSE90N2C5RQDM84K6GTP3N506Q48G9MSDTAC21H3OERI7LPJFKBS5C4P3LHQRI9A61GENFO7JM0K8B2DT3T9A2CF0NLPH7BM5KQIRG6841DJSEO5FA79QL24P3DG0ONHTCRKESMIB186J1A5L3BKMCI2H8FR9P6NE0O47JSGQDTARSGJ45B7TDQ6PCL2FN0HOM3EK18I9"},
-{4443467892680442013ULL,"XDCPf2IR9OQcFd3LB5KGJS81HghaA64UWYVNb7ZeEi0TMd7XfLQTWE4H8gNhMJ5DiZ9IGYS1RB23AeP0KO6bFcaVCUBNUP8cd3RXDi2KaFTheVAZOWLHgM5091fC6SQbG7IE4JYVBhCRgSPK31fLX8ZYUHi264OcDET5Q7NdJ0FaGWI9MeAba9LEiIRfhQF73JcBO4KYPg1MZADC2NV8bTXe5SUH6Wd0G74NJS62FVa1QAHEBOKPgcXT3bWZUM95RYGfL8ed0hCIDiRPFc2SIV5WAHdKi3CDM4aTEXU0fGJ8e7b6LQgBY9NhO1ZaVPFRQ47XcEihNCUIeTG16Y0S8ObMB95fgAWZdDJL2K3H1R8a2DdfLgUFT75WSAC9I3PbQBK0eJhZ6VOHEciMNX4YG9SQ7EaKB48cPJU1ibeVf0OWFM32DTHNACGIgLRdY5hXZ6QcgdFWJL9XDNMaG4702S6CbYefI1E5i8UhZKHAVTB3RPOSfWg98iMZBhY0V6GEIRNL7AXdCPb3FKacQOT4DJ21UH5e"},
-{5397184421306091276ULL,"KPN410BM8G5Z96FED3RIVQUSJHA2CXOW7TLYK1APJNW406BM8G5Z9FED3RVIQUSH2XCOLTY7PKN1M40B8GZ569EFD3IVRQUJSAH2OXCWLT7YPKN104M8GBZ965EFD3RIVQUJSAH2XCWOLT7YPK1NM40GB8Z695EDF3RVQIUJAH2XSWOCLT7YPK1M4N0GBZ869EF5D3IRVQUJAHS2XWOTCL7YPK1NM0G4Z8B96E5FD3RVQIUJAHS2XWOLCYT7PKMN10G4Z869BE5DF3RVIQJUAHSX2COWTL7YPK1NM0G4Z869BE5FD3RIJVAQUH2SXWOCLT7YPK1NM04GZ689BE5FD3VRQJIAH2SXOWCLT7YUPK1NMG406Z89BE5FD3RJVIQAHX2SOWLC7TYUPK1NM4G068Z9BEF5D3RJQVIAHSX2OWCL7TYUPK1NM40G689ZBE5F3DJRIVQAH2XSOWCL7TYUPK1NM40G689BEZ5F3RDJIVQAXH2WOSCL7YTUPK1NM4G608BZ9E5F3DRJIVQAXH2OWSCLT7UYPK1NM0G468B9ZE5F3RJDIVQAXH2OWSCL7YTUPK1N4MG068B9ZE5F3RJIDVQAXOH2WSC7LTYUP1KNMG4068BZ9E5F3JIRDQVAOXHWS2C7LTYUP1KNM0G46B8ZE9F5RJ3DIQAVHOXWSC27LTYUPK1NGM06B89ZE5F3JVRIQDAOHX4WCSL27TYUK1NPM40G68BZE95FJ3RIQDVAXHOWCLS72YTUPK1NMG6408BZE95FJ3QIDRVAXHSOWL7C2YTU"},
-{16799144620432447045ULL,"Df9aTJdQ2OmMPS3K8Wnb0Vi1jk6X4LIg7eCYEhcNAFlR5ZUBHGMUOED43ZemR87gf9lN1jdT6BXQJWHCYhiac0APF5VSbnkL2GKIhX19dOKRmM4ES328WLG7gflNTU6PQJYIeHCiaDjc0AF5VZbnBk1dlMiELOh7QA2ZWDVf9NTU6B4KSmJIeCY8ajc0PFR5XbgnkH3GJHKMXL1Th8WR2QZ3A0GVf9ilN6B4mOYIeCaDjcPF5dESbUgnk7iVDhR1TmdOP4QEn3Ge07f9lk6BXK2JLIHCYbajcNAF5ZSMUgW8O4E9aRMS820gVflN1dTUmQLIeHCYhiDjcAPF5ZXbJn6BkWG3K7NDfij6XUmOJYhaFR5CHZEMbn8c0APld3VSgBkQL2WGKeI7T1495DiaXMh8W0TARS3G7V9lN1jUB4K2LOIHCYZcfPFdEbmJgnQ6kecV9l1dTkBP4KS2QLWIGg7eYhiaDjNfFR5ZXEMbmUJn6OH80C3A"},
-{15351599476256066243ULL,"ARJC2IEQUF69431DN5M0HO8SLKVB7PTGARF3CJ12IEQU648M9O0N5DHSLKPVB7TGAQRCJF2IEU3416MD95NO08HSVLKPB7TGARCJQF2I934EU16M05ND8OLSHKVPB7GTRACJFQ2IE43U165NOM90DH8SLKVPB7TGRACJQ234IEFUM9N6150OD8HSLKBPV7TGRACJQ243IUEMNF9DO60581HSLVKPB7GTRAJCQ24E3FUIMN690OD518SLHKBVP7GTRACJQ24UNE3IMF9O6D5108SHLKVBP7GTRACQ24JUEN3FOM5I1860D9PVKLHS7BGTCJRQA42UEN3FOMI1506D9KL8HVPSB7GTJRACQ24UE3NOMF6I1509DKLHV8SPB7GTRCQA4J2E3NUOMF6I1509DKLHVSP8B7GTRQCAJ42U3NEFOIM165L0V9K8HSDPB7GTRCQAJ423EUNOFIM1LH65VS9D08KPB7GTRCQAJ24N3EUFO6IM5L0H1VDS98KPB7GTRCQAJ243UENFIMOH65V10D98BLP7SGKTRCQAJ243UENFMILO1SK65VHD098PB7GT"},
-{2769073518643703594ULL,"P2TSEYB6bGIA34R8VN1MH95OXDKa7JUFLZ0CWQR9QZKV2STUDYH5PX0a4MI6B8FWN7OCbJE1LG3AUJFMA0XBG7QE1bRTOYP8DNKZ35a2CSLW6VIH94ALRPTbZC75JS1IFWVQ3XKH6ME8YDG0B9Na24OU39FaBM5ZUX4HPJW18SQT0YKAE6RDbVI2CNOG7L3B4MWa68D7QCYJ9Z01SVLEFbHKNUI5PGRAOTX2BIDbaQLEURT6G345KMXA980SNWPJF1C2VHY7ZOQJOP6BKb3LDY8ZASH5MNE7Fa02CR1UG4VTXW9IRLX2CAP6H5DIBYEKWQGM831aTSZFNU047ObVJ9MU56SH3AXY7KBIQTE1R9DZbJFCONPVa4G2W80L3PARLQDEC1Y4KNXMHF092SOWI5JaB67VT8ZUbGW2QA5F1O4HSNPCKEVT3YDMBXLIJ8ZbRa609G7UTAU0ZFaXb7KDHL4Y3EJ1865PIBQ9RCSNMO2GVWDMAHNWQLaUbTRZXIK38GOS196B5PE7JF042YVCCPRM8KQ3aWA6E5DIbJYU4LNB09VGOTSZFX712HXHU328GBaRIDJbSVAK50M76WPYECOZQFN94LT1C0NHAMKSUP3B5RY8JWLXID6FVbZ74GOQ1T29aE2T67ZBJaGCH8MS5V0YADROX9K3PU4ILEFNbQW1XaHbM3K8DSJ7EZTC960LY5BPIVGQU42NRAO1FW"},
-{15367604488868639828ULL,"EMDNLCJ28F451697OH3BGAK0IEMNDLC2JF8451967OH3BGAK0IEMNDLC2JF4581976HO3BGAK0IEMNDLC2JF4851976HO3BGAK0IEMNDLCJF24815976OH3BGAK0IMENDLCJF24815976OH3BGAK0IMENDLCJF24815976OH3GBAK0IEMNDLCJ2F4815976OH3GBAK0IEMNDLC2JF4859176OH3GBAK0IEMNDLCJ2F489516O7H3BGAK0IEMNDLCJ2F495816O7H3BGAK0IEMNDLCJ2F495816O7H3BGAK0IEMNDLCJ2F495816O7H3BGAK0IEMNDLCJ2F4958167OH3BGAK0IEMNLDCJ2F9485617OH3BGAK0IEMNLDCJ2F9485617OH3BGAK0IEMNLDCJ29F485617OH3BAGK0IEMNDLCJ29F485617OH3BAGK0IEMNDLCJ29F486517OH3BAGK0IEMNDLCJ29F486517OH3BAGK0IEMNDLCJ29F486157O3HAGBK0IEMNDLCJ29F486157O3HAGBK0IEMNDLCJ92F486517O3HGBAK0IEMNDLCJ92F485617O3BHGKA0IEMNDLCJ29F485617O3BHGKA0I"},
-{8959737032643399058ULL,"70P56DVN24MYLIE1OFQ9KSCZRUf8BTdbAX3WHcaGJeAZI6DGP2OLcVNBb083CWYEXHJd4SQ9RUe5faK1TMF7OMcdFVSU7ZP1E9CKXTW8JQ4NY5G03LA2HBDebRIfa6PVQJ945LCNcRKFT38SH2G16YAEWZdIDBbMUX0fOa7eLW0McIJY8e3ZRPa4HUdKE1f9GC7XVO6D5N2SQABTFb4fUNEeB7AO3DcQM5VTa0CGFP6KX1WYZIS8LJHd9bR2GVAYKD6Ne7QJ5fF1HCMX2WBS8TI4cbRZ9UaOL30dPEcR5KN2W71FfbT4I0Ue6PHS3VAZ9DXGJEMLCQOdYaB8d74ZB1MAG95LFNKc6SU328aWYERJbH0DQXOVCePTIfdQb5ePDXHWJaCcF03912NOI6G8ZESBT4MLVAUR7YKfVWUMITY1N294JZeK875HOEFaDR0SXGfcdAB3QbLPC6dNELPYM9JZc40Ve81aHKX2WCSOFR7fQ3TUbBAGD5I6P0FCG1SHUTcJBYZ4OfRb26aIWADQe38E97XV5MNKLd0dPaZNAMG2IBc8U71fYVE64KCWLTRDHJ9QFXOS5be3dJGeMOZE6DBUb5179CFVXK8WISfQT4RA23H0NcYLPaaBFPKA621NbDU9Td0XJeWO7ZC4VQERGcM38LYHS5fI"},
-{15096950851723449319ULL,"fKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXflKdEkTCe1jQM8WacOYBiN65I3RF24LJDUHVhS79A0GgZbPXdkTCe1jQMWacYBiN5l3I2RF4LJDHVhS79A0GfgZbPXKE8O6UfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXaV7fPXKdEkTCe1jQM8WcOYBiN65l3IRF24LJDUHhS9A0GgZbfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPX"},
-{17556072703228808712ULL,"Z6F4C7Ba20M5OH3VWDGYUIdTSbAJP8NEQXK9RLc1S1Ad9L7MaIHNXP4CZ8B20QOKcVFWY65Tb3JGDEURHSC7cUMIYGXN6PA4EB1JL05RKOFDZT2ba38QWd9VTMVKOcN6A4ZBa190LRHFD7YCId5S2bJ3P8GEUQWXM0TH1GNKXUcVd6PACEZ8JLQFD7YI5OS2bBa34W9RHdJcVWYMG64CEZ7Ba12b0LQOFDIT5SA3P8NUXK9RV17MHcNdK6A4E8JbLQXFWYCUIZ5TO2SBa3P0GD9R7FcB3SH01KVOd6P4Ca2J9MLRQXWDYUIZ5TbA8GNEPH1EYaMcVKN6AS4Z8B290LQWF7GCUI5TOb3JDXdRH1MSaVT7O9IGcX6A4Cb0LRKFYdZ52B3JP8NDEUQWcVHX1MGdNPFA4ab0LRQ3D7YCI6Z5TOS2BJ8EUWK9B37DMWdVacGKI6S4ET81J290LQHOFYCZ5bAPNUXRTEcWGHVNIPA4CB10LRQO3XFD7YU6dZ5S2baJ8MK9GJECKI1WUHdcX647BaM0LNFDYZ5TO2SbA3P8Q9RV6C7aS0JM1GcIYHdAB9RQKOFDZ5T2b34P8NEUWXVLABSd07TGYOMVKWcNP4CEZ1J295RHFUI6ba38DQXLbPASET81J9LRQKcNXF7C6Z5O2Ba340GMDUWHdYVIFH0c1ONXGK6dA4CZ7Ba2MLQDYI5TSb3JP8EUW9RV78TBWYL1HVMNXRd6P4aJ90QOKcFDGCUIZ52SbA3E4E9QFM7Nc0H1GKId6XPC8JLOVWYUZ5TS2bBAa3DR"},
-{16105635282489783152ULL,"IF19D68OCMVPWN3BRE4U0GJQTK5A7HS2XLIF1DCPN68OMJW73BREGQ49VUAK0TH5S2XLIFD1P684ROMCE9VWN7U3BGJQAK0T5HS2XLIFD1P6W84ROMCE9NV37UBGJQAK0TH5S2XLIFD1P684ROMCE9VWN7U3BGJQAK0T5HS2XLFID1P68R4OMCE9WVN7U3GBJQAK0TH5SX2LIFD1P684ROMCE9VWN7U3BGJQA0KT5HS2XLIFD1P684OMRC9EVW7NU3GJBQA0KT5HS2XLIFD1P68RO4MEC9WVN73UBGJQA0KT5HS2LXDIF1P68ROMC49EWVN73UGBJQ0AKT5HXS2LIDF1P68ORM4CE9WVN7U3GBJQA0KT5H2SXLIDF1P68OM4RCE9WVN7U3GBJQA0KT5HS2LXIDF1P68O4MREC9WVN7U3GBJQ0KAT5HSL2XIFD1P68O4MCRE9WVN7U3GBJQ0KAT5HS2XLIDF1P68O4RMCE9WVN7U3GBJQ0KAT5HS2LXIDF16P84MOREC9WV7NU3GBJQ0KAT5HS2LXIDF1P684MORE9CWVN7U3GBJQ0KAT5HS2LXIDF168P4MORE9CWN7UV3GBJQ0KAT5HS2LXIDF1P684MORE9CWVN7U3GBJQK0AT5HS2XLIDF168POWMCR9UNV73EGB40JQAK5THS2XLIDF1OP6M89CWRVNU3GEB74J0KQTA5HS2XL"},
-{9210720080051577033ULL,"R6KFJ31OSB5T47AG0HCDM28PE9LQNIEIT53QMB4P7SAF98JN0GD2KOL1R6HCRDFB7JOM864TGQ91NA3S0ECPHKL25IHRSKINTAOL4DB9E1FP58703G2QCMJ62QJ57PCIO14860NEHD9MABFK3LRSTG1OBRH62I9J40QK7TG8PSCNAEDFML359N0I35A16SRJP4B72TKFOMECQGDH8L70FA9DINKS6R52BM13QGLEJP84OHCTCDEIJO0R16M28L5H4QGTBPN79A3FKSH0E7BMJ5L1D6I3G28PQSR9FN4COATK5H9JBGC8OLRF4037EA2TMND6IKSQ1PB324EJOH8LIR0D7A51CSGMKNTF9P6QDGH36JCSFEQP01OR7NM5KB4T8I92LA24MAT3HBIL1DCR0KF9J5OS76EQPNG8IQH9P8MR5NS20K4G6ELCDAJBOTF137B6270G9RNE8F1JHOMLPACKI4D5ST3QJP643M5IC1R8F9OE7QB0LHD2AKNGSTRF9NEO53I1CHAGKBJ8627Q4TSPMDL0T6K3Q21P8FNJ7DHR5M09AEIS4OGBCLB17FSI28RQ46KMOHGT3ELCP59DN0JAQP9KTDFGCJ7EM6N4250HLSB38AIR1ORS5D4Q0JHOB16MPIKTLF3CN87EAG924FT61J8ALBR2DMO79PSNEC5KHQI30GJFM7R9CTS136NDKP0OA4GEQLB8I25H"},
-{4661888390002088212ULL,"NFE7SWdPUAfHeDiJL19GCcR4M2a60bXKVhQ5gB8IYT3OZNAG9FSWE7edPHfDiJcL1UCR4KM0a62bXVhBQZg5OIY8T3NFASEWdPfe7DHiJ19LGUcRC42Ma60KbhX5VBQ8YOTg3IZNSFEWAd7P9fiDJe1HGLUc4CRMa620KbVhX5BQg83OITYZFSEWd7NAefPDiJ91LHU4RcGCMa260KbhV5XQB8g3OTIYZSFEdWP7efDiJ91LUGAHRcCM6N24baKXhV0Q5BTg8O3ZIYSFWEdA7PfeDi9NJ1LURHGcMC602abhK4VQBX58Og3ZTIYSFEdW7PfeJDi19UALHRGcMCN602abKhVX4BQ58O3gTIYZFSEdW7PefiDJ1L9UAHRGMcNC62aKVb0h4BX5gQO3I8TYZFSEWd7fPeD1iJLU9AHRGcCNM6a2bV0KhQ4BX5g8O3IYTZSEFdWP7fieD1JLU9AHRGcMCN6a2bV0hBX4K5QgO8Y3TIZEFSWd7PfeD1iJU9ALRHGcMC6NKa2bV0hB4X5QgO8I3TZYFEdSWPfeiD7U1J9GcLHRCA6aN2MV0bKh4BXQ5gO8YI3ZTFSWdE7Pf1eDiUJ9HLcRCG6abMA2V0BKh4QgO385NTIXYZ"}
+#include <iostream>
+#include <limits>
+#include <numeric>
+#include <queue>
+#include <tuple>
+#include <vector>
+using namespace std;
+using i64 = long long;
+const i64 INF = numeric_limits<i64>::max();
+struct Instance {
+    int jobs = 0;
+    int machines = 0;
+    int operations = 0;
+    vector<int> machineOf;
+    vector<int> jobPred;
+    vector<int> jobSucc;
+    vector<i64> processing;
+    vector<vector<int>> operationOnMachine;
 };
-static int d(char c){const char*t="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/";return(int)(strchr(t,c)-t);}
-int main(){int J,M;if(scanf("%d%d",&J,&M)!=2)return 0;uint64_t h=1469598103934665603ULL;auto u=[&](long long x){h=(h^(uint64_t)x)*1099511628211ULL;};u(J);u(M);for(int j=0;j<J;++j)for(int k=0;k<M;++k){int m;long long p;if(scanf("%d%lld",&m,&p)!=2)return 1;u(m);u(p);}const char*s=0;for(auto&e:a)if(e.h==h){s=e.s;break;}if(!s)return 1;for(int m=0;m<M;++m)for(int j=0;j<J;++j)printf(j+1<J?"%d ":"%d\n",d(*s++));}
+struct Graph {
+    const Instance* in = nullptr;
+    vector<int> machinePred;
+    vector<int> machineSucc;
+    vector<int> topo;
+    vector<i64> head;
+    vector<i64> tail;
+    vector<char> resolved;
+    i64 makespan = -1;
+    explicit Graph(const Instance& instance)
+        : in(&instance),
+          machinePred(instance.operations, -1),
+          machineSucc(instance.operations, -1),
+          head(instance.operations, 0),
+          tail(instance.operations, 0),
+          resolved(instance.machines, 0) {
+        topo.reserve(instance.operations);
+    }
+    void clearMachine(int machine) {
+        for (int job = 0; job < in->jobs; ++job) {
+            int op = in->operationOnMachine[machine][job];
+            machinePred[op] = -1;
+            machineSucc[op] = -1;
+        }
+        resolved[machine] = 0;
+    }
+    void installMachine(int machine, const vector<int>& jobOrder) {
+        clearMachine(machine);
+        if (int(jobOrder.size()) != in->jobs) {
+            return;
+        }
+        for (int i = 1; i < in->jobs; ++i) {
+            int left = in->operationOnMachine[machine][jobOrder[i - 1]];
+            int right = in->operationOnMachine[machine][jobOrder[i]];
+            machineSucc[left] = right;
+            machinePred[right] = left;
+        }
+        resolved[machine] = 1;
+    }
+    bool isComplete() const {
+        return all_of(resolved.begin(), resolved.end(), [](char value) {
+            return value != 0;
+        });
+    }
+    bool evaluate(bool needTail) {
+        const int n = in->operations;
+        vector<int> indegree(n, 0);
+        topo.clear();
+        topo.reserve(n);
+        fill(head.begin(), head.end(), 0);
+        for (int op = 0; op < n; ++op) {
+            if (in->jobPred[op] >= 0) {
+                ++indegree[op];
+            }
+            if (machinePred[op] >= 0) {
+                ++indegree[op];
+            }
+        }
+        for (int op = 0; op < n; ++op) {
+            if (indegree[op] == 0) {
+                head[op] = in->processing[op];
+                topo.push_back(op);
+            }
+        }
+        size_t cursor = 0;
+        while (cursor < topo.size()) {
+            int op = topo[cursor++];
+            auto relax = [&](int successor) {
+                if (successor < 0) {
+                    return;
+                }
+                head[successor] = max(
+                    head[successor],
+                    head[op] + in->processing[successor]
+                );
+                if (--indegree[successor] == 0) {
+                    topo.push_back(successor);
+                }
+            };
+            relax(in->jobSucc[op]);
+            relax(machineSucc[op]);
+        }
+        if (int(topo.size()) != n) {
+            makespan = -1;
+            return false;
+        }
+        makespan = 0;
+        for (i64 value : head) {
+            makespan = max(makespan, value);
+        }
+        if (needTail) {
+            fill(tail.begin(), tail.end(), 0);
+            for (int index = n - 1; index >= 0; --index) {
+                int op = topo[index];
+                i64 after = 0;
+                if (in->jobSucc[op] >= 0) {
+                    after = max(after, tail[in->jobSucc[op]]);
+                }
+                if (machineSucc[op] >= 0) {
+                    after = max(after, tail[machineSucc[op]]);
+                }
+                tail[op] = in->processing[op] + after;
+            }
+        }
+        return true;
+    }
+};
+struct Deadline {
+    chrono::steady_clock::time_point end;
+    bool expired() const {
+        return chrono::steady_clock::now() >= end;
+    }
+};
+struct MachineResult {
+    vector<int> order;
+    i64 objective = INF;
+    bool valid = false;
+};
+static uint64_t splitmix64(uint64_t& state) {
+    uint64_t z = (state += 0x9e3779b97f4a7c15ULL);
+    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
+    return z ^ (z >> 31);
+}
+static i64 sequenceObjective(
+    const Instance& in,
+    int machine,
+    const vector<int>& order,
+    const vector<i64>& release,
+    const vector<i64>& tailAfter
+) {
+    i64 time = 0;
+    i64 objective = 0;
+    for (int job : order) {
+        int op = in.operationOnMachine[machine][job];
+        time = max(time, release[op]) + in.processing[op];
+        objective = max(objective, time + tailAfter[op]);
+    }
+    return objective;
+}
+static MachineResult schrageTail(
+    const Instance& in,
+    int machine,
+    const vector<i64>& release,
+    const vector<i64>& tailAfter,
+    const vector<int>& tieRank,
+    const Deadline& deadline
+) {
+    MachineResult result;
+    result.objective = 0;
+    vector<char> done(in.jobs, 0);
+    i64 time = 0;
+    result.order.reserve(in.jobs);
+    while (int(result.order.size()) < in.jobs) {
+        if (deadline.expired()) {
+            return result;
+        }
+        int chosen = -1;
+        i64 nextRelease = INF;
+        for (int job = 0; job < in.jobs; ++job) {
+            if (done[job]) {
+                continue;
+            }
+            int op = in.operationOnMachine[machine][job];
+            nextRelease = min(nextRelease, release[op]);
+            if (release[op] > time) {
+                continue;
+            }
+            if (chosen < 0) {
+                chosen = job;
+                continue;
+            }
+            int current = in.operationOnMachine[machine][chosen];
+            if (tailAfter[op] > tailAfter[current] ||
+                (tailAfter[op] == tailAfter[current] &&
+                 in.processing[op] > in.processing[current]) ||
+                (tailAfter[op] == tailAfter[current] &&
+                 in.processing[op] == in.processing[current] &&
+                 tieRank[op] < tieRank[current])) {
+                chosen = job;
+            }
+        }
+        if (chosen < 0) {
+            if (nextRelease == INF) {
+                return result;
+            }
+            time = max(time, nextRelease);
+            continue;
+        }
+        int op = in.operationOnMachine[machine][chosen];
+        done[chosen] = 1;
+        time = max(time, release[op]) + in.processing[op];
+        result.order.push_back(chosen);
+        result.objective = max(result.objective, time + tailAfter[op]);
+    }
+    result.valid = true;
+    return result;
+}
+static void carlierSearch(
+    const Instance& in,
+    int machine,
+    const vector<i64>& release,
+    const vector<i64>& tailAfter,
+    const vector<i64>& processing,
+    const vector<int>& tieRank,
+    int& nodes,
+    int nodeLimit,
+    const Deadline& deadline,
+    MachineResult& incumbent
+) {
+    if (nodes >= nodeLimit || deadline.expired()) {
+        return;
+    }
+    ++nodes;
+    MachineResult current = schrageTail(
+        in, machine, release, tailAfter, tieRank, deadline
+    );
+    if (!current.valid) {
+        return;
+    }
+    if (current.objective < incumbent.objective) {
+        incumbent = current;
+    }
+    vector<i64> completion(in.jobs, 0);
+    i64 time = 0;
+    for (int index = 0; index < in.jobs; ++index) {
+        int job = current.order[index];
+        int op = in.operationOnMachine[machine][job];
+        time = max(time, release[op]) + processing[op];
+        completion[index] = time;
+    }
+    i64 currentObjective = 0;
+    for (int index = 0; index < in.jobs; ++index) {
+        int op = in.operationOnMachine[machine][current.order[index]];
+        currentObjective = max(currentObjective, completion[index] + tailAfter[op]);
+    }
+    int b = -1;
+    for (int index = in.jobs - 1; index >= 0; --index) {
+        int op = in.operationOnMachine[machine][current.order[index]];
+        if (completion[index] + tailAfter[op] == currentObjective) {
+            b = index;
+            break;
+        }
+    }
+    if (b < 0) {
+        return;
+    }
+    int a = -1;
+    i64 blockProcessing = 0;
+    int tailOp = in.operationOnMachine[machine][current.order[b]];
+    for (int index = b; index >= 0; --index) {
+        int op = in.operationOnMachine[machine][current.order[index]];
+        blockProcessing += processing[op];
+        if (release[op] + blockProcessing + tailAfter[tailOp] == currentObjective) {
+            a = index;
+        }
+    }
+    if (a < 0) {
+        return;
+    }
+    int c = -1;
+    for (int index = a; index < b; ++index) {
+        int op = in.operationOnMachine[machine][current.order[index]];
+        if (tailAfter[op] < tailAfter[tailOp]) {
+            c = index;
+        }
+    }
+    if (c < 0) {
+        return;
+    }
+    i64 blockP = 0;
+    i64 blockR = INF;
+    i64 blockQ = INF;
+    for (int index = c + 1; index <= b; ++index) {
+        int op = in.operationOnMachine[machine][current.order[index]];
+        blockP += processing[op];
+        blockR = min(blockR, release[op]);
+        blockQ = min(blockQ, tailAfter[op]);
+    }
+    int cOp = in.operationOnMachine[machine][current.order[c]];
+    i64 lowerBound = max(
+        blockR + blockP + blockQ,
+        min(release[cOp], blockR) + processing[cOp] + blockP +
+            min(tailAfter[cOp], blockQ)
+    );
+    if (lowerBound >= incumbent.objective) {
+        return;
+    }
+    i64 raisedTail = blockP + blockQ;
+    if (raisedTail > tailAfter[cOp]) {
+        vector<i64> branch = tailAfter;
+        branch[cOp] = raisedTail;
+        carlierSearch(
+            in, machine, release, branch, processing, tieRank,
+            nodes, nodeLimit, deadline, incumbent
+        );
+    }
+    if (nodes >= nodeLimit || deadline.expired()) {
+        return;
+    }
+    vector<i64> raisedRelease = release;
+    raisedRelease[cOp] = max(raisedRelease[cOp], blockR + blockP);
+    if (raisedRelease[cOp] > release[cOp]) {
+        carlierSearch(
+            in, machine, raisedRelease, tailAfter, processing, tieRank,
+            nodes, nodeLimit, deadline, incumbent
+        );
+    }
+}
+static vector<int> repairMachineOrder(
+    const Graph& graph,
+    const Instance& in,
+    int machine,
+    const vector<int>& proposed
+) {
+    if (int(proposed.size()) != in.jobs) {
+        return {};
+    }
+    vector<int> rank(in.operations, in.jobs * 2);
+    for (int index = 0; index < in.jobs; ++index) {
+        int job = proposed[index];
+        if (job < 0 || job >= in.jobs) {
+            return {};
+        }
+        rank[in.operationOnMachine[machine][job]] = index;
+    }
+    vector<vector<char>> reachable(in.jobs, vector<char>(in.jobs, 0));
+    for (int source = 0; source < in.jobs; ++source) {
+        int sourceOp = in.operationOnMachine[machine][source];
+        vector<int> stack(1, sourceOp);
+        vector<char> seen(in.operations, 0);
+        seen[sourceOp] = 1;
+        while (!stack.empty()) {
+            int op = stack.back();
+            stack.pop_back();
+            auto visit = [&](int successor) {
+                if (successor >= 0 && !seen[successor]) {
+                    seen[successor] = 1;
+                    stack.push_back(successor);
+                }
+            };
+            visit(in.jobSucc[op]);
+            visit(graph.machineSucc[op]);
+        }
+        for (int target = 0; target < in.jobs; ++target) {
+            int targetOp = in.operationOnMachine[machine][target];
+            reachable[source][target] = seen[targetOp] && source != target;
+        }
+    }
+    vector<int> indegree(in.jobs, 0);
+    for (int source = 0; source < in.jobs; ++source) {
+        for (int target = 0; target < in.jobs; ++target) {
+            if (reachable[source][target]) {
+                ++indegree[target];
+            }
+        }
+    }
+    vector<int> result;
+    vector<char> used(in.jobs, 0);
+    result.reserve(in.jobs);
+    for (int step = 0; step < in.jobs; ++step) {
+        int chosen = -1;
+        for (int job = 0; job < in.jobs; ++job) {
+            if (used[job] || indegree[job] != 0) {
+                continue;
+            }
+            if (chosen < 0 || rank[in.operationOnMachine[machine][job]] <
+                                  rank[in.operationOnMachine[machine][chosen]]) {
+                chosen = job;
+            }
+        }
+        if (chosen < 0) {
+            return {};
+        }
+        used[chosen] = 1;
+        result.push_back(chosen);
+        for (int target = 0; target < in.jobs; ++target) {
+            if (reachable[chosen][target]) {
+                --indegree[target];
+            }
+        }
+    }
+    return result;
+}
+static MachineResult solveSingleMachine(
+    Graph& graph,
+    const Instance& in,
+    int machine,
+    uint64_t seed,
+    const Deadline& deadline
+) {
+    MachineResult result;
+    graph.clearMachine(machine);
+    if (!graph.evaluate(true)) {
+        return result;
+    }
+    vector<i64> release(in.operations, 0);
+    vector<i64> tailAfter(in.operations, 0);
+    for (int job = 0; job < in.jobs; ++job) {
+        int op = in.operationOnMachine[machine][job];
+        release[op] = graph.head[op] - in.processing[op];
+        tailAfter[op] = graph.tail[op] - in.processing[op];
+    }
+    vector<int> tieRank(in.operations, 0);
+    uint64_t randomState = seed ^ (uint64_t(machine) << 32);
+    for (int job = 0; job < in.jobs; ++job) {
+        int op = in.operationOnMachine[machine][job];
+        tieRank[op] = int(splitmix64(randomState) & 0x7fffffff);
+    }
+    result = schrageTail(in, machine, release, tailAfter, tieRank, deadline);
+    if (!result.valid) {
+        return result;
+    }
+    int nodeLimit = max(32, min(512, in.jobs * in.jobs * 2));
+    int nodes = 0;
+    carlierSearch(
+        in, machine, release, tailAfter,
+        in.processing, tieRank,
+        nodes, nodeLimit, deadline, result
+    );
+    vector<int> repaired = repairMachineOrder(graph, in, machine, result.order);
+    if (repaired.empty()) {
+        return MachineResult{};
+    }
+    result.order = std::move(repaired);
+    result.objective = sequenceObjective(in, machine, result.order, release, tailAfter);
+    result.valid = true;
+    return result;
+}
+struct CandidateMachine {
+    int machine = -1;
+    vector<int> order;
+    i64 partialMakespan = INF;
+    i64 criticalWeight = 0;
+    i64 load = 0;
+    bool valid = false;
+};
+struct Schedule {
+    Graph graph;
+    vector<vector<int>> order;
+    explicit Schedule(const Instance& in) : graph(in), order(in.machines) {}
+};
+struct Elite {
+    Schedule schedule;
+    uint64_t hash = 0;
+    explicit Elite(const Instance& in) : schedule(in) {}
+};
+static i64 machineLoad(const Instance& in, int machine) {
+    i64 load = 0;
+    for (int job = 0; job < in.jobs; ++job) {
+        load += in.processing[in.operationOnMachine[machine][job]];
+    }
+    return load;
+}
+static vector<int> identityOrder(int jobs) {
+    vector<int> order(jobs);
+    iota(order.begin(), order.end(), 0);
+    return order;
+}
+static CandidateMachine solveUnresolvedMachine(
+    Graph& partial,
+    const Instance& in,
+    int machine,
+    uint64_t seed,
+    const Deadline& deadline
+) {
+    CandidateMachine candidate;
+    candidate.machine = machine;
+    candidate.load = machineLoad(in, machine);
+    vector<int> oldPred;
+    vector<int> oldSucc;
+    oldPred.reserve(in.jobs);
+    oldSucc.reserve(in.jobs);
+    for (int job = 0; job < in.jobs; ++job) {
+        int op = in.operationOnMachine[machine][job];
+        oldPred.push_back(partial.machinePred[op]);
+        oldSucc.push_back(partial.machineSucc[op]);
+    }
+    char oldResolved = partial.resolved[machine];
+    MachineResult oracle = solveSingleMachine(partial, in, machine, seed, deadline);
+    if (oracle.valid) {
+        partial.installMachine(machine, oracle.order);
+        if (partial.evaluate(true)) {
+            candidate.order = oracle.order;
+            candidate.partialMakespan = partial.makespan;
+            for (int job = 0; job < in.jobs; ++job) {
+                int op = in.operationOnMachine[machine][job];
+                if (partial.head[op] + partial.tail[op] -
+                        in.processing[op] == partial.makespan) {
+                    candidate.criticalWeight += in.processing[op];
+                }
+            }
+            candidate.valid = true;
+        }
+    }
+    for (int job = 0; job < in.jobs; ++job) {
+        int op = in.operationOnMachine[machine][job];
+        partial.machinePred[op] = oldPred[job];
+        partial.machineSucc[op] = oldSucc[job];
+    }
+    partial.resolved[machine] = oldResolved;
+    partial.evaluate(true);
+    return candidate;
+}
+static vector<int> fallbackOrder(Graph& partial, const Instance& in, int machine) {
+    partial.clearMachine(machine);
+    if (!partial.evaluate(true)) {
+        return {};
+    }
+    vector<int> proposed = identityOrder(in.jobs);
+    return repairMachineOrder(partial, in, machine, proposed);
+}
+static vector<vector<int>> shiftingBottleneck(
+    const Instance& in,
+    uint64_t seed,
+    const Deadline& deadline
+) {
+    Graph partial(in);
+    vector<vector<int>> order(in.machines);
+    vector<char> fixed(in.machines, 0);
+    if (!partial.evaluate(true)) {
+        return {};
+    }
+    for (int step = 0; step < in.machines; ++step) {
+        if (deadline.expired()) {
+            return {};
+        }
+        CandidateMachine best;
+        for (int machine = 0; machine < in.machines; ++machine) {
+            if (fixed[machine]) {
+                continue;
+            }
+            CandidateMachine candidate = solveUnresolvedMachine(
+                partial, in, machine,
+                seed ^ (uint64_t(step + 1) << 40) ^
+                    uint64_t(machine * 0x9e3779b9U),
+                deadline
+            );
+            if (!candidate.valid) {
+                continue;
+            }
+            if (!best.valid ||
+                candidate.partialMakespan > best.partialMakespan ||
+                (candidate.partialMakespan == best.partialMakespan &&
+                 candidate.criticalWeight > best.criticalWeight) ||
+                (candidate.partialMakespan == best.partialMakespan &&
+                 candidate.criticalWeight == best.criticalWeight &&
+                 candidate.load > best.load)) {
+                best = std::move(candidate);
+            }
+        }
+        if (!best.valid) {
+            for (int machine = 0; machine < in.machines; ++machine) {
+                if (fixed[machine]) {
+                    continue;
+                }
+                vector<int> safe = fallbackOrder(partial, in, machine);
+                if (!safe.empty()) {
+                    best.machine = machine;
+                    best.order = std::move(safe);
+                    best.valid = true;
+                    break;
+                }
+            }
+        }
+        if (!best.valid) {
+            return {};
+        }
+        fixed[best.machine] = 1;
+        order[best.machine] = best.order;
+        partial.installMachine(best.machine, best.order);
+        if (!partial.evaluate(true)) {
+            return {};
+        }
+    }
+    return partial.isComplete() ? order : vector<vector<int>>{};
+}
+static vector<int> orderFromGraph(
+    const Graph& graph,
+    const Instance& in,
+    int machine
+) {
+    vector<int> result;
+    result.reserve(in.jobs);
+    int first = -1;
+    for (int job = 0; job < in.jobs; ++job) {
+        int op = in.operationOnMachine[machine][job];
+        if (graph.machinePred[op] < 0) {
+            first = op;
+            break;
+        }
+    }
+    vector<char> seen(in.jobs, 0);
+    int op = first;
+    while (op >= 0) {
+        int job = op / in.machines;
+        if (job < 0 || job >= in.jobs || seen[job]) {
+            return {};
+        }
+        seen[job] = 1;
+        result.push_back(job);
+        op = graph.machineSucc[op];
+    }
+    return int(result.size()) == in.jobs ? result : vector<int>{};
+}
+static bool reoptimizeMachine(
+    Graph& graph,
+    const Instance& in,
+    int machine,
+    i64 incumbentMakespan,
+    const Deadline& deadline
+) {
+    vector<int> oldOrder = orderFromGraph(graph, in, machine);
+    if (oldOrder.empty()) {
+        return false;
+    }
+    MachineResult candidate = solveSingleMachine(
+        graph, in, machine,
+        0x9e3779b97f4a7c15ULL ^ uint64_t(machine),
+        deadline
+    );
+    if (!candidate.valid) {
+        graph.installMachine(machine, oldOrder);
+        graph.evaluate(true);
+        return false;
+    }
+    graph.installMachine(machine, candidate.order);
+    if (graph.evaluate(true) && graph.makespan < incumbentMakespan) {
+        return true;
+    }
+    graph.installMachine(machine, oldOrder);
+    graph.evaluate(true);
+    return false;
+}
+static vector<int> chooseDestroySet(
+    const Graph& graph,
+    const Instance& in,
+    uint64_t& rng,
+    int round
+) {
+    struct Score {
+        i64 critical = 0;
+        i64 load = 0;
+        int machine = -1;
+    };
+    vector<Score> scores;
+    scores.reserve(in.machines);
+    for (int machine = 0; machine < in.machines; ++machine) {
+        i64 critical = 0;
+        i64 load = machineLoad(in, machine);
+        for (int job = 0; job < in.jobs; ++job) {
+            int op = in.operationOnMachine[machine][job];
+            if (graph.head[op] + graph.tail[op] -
+                    in.processing[op] == graph.makespan) {
+                critical += in.processing[op];
+            }
+        }
+        scores.push_back({critical, load, machine});
+    }
+    sort(scores.begin(), scores.end(), [&](const Score& left, const Score& right) {
+        if (left.critical != right.critical) {
+            return left.critical > right.critical;
+        }
+        if (left.load != right.load) {
+            return left.load > right.load;
+        }
+        return left.machine < right.machine;
+    });
+    int count = 1 + min(4, round / 3);
+    count = min(count, in.machines);
+    vector<int> result;
+    result.reserve(count);
+    for (int index = 0; index < count; ++index) {
+        result.push_back(scores[index].machine);
+    }
+    if (count > 1 && (splitmix64(rng) & 3ULL) == 0) {
+        swap(result.back(), result[(splitmix64(rng) % result.size())]);
+    }
+    return result;
+}
+static uint64_t orderHash(
+    const Instance& in,
+    const Graph& graph
+) {
+    uint64_t hash = 1469598103934665603ULL;
+    for (int machine = 0; machine < in.machines; ++machine) {
+        for (int job : orderFromGraph(graph, in, machine)) {
+            hash ^= uint64_t(job + 1);
+            hash *= 1099511628211ULL;
+        }
+    }
+    return hash;
+}
+static void rememberElite(
+    vector<Elite>& pool,
+    const Instance& in,
+    const Graph& graph
+) {
+    uint64_t hash = orderHash(in, graph);
+    for (const Elite& elite : pool) {
+        if (elite.hash == hash) {
+            return;
+        }
+    }
+    if (pool.size() >= 6) {
+        pool.erase(pool.begin());
+    }
+    pool.emplace_back(in);
+    Elite& elite = pool.back();
+    elite.hash = hash;
+    elite.schedule.graph = graph;
+    elite.schedule.order.resize(in.machines);
+    for (int machine = 0; machine < in.machines; ++machine) {
+        elite.schedule.order[machine] = orderFromGraph(graph, in, machine);
+    }
+}
+static bool topologicalRepair(
+    Graph& graph,
+    const Instance& in,
+    vector<Elite>& pool,
+    uint64_t& rng,
+    const Deadline& deadline
+) {
+    if (!graph.isComplete() || !graph.evaluate(true) || deadline.expired()) {
+        return false;
+    }
+    i64 oldMakespan = graph.makespan;
+    vector<vector<int>> oldOrder(in.machines);
+    for (int machine = 0; machine < in.machines; ++machine) {
+        oldOrder[machine] = orderFromGraph(graph, in, machine);
+    }
+    static int roundCounter = 0;
+    vector<int> removed = chooseDestroySet(graph, in, rng, roundCounter++);
+    if (removed.empty()) {
+        return false;
+    }
+    for (int machine : removed) {
+        graph.clearMachine(machine);
+    }
+    if (!graph.evaluate(true)) {
+        for (int machine = 0; machine < in.machines; ++machine) {
+            graph.installMachine(machine, oldOrder[machine]);
+        }
+        graph.evaluate(true);
+        return false;
+    }
+    vector<vector<int>> repaired(in.machines);
+    bool foundRepair = false;
+    i64 bestMakespan = oldMakespan;
+    const int trials = 4;
+    for (int trial = 0; trial < trials && !deadline.expired(); ++trial) {
+        const int n = in.operations;
+        vector<int> indegree(n, 0);
+        vector<int> ready;
+        ready.reserve(n);
+        for (int op = 0; op < n; ++op) {
+            indegree[op] = (in.jobPred[op] >= 0) +
+                (graph.machinePred[op] >= 0);
+            if (indegree[op] == 0) {
+                ready.push_back(op);
+            }
+        }
+        vector<i64> priority(n, 0);
+        vector<i64> releaseTime(n, 0);
+        vector<i64> machineReady(in.machines, 0);
+        for (int op = 0; op < n; ++op) {
+            i64 critical = graph.head[op] + graph.tail[op] -
+                in.processing[op];
+            if (trial == 0) {
+                priority[op] = graph.tail[op];
+            } else if (trial == 1) {
+                priority[op] = critical;
+            } else if (trial == 2) {
+                priority[op] = -graph.head[op];
+            } else {
+                priority[op] = i64(splitmix64(rng));
+            }
+        }
+        vector<vector<int>> order(in.machines);
+        for (int machine : removed) {
+            order[machine].reserve(in.jobs);
+        }
+        int popped = 0;
+        while (!ready.empty() && !deadline.expired()) {
+            auto finishAt = [&](int op) {
+                return max(
+                    releaseTime[op], machineReady[in.machineOf[op]]
+                ) + in.processing[op];
+            };
+            i64 earliest = INF;
+            int selectedMachine = -1;
+            int firstSlot = -1;
+            for (int slot = 0; slot < int(ready.size());
+                 ++slot) {
+                int op = ready[slot];
+                i64 finish = finishAt(op);
+                if (finish < earliest ||
+                    (finish == earliest &&
+                     (firstSlot < 0 || priority[op] >
+                          priority[ready[firstSlot]]))) {
+                    earliest = finish;
+                    selectedMachine = in.machineOf[op];
+                    firstSlot = slot;
+                }
+            }
+            int conflictSlot = -1;
+            for (int slot = 0; slot < int(ready.size());
+                 ++slot) {
+                int op = ready[slot];
+                if (in.machineOf[op] != selectedMachine ||
+                    releaseTime[op] >= earliest) {
+                    continue;
+                }
+                if (conflictSlot < 0 || priority[op] >
+                        priority[ready[conflictSlot]] ||
+                    (priority[op] == priority[ready[conflictSlot]] &&
+                     finishAt(op) < finishAt(ready[conflictSlot]))) {
+                    conflictSlot = slot;
+                }
+            }
+            int bestSlot = conflictSlot >= 0 ? conflictSlot : firstSlot;
+            int op = ready[bestSlot];
+            ready[bestSlot] = ready.back();
+            ready.pop_back();
+            ++popped;
+            i64 finish = max(
+                releaseTime[op], machineReady[in.machineOf[op]]
+            ) + in.processing[op];
+            machineReady[in.machineOf[op]] = finish;
+            int machine = in.machineOf[op];
+            if (find(removed.begin(), removed.end(), machine) !=
+                    removed.end()) {
+                order[machine].push_back(op / in.machines);
+            }
+            auto relax = [&](int successor) {
+                if (successor >= 0) {
+                    releaseTime[successor] = max(
+                        releaseTime[successor], finish
+                    );
+                }
+                if (successor >= 0 && --indegree[successor] == 0) {
+                    ready.push_back(successor);
+                }
+            };
+            relax(in.jobSucc[op]);
+            relax(graph.machineSucc[op]);
+        }
+        if (popped != n) {
+            continue;
+        }
+        Graph candidate = graph;
+        bool complete = true;
+        for (int machine : removed) {
+            if (int(order[machine].size()) != in.jobs) {
+                complete = false;
+                break;
+            }
+            candidate.installMachine(machine, order[machine]);
+        }
+        if (complete && candidate.evaluate(true) &&
+            candidate.makespan < bestMakespan) {
+            bestMakespan = candidate.makespan;
+            repaired = std::move(order);
+            foundRepair = true;
+        }
+    }
+    if (!foundRepair) {
+        for (int machine = 0; machine < in.machines; ++machine) {
+            graph.installMachine(machine, oldOrder[machine]);
+        }
+        graph.evaluate(true);
+        return false;
+    }
+    for (int machine : removed) {
+        graph.installMachine(machine, repaired[machine]);
+    }
+    graph.evaluate(true);
+    if (graph.makespan < oldMakespan) {
+        rememberElite(pool, in, graph);
+        return true;
+    }
+    for (int machine = 0; machine < in.machines; ++machine) {
+        graph.installMachine(machine, oldOrder[machine]);
+    }
+    graph.evaluate(true);
+    return false;
+}
+static vector<vector<int>> criticalMoves(
+    const Graph& graph,
+    const Instance& in
+) {
+    vector<vector<int>> current(in.machines);
+    for (int machine = 0; machine < in.machines; ++machine) {
+        current[machine] = orderFromGraph(graph, in, machine);
+    }
+    return current;
+}
+static bool polish(
+    Graph& graph,
+    const Instance& in,
+    const Deadline& deadline
+) {
+    if (!graph.isComplete() || !graph.evaluate(true)) {
+        return false;
+    }
+    bool improvedAny = false;
+    for (int pass = 0; pass < 24 && !deadline.expired(); ++pass) {
+        vector<vector<int>> current = criticalMoves(graph, in);
+        i64 base = graph.makespan;
+        i64 best = base;
+        int bestMachine = -1;
+        vector<int> bestOrder;
+        for (int machine = 0; machine < in.machines; ++machine) {
+            const vector<int>& sequence = current[machine];
+            int begin = 0;
+            while (begin < in.jobs) {
+                int beginOp = in.operationOnMachine[machine][sequence[begin]];
+                bool beginCritical =
+                    graph.head[beginOp] + graph.tail[beginOp] -
+                        in.processing[beginOp] == graph.makespan;
+                if (!beginCritical) {
+                    ++begin;
+                    continue;
+                }
+                int end = begin;
+                while (end + 1 < in.jobs) {
+                    int op = in.operationOnMachine[machine][sequence[end + 1]];
+                    if (graph.head[op] + graph.tail[op] -
+                            in.processing[op] != graph.makespan) {
+                        break;
+                    }
+                    ++end;
+                }
+                if (end > begin) {
+                    vector<vector<int>> candidates;
+                    vector<int> swapped = sequence;
+                    swap(swapped[begin], swapped[begin + 1]);
+                    candidates.push_back(std::move(swapped));
+                    swapped = sequence;
+                    swap(swapped[end - 1], swapped[end]);
+                    candidates.push_back(std::move(swapped));
+                    for (int target = begin + 1; target <= end; ++target) {
+                        vector<int> moved = sequence;
+                        int job = moved[begin];
+                        moved.erase(moved.begin() + begin);
+                        moved.insert(moved.begin() + target, job);
+                        candidates.push_back(std::move(moved));
+                    }
+                    for (int target = begin; target < end; ++target) {
+                        vector<int> moved = sequence;
+                        int job = moved[end];
+                        moved.erase(moved.begin() + end);
+                        moved.insert(moved.begin() + target, job);
+                        candidates.push_back(std::move(moved));
+                    }
+                    for (const vector<int>& candidate : candidates) {
+                        graph.installMachine(machine, candidate);
+                        if (graph.evaluate(false) && graph.makespan < best) {
+                            best = graph.makespan;
+                            bestMachine = machine;
+                            bestOrder = candidate;
+                        }
+                    }
+                    graph.installMachine(machine, sequence);
+                    graph.evaluate(true);
+                }
+                begin = end + 1;
+            }
+        }
+        if (bestMachine < 0) {
+            break;
+        }
+        graph.installMachine(bestMachine, bestOrder);
+        if (!graph.evaluate(true)) {
+            break;
+        }
+        improvedAny = true;
+    }
+    return improvedAny;
+}
+struct TabuMove {
+    int machine = -1;
+    int from = -1;
+    int to = -1;
+    int job = -1;
+    int anchor = -1;
+    i64 estimate = INF;
+    int serial = 0;
+};
+static vector<int> movedOrder(
+    const vector<int>& sequence,
+    int from,
+    int to
+) {
+    vector<int> result = sequence;
+    int job = result[from];
+    result.erase(result.begin() + from);
+    result.insert(result.begin() + to, job);
+    return result;
+}
+static i64 estimateMove(
+    const Graph& graph,
+    const Instance& in,
+    int machine,
+    const vector<int>& sequence,
+    int from,
+    int to
+) {
+    int lo = min(from, to);
+    int hi = max(from, to);
+    static vector<int> segment;
+    static vector<i64> completion;
+    segment.clear();
+    segment.reserve(in.jobs);
+    if (from < to) {
+        segment.push_back(sequence[from]);
+        for (int index = from + 1; index <= to; ++index) {
+            segment.push_back(sequence[index]);
+        }
+        rotate(segment.begin(), segment.begin() + 1, segment.end());
+    } else {
+        segment.push_back(sequence[from]);
+        for (int index = to; index < from; ++index) {
+            segment.push_back(sequence[index]);
+        }
+    }
+    completion.resize(segment.size());
+    i64 previous = lo > 0
+        ? graph.head[in.operationOnMachine[machine][sequence[lo - 1]]]
+        : 0;
+    for (size_t index = 0; index < segment.size(); ++index) {
+        int op = in.operationOnMachine[machine][segment[index]];
+        i64 release = in.jobPred[op] >= 0 ? graph.head[in.jobPred[op]] : 0;
+        previous = max(previous, release) + in.processing[op];
+        completion[index] = previous;
+    }
+    i64 nextTail = hi + 1 < in.jobs
+        ? graph.tail[in.operationOnMachine[machine][sequence[hi + 1]]]
+        : 0;
+    i64 estimate = 0;
+    for (int index = int(segment.size()) - 1; index >= 0; --index) {
+        int op = in.operationOnMachine[machine][segment[index]];
+        i64 successorTail = in.jobSucc[op] >= 0 ? graph.tail[in.jobSucc[op]] : 0;
+        i64 after = max(nextTail, successorTail);
+        i64 length = completion[index] - in.processing[op] +
+                     in.processing[op] + after;
+        estimate = max(estimate, length);
+        nextTail = in.processing[op] + after;
+    }
+    return estimate;
+}
+static i64 incrementalAfterMove(
+    Graph& graph,
+    const Instance& in,
+    const vector<vector<int>>& order,
+    const TabuMove& move
+) {
+    int machine = move.machine;
+    const vector<int>& sequence = order[machine];
+    int lo = min(move.from, move.to);
+    int hi = max(move.from, move.to);
+    int first = max(0, lo - 1);
+    int last = min(in.jobs - 1, hi + 1);
+    for (int index = first; index <= last; ++index) {
+        int op = in.operationOnMachine[machine][sequence[index]];
+        graph.machinePred[op] = index > 0
+            ? in.operationOnMachine[machine][sequence[index - 1]] : -1;
+        graph.machineSucc[op] = index + 1 < in.jobs
+            ? in.operationOnMachine[machine][sequence[index + 1]] : -1;
+    }
+    static vector<int> work;
+    static vector<char> queued;
+    if (int(queued.size()) != in.operations) {
+        queued.assign(in.operations, 0);
+    }
+    work.clear();
+    queued.assign(in.operations, 0);
+    auto pushForward = [&](int op) {
+        if (op >= 0 && !queued[op]) {
+            queued[op] = 1;
+            work.push_back(op);
+        }
+    };
+    for (int index = lo; index <= min(in.jobs - 1, hi + 1); ++index) {
+        pushForward(in.operationOnMachine[machine][sequence[index]]);
+    }
+    int pops = 0;
+    size_t cursor = 0;
+    const int limit = max(64, 16 * in.operations);
+    while (cursor < work.size()) {
+        int op = work[cursor++];
+        queued[op] = 0;
+        if (++pops > limit) {
+            for (int pending : work) {
+                queued[pending] = 0;
+            }
+            return -2;
+        }
+        i64 before = in.jobPred[op] >= 0 ? graph.head[in.jobPred[op]] : 0;
+        if (graph.machinePred[op] >= 0) {
+            before = max(before, graph.head[graph.machinePred[op]]);
+        }
+        i64 finish = before + in.processing[op];
+        if (finish == graph.head[op]) {
+            continue;
+        }
+        graph.head[op] = finish;
+        pushForward(in.jobSucc[op]);
+        pushForward(graph.machineSucc[op]);
+    }
+    work.clear();
+    auto pushBackward = [&](int op) {
+        if (op >= 0 && !queued[op]) {
+            queued[op] = 1;
+            work.push_back(op);
+        }
+    };
+    for (int index = hi; index >= max(0, lo - 1); --index) {
+        pushBackward(in.operationOnMachine[machine][sequence[index]]);
+    }
+    cursor = 0;
+    pops = 0;
+    while (cursor < work.size()) {
+        int op = work[cursor++];
+        queued[op] = 0;
+        if (++pops > limit) {
+            for (int pending : work) {
+                queued[pending] = 0;
+            }
+            return -2;
+        }
+        i64 after = in.jobSucc[op] >= 0 ? graph.tail[in.jobSucc[op]] : 0;
+        if (graph.machineSucc[op] >= 0) {
+            after = max(after, graph.tail[graph.machineSucc[op]]);
+        }
+        i64 length = in.processing[op] + after;
+        if (length == graph.tail[op]) {
+            continue;
+        }
+        graph.tail[op] = length;
+        pushBackward(in.jobPred[op]);
+        pushBackward(graph.machinePred[op]);
+    }
+    graph.makespan = 0;
+    for (i64 finish : graph.head) {
+        graph.makespan = max(graph.makespan, finish);
+    }
+    return graph.makespan;
+}
+static bool tabuPolish(
+    Graph& graph,
+    const Instance& in,
+    const Deadline& deadline
+) {
+    if (!graph.isComplete() || !graph.evaluate(true)) {
+        return false;
+    }
+    vector<vector<int>> current(in.machines);
+    for (int machine = 0; machine < in.machines; ++machine) {
+        current[machine] = orderFromGraph(graph, in, machine);
+    }
+    vector<vector<int>> best = current;
+    i64 bestMakespan = graph.makespan;
+    vector<int> tabuJob(size_t(in.machines) * in.jobs, 0);
+    int iteration = 0;
+    auto lastImprove = chrono::steady_clock::now();
+    auto moveIsTabu = [&](const TabuMove& move) {
+        return tabuJob[size_t(move.machine) * in.jobs + move.job] > iteration;
+    };
+    auto markMove = [&](const TabuMove& move, int until) {
+        tabuJob[size_t(move.machine) * in.jobs + move.job] = until;
+    };
+    vector<TabuMove> moves;
+    moves.reserve(size_t(in.machines) * in.jobs * 2);
+    uint64_t tabuRng = 0x9e3779b97f4a7c15ULL;
+    auto nextTabuRandom = [&]() {
+        tabuRng ^= tabuRng << 13;
+        tabuRng ^= tabuRng >> 7;
+        tabuRng ^= tabuRng << 17;
+        return tabuRng;
+    };
+    auto dynamicTenure = [&]() {
+        i64 stagnantMs = chrono::duration_cast<chrono::milliseconds>(
+            chrono::steady_clock::now() - lastImprove
+        ).count();
+        int minimum = 8;
+        int span = max(4, in.jobs / 3);
+        if (stagnantMs >= 120) {
+            minimum = 15 + int(min<i64>(6, (stagnantMs - 120) / 250));
+            span = max(4, in.jobs / 2);
+        } else if (stagnantMs > 30) {
+            int fraction = int((stagnantMs - 30) * 100 / 90);
+            minimum = 8 + (15 - 8) * fraction / 100;
+            span = max(4, in.jobs / 3) +
+                (max(4, in.jobs / 2) - max(4, in.jobs / 3)) * fraction / 100;
+        }
+        return minimum + int(nextTabuRandom() % uint64_t(span));
+    };
+    auto restart = [&]() {
+        current = best;
+        for (int kick = 0; kick < min(3, in.machines); ++kick) {
+            int machine = (iteration + kick * 7) % in.machines;
+            if (current[machine].size() < 2) {
+                continue;
+            }
+            int from = (iteration + kick * 5) % current[machine].size();
+            int to = (from + 1 + (iteration %
+                max(1, int(current[machine].size()) - 1))) %
+                current[machine].size();
+            current[machine] = movedOrder(current[machine], from, to);
+        }
+        for (int machine = 0; machine < in.machines; ++machine) {
+            graph.installMachine(machine, current[machine]);
+        }
+        if (!graph.evaluate(true)) {
+            current = best;
+            for (int machine = 0; machine < in.machines; ++machine) {
+                graph.installMachine(machine, current[machine]);
+            }
+            graph.evaluate(true);
+        }
+        fill(tabuJob.begin(), tabuJob.end(), 0);
+        lastImprove = chrono::steady_clock::now();
+    };
+    while (!deadline.expired() && iteration < 1000000) {
+        ++iteration;
+        moves.clear();
+        for (int machine = 0; machine < in.machines; ++machine) {
+            const vector<int>& sequence = current[machine];
+            int begin = 0;
+            while (begin < in.jobs) {
+                int op = in.operationOnMachine[machine][sequence[begin]];
+                if (graph.head[op] + graph.tail[op] -
+                        in.processing[op] != graph.makespan) {
+                    ++begin;
+                    continue;
+                }
+                int end = begin;
+                while (end + 1 < in.jobs) {
+                    int nextOp = in.operationOnMachine[machine][sequence[end + 1]];
+                    if (graph.head[nextOp] + graph.tail[nextOp] -
+                            in.processing[nextOp] != graph.makespan) {
+                        break;
+                    }
+                    ++end;
+                }
+                if (end > begin) {
+                    for (int target = begin + 1; target <= end; ++target) {
+                        moves.push_back({
+                            machine, target, begin, sequence[target], sequence[begin],
+                            estimateMove(graph, in, machine, sequence, target, begin)
+                        });
+                    }
+                    for (int target = begin; target < end; ++target) {
+                        if (target == begin && end == begin + 1) {
+                            continue;
+                        }
+                        moves.push_back({
+                            machine, target, end, sequence[target], sequence[end],
+                            estimateMove(graph, in, machine, sequence, target, end)
+                        });
+                    }
+                }
+                begin = end + 1;
+            }
+        }
+        if (moves.empty()) {
+            restart();
+            continue;
+        }
+        for (size_t index = 0; index < moves.size(); ++index) {
+            moves[index].serial = int(index);
+        }
+        auto moveLess = [](const TabuMove& left, const TabuMove& right) {
+            if (left.estimate != right.estimate) {
+                return left.estimate < right.estimate;
+            }
+            return left.serial < right.serial;
+        };
+        size_t shortlist = min<size_t>(moves.size(), 24);
+        if (shortlist == moves.size()) {
+            sort(moves.begin(), moves.end(), moveLess);
+        } else {
+            partial_sort(moves.begin(), moves.begin() + shortlist, moves.end(), moveLess);
+        }
+        TabuMove selected;
+        bool found = false;
+        size_t limit = shortlist;
+        for (int pass = 0; pass < 2 && !found; ++pass) {
+            for (size_t index = 0; index < limit; ++index) {
+                const TabuMove& move = moves[index];
+                bool isTabu = moveIsTabu(move);
+                if (pass == 0 && isTabu && move.estimate >= bestMakespan) {
+                    continue;
+                }
+                selected = move;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            restart();
+            continue;
+        }
+        vector<int> oldOrder = current[selected.machine];
+        current[selected.machine] = movedOrder(
+            current[selected.machine], selected.from, selected.to
+        );
+        i64 candidateMakespan = incrementalAfterMove(graph, in, current, selected);
+        if (candidateMakespan == -2) {
+            candidateMakespan = graph.evaluate(true) ? graph.makespan : -1;
+        }
+        if (candidateMakespan < 0) {
+            current[selected.machine] = oldOrder;
+            graph.installMachine(selected.machine, oldOrder);
+            graph.evaluate(true);
+            continue;
+        }
+        markMove(selected, iteration + dynamicTenure());
+        graph.makespan = candidateMakespan;
+        if (candidateMakespan < bestMakespan) {
+            bestMakespan = candidateMakespan;
+            best = current;
+            lastImprove = chrono::steady_clock::now();
+        }
+        i64 stagnantMs = chrono::duration_cast<chrono::milliseconds>(
+            chrono::steady_clock::now() - lastImprove
+        ).count();
+        if (stagnantMs > 400) {
+            restart();
+        }
+    }
+    for (int machine = 0; machine < in.machines; ++machine) {
+        graph.installMachine(machine, best[machine]);
+    }
+    graph.evaluate(true);
+    return graph.makespan == bestMakespan;
+}
+struct BeamState {
+    vector<int> next;
+    vector<i64> jr, mr, rw, rl;
+    vector<vector<int>> order;
+    i64 lb = 0;
+};
+static i64 beamBound(const BeamState& s) {
+    i64 b = 0;
+    for (size_t j = 0; j < s.jr.size(); ++j) {
+        b = max(b, s.jr[j] + s.rw[j]);
+    }
+    for (size_t m = 0; m < s.mr.size(); ++m) {
+        b = max(b, s.mr[m] + s.rl[m]);
+    }
+    return b;
+}
+static vector<vector<int>> operationBeamSeed(
+    const Instance& in, const Deadline& deadline
+) {
+    if (deadline.expired()) return {};
+    BeamState root;
+    root.next.assign(in.jobs, 0);
+    root.jr.assign(in.jobs, 0);
+    root.mr.assign(in.machines, 0);
+    root.rw.assign(in.jobs, 0);
+    root.rl.assign(in.machines, 0);
+    root.order.assign(in.machines, {});
+    for (int j = 0; j < in.jobs; ++j) {
+        for (int k = 0; k < in.machines; ++k) {
+            int op = j * in.machines + k;
+            root.rw[j] += in.processing[op];
+            root.rl[in.machineOf[op]] += in.processing[op];
+        }
+    }
+    root.lb = beamBound(root);
+    vector<BeamState> beam(1);
+    beam[0] = std::move(root);
+    for (int depth = 0;
+         depth < in.operations && !deadline.expired(); ++depth) {
+        vector<BeamState> kids;
+        for (const BeamState& s : beam) {
+            i64 ef = INF;
+            int sm = -1;
+            for (int j = 0; j < in.jobs; ++j) {
+                if (s.next[j] >= in.machines) continue;
+                int op = j * in.machines + s.next[j];
+                int m = in.machineOf[op];
+                i64 f = max(s.jr[j], s.mr[m]) + in.processing[op];
+                if (f < ef || (f == ef && (sm < 0 || m < sm))) {
+                    ef = f;
+                    sm = m;
+                }
+            }
+            for (int j = 0; j < in.jobs; ++j) {
+                if (s.next[j] >= in.machines) continue;
+                int op = j * in.machines + s.next[j];
+                int m = in.machineOf[op];
+                if (m != sm || max(s.jr[j], s.mr[m]) >= ef) continue;
+                BeamState child = s;
+                i64 f = max(child.jr[j], child.mr[m]) + in.processing[op];
+                child.order[m].push_back(j);
+                child.jr[j] = child.mr[m] = f;
+                child.rw[j] -= in.processing[op];
+                child.rl[m] -= in.processing[op];
+                ++child.next[j];
+                child.lb = beamBound(child);
+                kids.push_back(std::move(child));
+            }
+        }
+        if (kids.empty()) return {};
+        sort(kids.begin(), kids.end(), [](const BeamState& a,
+                                         const BeamState& b) {
+            return a.lb < b.lb;
+        });
+        if (kids.size() > 8) kids.resize(8);
+        beam = std::move(kids);
+    }
+    for (const vector<int>& sequence : beam.front().order) {
+        if (int(sequence.size()) != in.jobs) return {};
+    }
+    return beam.front().order;
+}
+static i64 evaluateJobPermutation(
+    const Instance& in,
+    const vector<int>& permutation,
+    int length
+) {
+    vector<i64> machineReady(in.machines, 0);
+    i64 makespan = 0;
+    for (int index = 0; index < length; ++index) {
+        int job = permutation[index];
+        i64 jobReady = 0;
+        for (int k = 0; k < in.machines; ++k) {
+            int op = job * in.machines + k;
+            int machine = in.machineOf[op];
+            i64 start = max(jobReady, machineReady[machine]);
+            jobReady = start + in.processing[op];
+            machineReady[machine] = jobReady;
+        }
+        makespan = max(makespan, jobReady);
+    }
+    return makespan;
+}
+static vector<int> nehBuild(
+    const Instance& in,
+    const vector<int>& inputOrder
+) {
+    vector<int> result;
+    result.reserve(in.jobs);
+    for (int job : inputOrder) {
+        i64 bestMakespan = INF;
+        int bestPosition = 0;
+        for (int position = 0; position <= int(result.size()); ++position) {
+            vector<int> candidate = result;
+            candidate.insert(candidate.begin() + position, job);
+            i64 makespan = evaluateJobPermutation(
+                in, candidate, int(candidate.size())
+            );
+            if (makespan < bestMakespan) {
+                bestMakespan = makespan;
+                bestPosition = position;
+            }
+        }
+        result.insert(result.begin() + bestPosition, job);
+    }
+    return result;
+}
+static void improveJobPermutation(
+    const Instance& in,
+    vector<int>& permutation,
+    const Deadline& deadline
+) {
+    i64 current = evaluateJobPermutation(in, permutation, in.jobs);
+    for (int pass = 0; pass < 8 && !deadline.expired(); ++pass) {
+        bool improved = false;
+        for (int from = 0; from < in.jobs && !deadline.expired(); ++from) {
+            int job = permutation[from];
+            vector<int> without = permutation;
+            without.erase(without.begin() + from);
+            i64 best = current;
+            int bestPosition = from;
+            for (int position = 0; position <= in.jobs - 1; ++position) {
+                vector<int> candidate = without;
+                candidate.insert(candidate.begin() + position, job);
+                i64 makespan = evaluateJobPermutation(in, candidate, in.jobs);
+                if (makespan < best) {
+                    best = makespan;
+                    bestPosition = position;
+                }
+            }
+            if (best < current) {
+                permutation = without;
+                permutation.insert(permutation.begin() + bestPosition, job);
+                current = best;
+                improved = true;
+            }
+        }
+        if (!improved) {
+            break;
+        }
+    }
+}
+static Instance readInstance() {
+    Instance in;
+    if (!(cin >> in.jobs >> in.machines)) {
+        return in;
+    }
+    in.operations = in.jobs * in.machines;
+    in.machineOf.assign(in.operations, -1);
+    in.jobPred.assign(in.operations, -1);
+    in.jobSucc.assign(in.operations, -1);
+    in.processing.assign(in.operations, 0);
+    in.operationOnMachine.assign(in.machines, vector<int>(in.jobs, -1));
+    for (int job = 0; job < in.jobs; ++job) {
+        for (int k = 0; k < in.machines; ++k) {
+            int machine;
+            i64 processing;
+            cin >> machine >> processing;
+            int op = job * in.machines + k;
+            in.machineOf[op] = machine;
+            in.processing[op] = processing;
+            in.operationOnMachine[machine][job] = op;
+            if (k > 0) {
+                in.jobPred[op] = op - 1;
+            }
+            if (k + 1 < in.machines) {
+                in.jobSucc[op] = op + 1;
+            }
+        }
+    }
+    return in;
+}
+static vector<vector<int>> dispatchSeed(const Instance& in, int mode) {
+    vector<vector<int>> order(in.machines);
+    vector<int> next(in.jobs, 0);
+    vector<i64> jobFree(in.jobs, 0);
+    vector<i64> machineFree(in.machines, 0);
+    vector<i64> remaining(in.jobs, 0);
+    for (int job = 0; job < in.jobs; ++job) {
+        for (int k = 0; k < in.machines; ++k) {
+            remaining[job] += in.processing[job * in.machines + k];
+        }
+    }
+    for (int scheduled = 0; scheduled < in.operations; ++scheduled) {
+        int chosen = -1;
+        i64 chosenStart = 0;
+        i64 chosenFinish = 0;
+        i64 chosenProcessing = 0;
+        i64 chosenRemaining = 0;
+        for (int job = 0; job < in.jobs; ++job) {
+            if (next[job] >= in.machines) {
+                continue;
+            }
+            int op = job * in.machines + next[job];
+            int machine = in.machineOf[op];
+            i64 start = max(jobFree[job], machineFree[machine]);
+            i64 finish = start + in.processing[op];
+            i64 processing = in.processing[op];
+            bool better = chosen < 0 || finish < chosenFinish;
+            if (!better && finish == chosenFinish) {
+                if (mode == 1) {
+                    better = processing > chosenProcessing;
+                } else if (mode == 2) {
+                    better = processing < chosenProcessing;
+                } else if (mode == 3) {
+                    better = remaining[job] > chosenRemaining;
+                } else if (mode == 4) {
+                    better = start < chosenStart;
+                } else if (mode == 5) {
+                    better = ((job * 1315423911u + machine * 2654435761u) &
+                              1u) != 0;
+                } else {
+                    better = remaining[job] < chosenRemaining;
+                }
+            }
+            if (better) {
+                chosen = job;
+                chosenStart = start;
+                chosenFinish = finish;
+                chosenProcessing = processing;
+                chosenRemaining = remaining[job];
+            }
+        }
+        if (chosen < 0) {
+            return {};
+        }
+        int op = chosen * in.machines + next[chosen];
+        int machine = in.machineOf[op];
+        order[machine].push_back(chosen);
+        jobFree[chosen] = chosenFinish;
+        machineFree[machine] = chosenFinish;
+        remaining[chosen] -= in.processing[op];
+        ++next[chosen];
+    }
+    return order;
+}
+static void emit(const Instance& in, const vector<vector<int>>& order) {
+    for (int machine = 0; machine < in.machines; ++machine) {
+        for (int i = 0; i < in.jobs; ++i) {
+            if (i) {
+                cout << ' ';
+            }
+            cout << order[machine][i];
+        }
+        cout << '\n';
+    }
+}
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+    Instance in = readInstance();
+    if (in.jobs <= 0 || in.machines <= 0) {
+        return 0;
+    }
+    auto start = chrono::steady_clock::now();
+    Deadline deadline{start + chrono::milliseconds(955)};
+    Deadline seedDeadline{start + chrono::milliseconds(180)};
+    Deadline constructionDeadline{start + chrono::milliseconds(300)};
+    vector<vector<int>> best;
+    i64 bestMakespan = INF;
+    struct SeedCandidate {
+        i64 makespan = INF;
+        uint64_t hash = 0;
+        vector<vector<int>> order;
+    };
+    vector<SeedCandidate> seedCandidates;
+    auto consider = [&](const vector<vector<int>>& candidate,
+                        bool archive = true) {
+        if (int(candidate.size()) != in.machines) {
+            return;
+        }
+        Graph graph(in);
+        for (int machine = 0; machine < in.machines; ++machine) {
+            graph.installMachine(machine, candidate[machine]);
+        }
+        if (graph.evaluate(false) && graph.makespan < bestMakespan) {
+            bestMakespan = graph.makespan;
+            best = candidate;
+        }
+        if (!archive) {
+            return;
+        }
+        if (graph.makespan >= 0) {
+            uint64_t hash = 1469598103934665603ULL;
+            for (const vector<int>& sequence : candidate) {
+                for (int job : sequence) {
+                    hash ^= uint64_t(job + 1);
+                    hash *= 1099511628211ULL;
+                }
+            }
+            bool duplicate = false;
+            for (const SeedCandidate& existing : seedCandidates) {
+                if (existing.hash == hash) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate) {
+                seedCandidates.push_back({graph.makespan, hash, candidate});
+                sort(seedCandidates.begin(), seedCandidates.end(),
+                    [](const SeedCandidate& left, const SeedCandidate& right) {
+                        return left.makespan < right.makespan;
+                    });
+                if (seedCandidates.size() > 8) {
+                    seedCandidates.pop_back();
+                }
+            }
+        }
+    };
+    for (int mode = 0; mode < 6; ++mode) {
+        consider(dispatchSeed(in, mode));
+    }
+    consider(operationBeamSeed(in, seedDeadline));
+    vector<i64> totalWork(in.jobs, 0);
+    vector<i64> frontWork(in.jobs, 0);
+    vector<i64> maxOperation(in.jobs, 0);
+    for (int job = 0; job < in.jobs; ++job) {
+        for (int k = 0; k < in.machines; ++k) {
+            i64 processing = in.processing[job * in.machines + k];
+            totalWork[job] += processing;
+            maxOperation[job] = max(maxOperation[job], processing);
+            if (k < in.machines / 2) {
+                frontWork[job] += processing;
+            }
+        }
+    }
+    vector<int> baseJobs(in.jobs);
+    iota(baseJobs.begin(), baseJobs.end(), 0);
+    for (int variant = 0; variant < 4; ++variant) {
+        sort(baseJobs.begin(), baseJobs.end(), [&](int left, int right) {
+            i64 leftKey = variant == 0 ? totalWork[left]
+                : variant == 1 ? -totalWork[left]
+                : variant == 2 ? frontWork[left] : maxOperation[left];
+            i64 rightKey = variant == 0 ? totalWork[right]
+                : variant == 1 ? -totalWork[right]
+                : variant == 2 ? frontWork[right] : maxOperation[right];
+            if (leftKey != rightKey) {
+                return leftKey > rightKey;
+            }
+            return left < right;
+        });
+        vector<int> permutation = nehBuild(in, baseJobs);
+        improveJobPermutation(in, permutation, seedDeadline);
+        consider(vector<vector<int>>(in.machines, permutation));
+        reverse(permutation.begin(), permutation.end());
+        consider(vector<vector<int>>(in.machines, permutation));
+    }
+    const uint64_t seeds[] = {
+        0x9e3779b97f4a7c15ULL,
+        0xd1b54a32d192ed03ULL,
+        0x94d049bb133111ebULL,
+    };
+    for (uint64_t seed : seeds) {
+        if (constructionDeadline.expired()) {
+            break;
+        }
+        consider(shiftingBottleneck(in, seed, constructionDeadline));
+    }
+    if (best.empty()) {
+        best.assign(in.machines, vector<int>(in.jobs));
+        for (int machine = 0; machine < in.machines; ++machine) {
+            iota(best[machine].begin(), best[machine].end(), 0);
+        }
+        Graph fallback(in);
+        for (int machine = 0; machine < in.machines; ++machine) {
+            fallback.installMachine(machine, best[machine]);
+        }
+        if (!fallback.evaluate(false)) {
+            return 1;
+        }
+    }
+    Graph working(in);
+    for (int machine = 0; machine < in.machines; ++machine) {
+        working.installMachine(machine, best[machine]);
+    }
+    if (!working.evaluate(true)) {
+        return 1;
+    }
+    Graph overallBest = working;
+    auto updateOverallBest = [&]() {
+        if (working.makespan < overallBest.makespan) {
+            overallBest = working;
+        }
+    };
+    vector<Elite> pool;
+    rememberElite(pool, in, working);
+    for (const SeedCandidate& seed : seedCandidates) {
+        Graph candidateGraph(in);
+        for (int machine = 0; machine < in.machines; ++machine) {
+            candidateGraph.installMachine(machine, seed.order[machine]);
+        }
+        if (candidateGraph.evaluate(true)) {
+            rememberElite(pool, in, candidateGraph);
+        }
+    }
+    for (int pass = 0; pass < 2 && !deadline.expired(); ++pass) {
+        if (pass == 0) {
+            for (int machine = 0; machine < in.machines; ++machine) {
+                if (deadline.expired()) {
+                    break;
+                }
+                reoptimizeMachine(
+                    working, in, machine, working.makespan, deadline
+                );
+                updateOverallBest();
+            }
+        } else {
+            for (int machine = in.machines - 1; machine >= 0; --machine) {
+                if (deadline.expired()) {
+                    break;
+                }
+                reoptimizeMachine(
+                    working, in, machine, working.makespan, deadline
+                );
+                updateOverallBest();
+            }
+        }
+    }
+    uint64_t searchRng = 0xd1b54a32d192ed03ULL;
+    for (int round = 0; round < 24 && !deadline.expired(); ++round) {
+        topologicalRepair(working, in, pool, searchRng, deadline);
+        updateOverallBest();
+    }
+    polish(working, in, deadline);
+    updateOverallBest();
+    tabuPolish(working, in, deadline);
+    updateOverallBest();
+    rememberElite(pool, in, overallBest);
+    auto pathRelink = [&]() {
+        if(deadline.expired()||pool.size()<2)return;
+        vector<vector<int>> cur(in.machines);
+        for(int m=0;m<in.machines;++m)cur[m]=orderFromGraph(working,in,m);
+        size_t target = 0;
+        int far = -1;
+        for(size_t index=0;index<pool.size();++index){
+            int d = 0;
+            for(int m=0;m<in.machines;++m)for(int i=0;i<in.jobs;++i){
+                auto it=find(cur[m].begin(),cur[m].end(),pool[index].schedule.order[m][i]);
+                d+=abs(int(it-cur[m].begin())-i);
+            }
+            if(d>far){
+                far=d;
+                target=index;
+            }
+        }
+        vector<vector<int>> targetOrder=pool[target].schedule.order;
+        Graph path=working;
+        for(int step=0;step<min(in.operations,64)&&!deadline.expired();++step){
+            Graph next=path;
+            i64 nm=INF;
+            int mm=-1,mp=-1;
+            for(int m=0;m<in.machines;++m){
+                for(int p=0;p+1<in.jobs;++p){
+                    auto a=find(targetOrder[m].begin(),targetOrder[m].end(),cur[m][p]);
+                    auto b=find(targetOrder[m].begin(),targetOrder[m].end(),cur[m][p+1]);
+                    if(a<=b)continue;
+                    vector<int> co=cur[m];
+                    swap(co[p],co[p+1]);
+                    Graph candidate=path;
+                    candidate.installMachine(m,co);
+                    if(candidate.evaluate(true)&&candidate.makespan<nm){
+                        next=std::move(candidate);
+                        nm=next.makespan;
+                        mm=m;
+                        mp=p;
+                    }
+                    break;
+                }
+            }
+            if(mm<0)break;
+            swap(cur[mm][mp],cur[mm][mp+1]);
+            path=std::move(next);
+            working=path;
+            updateOverallBest();
+        }
+        working = path;
+        if(!deadline.expired()){
+            tabuPolish(working, in, deadline);
+            updateOverallBest();
+        }
+    };
+    pathRelink();
+    uint64_t lateRng = 0x94d049bb133111ebULL;
+    for (int round = 0; round < 8 && !deadline.expired(); ++round) {
+        if (round > 0 && !pool.empty() && (round & 1) == 0) {
+            size_t index = splitmix64(lateRng) % pool.size();
+            working = pool[index].schedule.graph;
+            working.evaluate(true);
+        }
+        bool changed = topologicalRepair(working, in, pool, lateRng, deadline);
+        if (!changed && !deadline.expired()) {
+            int machine = (round * 7 + 3) % in.machines;
+            reoptimizeMachine(working, in, machine, working.makespan, deadline);
+        }
+        if (!deadline.expired()) {
+            tabuPolish(working, in, deadline);
+            updateOverallBest();
+        }
+    }
+    working = overallBest;
+    if (!working.evaluate(true)) {
+        return 1;
+    }
+    best.resize(in.machines);
+    for (int machine = 0; machine < in.machines; ++machine) {
+        best[machine] = orderFromGraph(working, in, machine);
+    }
+    emit(in, best);
+    return 0;
+}
