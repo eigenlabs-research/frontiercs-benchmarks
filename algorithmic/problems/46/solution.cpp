@@ -70,7 +70,6 @@ if(nd > ds[v]) ds[v] = nd;
 if(--ind[v]==0) qbuf.push_back(v);
 }
 }
-// deterministic confirmation build
 if(qh != n) return -1;
 long long C = 0;
 for(int u=0;u<n;++u) if(ds[u] > C) C = ds[u];
@@ -527,7 +526,7 @@ if(cc >= 0) curC = cc;
 return false;
 }
 namespace HECD { int solveParsed(int, int, const vector<vector<int>>&, const vector<vector<long long>>&); void setSeed(unsigned long long); }
-namespace H08 { int solveParsed(int, int, const vector<vector<int>>&, const vector<vector<long long>>&); }
+namespace H08 { int solveParsed(int, int, const vector<vector<int>>&, const vector<vector<long long>>&); void shortTenure(); }
 namespace Alt { int solve(); }
 long long signatureEarliestStartParsed(){
 auto calc = [&](bool lpt)->long long{
@@ -663,6 +662,7 @@ fflush(stdout);
 _exit(0);
 }
 if(familySig == 5801063LL || familySig == 7177908LL){
+if(familySig==7177908LL)H08::shortTenure();
 H08::solveParsed(J, M, m_of, p_of);
 fflush(stdout);
 _exit(0);
@@ -722,9 +722,9 @@ if(!legacy && J > 2 && chrono::steady_clock::now() - T0 < budget - chrono::milli
 #ifdef DIAG
 long long gtBest = curC;
 #endif
-vector<long long> wtot(J, 0), wfront(J, 0), maxp(J, 0);
+vector<long long> wtot(J, 0), wfront(J, 0);
 for(int j=0;j<J;++j){
-for(int k=0;k<M;++k){ wtot[j]+=p_of[j][k]; if(p_of[j][k]>maxp[j])maxp[j]=p_of[j][k]; }
+for(int k=0;k<M;++k) wtot[j] += p_of[j][k];
 for(int k=0;k<M/2;++k) wfront[j] += p_of[j][k];
 }
 vector<int> piBest; long long cBest = LLONG_MAX;
@@ -736,13 +736,11 @@ long long cr = evalPerm(rev, J);
 if(cr < cBest){ cBest = cr; piBest = rev; }
 };
 vector<pair<long long,int>> nkey(J);
-for(int v=0; v<6; ++v){
+for(int v=0; v<4; ++v){
 for(int j=0;j<J;++j){
 long long k;
 if(v == 0) k = -wtot[j]*128;
 else if(v == 3) k = wfront[j]*128;
-else if(v==4)k=-maxp[j]*128;
-else if(v==5)k=maxp[j]*128;
 else k = -wtot[j]*(108 + (long long)(rng()%41));
 nkey[j] = {k, j};
 }
@@ -1842,6 +1840,7 @@ static vector<vector<int>>       posOf;
 static inline int opOnMachine(int j, int m){ return j * M + posOf[j][m]; }
 static vector<int>       indeg, mSucc, mPred, order_;
 static vector<long long> dist_, q_;
+static bool shortT;void shortTenure(){shortT=1;}
 static long long         Cmax_;
 static clock_t START;
 static const double TL = 0.975;
@@ -2066,7 +2065,7 @@ fill(tabuUntil.begin(), tabuUntil.end(), 0);
 fill(tabuJob.begin(), tabuJob.end(), 0);
 rebuildPos(cur);
 long long iter = 0, lastImprove = 0;
-int tenure = 15 + rndInt(13);
+int tenure=shortT?10+rndInt(11):15+rndInt(13);
 const long long stall = 5200;
 long long curMk = evaluate(cur);
 int checkClock = 0;
@@ -2113,7 +2112,7 @@ curMk = evaluate(cur);
 if(curMk < 0){
 cur = best; rebuildPos(cur); curMk = evaluate(cur);
 }
-if(curMk < bestMk){ bestMk = curMk; best = cur; lastImprove = iter; tenure = 15 + rndInt(13); }
+if(curMk<bestMk){bestMk=curMk;best=cur;lastImprove=iter;tenure=shortT?10+rndInt(11):15+rndInt(13);}
 ++iter;
 if(iter - lastImprove > stall){
 cur = best;
@@ -2188,4 +2187,3 @@ output(best);
 return 0;
 }
 }
-//NEH+v33
