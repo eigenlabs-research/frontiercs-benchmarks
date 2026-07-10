@@ -1,4 +1,3 @@
-// v21.11: fix + crown5; portfolio trial 3
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -978,8 +977,7 @@ int main() {
     }
 
     vector<int> idx(n); iota(idx.begin(), idx.end(), 0);
-    bool alt = S < 1200 || (S >= 1400 && S < 1600) || (S >= 2000 && S < 6000);
-    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL) ^ (alt ? 123 : 0);
+    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL);
     RNG rng(seed);
     auto ord4 = [&]() {
         vector<int> res = idx;
@@ -1206,7 +1204,7 @@ int main() {
                 int Hcap = (int)(capA / W);
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
-                obuf = fromBest ? ilsOrd : ((((cntBLF & 1) != 0) ^ alt) ? ordBLF : ordB2);
+                obuf = fromBest ? ilsOrd : ((cntBLF & 1) ? ordBLF : ordB2);
                 int swaps = 1 + rng.rint(12);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
@@ -1271,7 +1269,6 @@ int main() {
             }
         }
     }
-    // late restart: try shuffled orderings at best width for fresh diversification
     static int LATE = envInt("PP_LATE", 4);
     if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30 && LATE > 0) {
         int lateW = bestR.packW;
@@ -1286,9 +1283,9 @@ int main() {
             }
         }
     }
-    } // end champion search block (skipped when best-fit produced the result)
+    }
     if (!useBF) crownRepack(bestR, TL_MS + 10.0);
-    else if (bestR.ok) crownRepack(bestR, TL_MS + 10.0); // second pass if time
+    else if (bestR.ok) crownRepack(bestR, TL_MS + 10.0);
 
     int maxX = -1, maxY = -1;
     for (auto& p : bestR.pl) {
@@ -1310,16 +1307,9 @@ int main() {
     if (Hc == 0) Hc = 1;
 
     vector<array<int,4>> ans(n, {0, 0, 0, 0});
-    for (auto& p : bestR.pl) {
-        auto& t = ps[p.idx].t[p.ti];
-        int bx = mapx[p.x];
-        int by = mapy[p.y];
-        int Xi = bx - t.minx;
-        int Yi = by - t.miny;
-        int Ri = (4 - (t.r % 4) + 4) % 4;
-        int Fi = t.f;
-        ans[p.idx] = {Xi, Yi, Ri, Fi};
-    }
+    for(auto&p:bestR.pl){auto&t=ps[p.idx].t[p.ti];int R=(-t.r)&3,F=t.f;int64_t mx=LLONG_MAX,my=LLONG_MAX;
+        for(auto q:ps[p.idx].b){int64_t x=q.first,y=q.second;if(F)x=-x;for(int j=0;j<R;j++){int64_t z=x;x=y;y=-z;}mx=min(mx,x);my=min(my,y);}
+        ans[p.idx]={(int)(mapx[p.x]-mx),(int)(mapy[p.y]-my),R,F};}
     string out;
     out.reserve(16 * (n + 1));
     out += to_string(Wc); out += ' '; out += to_string(Hc); out += '\n';
@@ -1331,5 +1321,5 @@ int main() {
     }
     fwrite(out.data(), 1, out.size(), stdout);
     fflush(stdout);
-    _Exit(0); // skip destructor teardown of large heaps
+    _Exit(0);
 }
