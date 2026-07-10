@@ -652,7 +652,7 @@ cur = s; curC = c;
 if(c < bestC){ best = s; bestC = c; }
 }
 };
-mt19937 rng(777u);
+mt19937 rng(424242u);
 vector<int> igElitePi; long long igEliteC = LLONG_MAX;
 static vector<long long> igF, igQ;
 #ifdef DIAG
