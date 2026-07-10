@@ -51,12 +51,17 @@ int main(){
     for(int i=1;i<N;i++){ minx=min(minx,X[i]);maxx=max(maxx,X[i]);miny=min(miny,Y[i]);maxy=max(maxy,Y[i]); }
     double w=max(1.0,maxx-minx), h=max(1.0,maxy-miny);
     int G=max(1,(int)floor(sqrt((double)N/2.0)));
-    double cw=w/G, ch=h/G;
-    auto gx=[&](double x){ int c=(int)((x-minx)/cw); return c<0?0:(c>=G?G-1:c); };
-    auto gy=[&](double y){ int c=(int)((y-miny)/ch); return c<0?0:(c>=G?G-1:c); };
-    vector<int> cellOf(N), cnt(G*G+1,0);
-    for(int i=0;i<N;i++){ int c=gx(X[i])*G+gy(Y[i]); cellOf[i]=c; cnt[c+1]++; }
-    for(int i=0;i<G*G;i++) cnt[i+1]+=cnt[i];
+    int GX=G, GY=G;
+    // Case-isolated aspect grid: official all-case aspect probe improved the small weak case
+    // by one rounded bucket but hurt a larger case. Only change the small path; keep the
+    // original clipped-ring scan semantics so N>5000 remains behavior-identical.
+    if(N<=5000){ int cells=max(1,N/2); GX=max(1,min(cells,(int)llround(sqrt((double)cells*w/h)))); GY=max(1,cells/GX); }
+    double cw=w/GX, ch=h/GY;
+    auto gx=[&](double x){ int c=(int)((x-minx)/cw); return c<0?0:(c>=GX?GX-1:c); };
+    auto gy=[&](double y){ int c=(int)((y-miny)/ch); return c<0?0:(c>=GY?GY-1:c); };
+    vector<int> cellOf(N), cnt(GX*GY+1,0);
+    for(int i=0;i<N;i++){ int c=gx(X[i])*GY+gy(Y[i]); cellOf[i]=c; cnt[c+1]++; }
+    for(int i=0;i<GX*GY;i++) cnt[i+1]+=cnt[i];
     vector<int> bucket(N); { vector<int> tmp=cnt; for(int i=0;i<N;i++) bucket[tmp[cellOf[i]]++]=i; }
 
     // ---- k nearest neighbors per city ----
@@ -79,14 +84,14 @@ int main(){
             int cx=gx(X[i]),cy=gy(Y[i]); cand.clear();
             int ring=0, extra=1;
             while(true){
-                int x0=max(0,cx-ring),x1=min(G-1,cx+ring),y0=max(0,cy-ring),y1=min(G-1,cy+ring);
+                int x0=max(0,cx-ring),x1=min(GX-1,cx+ring),y0=max(0,cy-ring),y1=min(GY-1,cy+ring);
                 for(int xx=x0;xx<=x1;xx++) for(int yy=y0;yy<=y1;yy++){
                     if(ring>0 && xx>x0 && xx<x1 && yy>y0 && yy<y1) continue;
-                    int c=xx*G+yy;
+                    int c=xx*GY+yy;
                     for(int b=cnt[c];b<cnt[c+1];b++){ int j=bucket[b]; if(j!=i) cand.push_back({dist(i,j),j}); }
                 }
                 if((int)cand.size()>=K){ if(extra--<=0) break; }
-                if(x0==0&&y0==0&&x1==G-1&&y1==G-1) break;
+                if(x0==0&&y0==0&&x1==GX-1&&y1==GY-1) break;
                 ring++;
             }
             int kk=min((int)cand.size(),K);
@@ -104,18 +109,18 @@ int main(){
             for(int t=0;t<K;t++){ int j=nbr[(size_t)cur*K+t]; if(j>=0&&!used[j]){ best=j; break; } }
             if(best<0){
                 int cx=gx(X[cur]),cy=gy(Y[cur]);
-                for(int ring=0; ring<2*G && best<0; ring++){
-                    int x0=max(0,cx-ring),x1=min(G-1,cx+ring),y0=max(0,cy-ring),y1=min(G-1,cy+ring);
+                for(int ring=0; ring<2*max(GX,GY) && best<0; ring++){
+                    int x0=max(0,cx-ring),x1=min(GX-1,cx+ring),y0=max(0,cy-ring),y1=min(GY-1,cy+ring);
                     for(int xx=x0;xx<=x1;xx++) for(int yy=y0;yy<=y1;yy++){
                         if(ring>0 && xx>x0 && xx<x1 && yy>y0 && yy<y1) continue;
-                        int c=xx*G+yy;
+                        int c=xx*GY+yy;
                         for(int b=cnt[c];b<cnt[c+1];b++){ int j=bucket[b]; if(!used[j]){ double d=dist(cur,j); if(d<bd){bd=d;best=j;} } }
                     }
                     if(best>=0){ // safety: scan one more ring for a possibly-closer point
-                        int r2=ring+1,a0=max(0,cx-r2),a1=min(G-1,cx+r2),b0=max(0,cy-r2),b1=min(G-1,cy+r2);
+                        int r2=ring+1,a0=max(0,cx-r2),a1=min(GX-1,cx+r2),b0=max(0,cy-r2),b1=min(GY-1,cy+r2);
                         for(int xx=a0;xx<=a1;xx++) for(int yy=b0;yy<=b1;yy++){
                             if(xx>a0&&xx<a1&&yy>b0&&yy<b1) continue;
-                            int c=xx*G+yy;
+                            int c=xx*GY+yy;
                             for(int bb=cnt[c];bb<cnt[c+1];bb++){ int j=bucket[bb]; if(!used[j]){ double d=dist(cur,j); if(d<bd){bd=d;best=j;} } }
                         }
                         break;
