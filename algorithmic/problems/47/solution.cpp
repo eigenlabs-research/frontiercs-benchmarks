@@ -1330,10 +1330,6 @@ int main(){
         consider(polish(beamMixedShelfPlan(allowRot, 14, 5, 5, TIME_LIMIT * 0.80)));
         g_msAlpha = 1.0;
     }
-    // Wide-and-shallow beam for broad exploration
-    if(allowRot && elapsed() < TIME_LIMIT * 0.85){
-        consider(polish(beamMixedShelfPlan(allowRot, 22, 8, 3, TIME_LIMIT * 0.85)));
-    }
 #endif
 #ifdef DIAG
     g_label="hybrid";
