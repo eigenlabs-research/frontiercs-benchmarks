@@ -1,4 +1,4 @@
-// v21.11: fix + crown5
+// v21.12: fix + crown5 + pbex multi-width retry
 #include <bits/stdc++.h>
 using namespace std;
 
@@ -191,7 +191,7 @@ static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0,
         adapt();
         if (!panic && deadlineMs > 0 && elapsed_ms() > deadlineMs) return R{};
     }
-    if ((int)pl.size() != nm) return R{};  // validate all pieces placed
+    if ((int)pl.size() != nm) return R{};
     int H = (int)g + 1;
     int maxX = -1;
     for (auto& pp : pl) {
@@ -580,7 +580,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
     vector<Pl> pl; pl.reserve(nm);
     if ((int)b3cache.size() < nm * 8) b3cache.resize(nm * 8);
     for (int i = 0; i < nm * 8; i++) b3cache[i].valid = false;
-    static int REPAIR = envInt("PP_REPAIR", 25); // ejection-chain depth (0 = off)
+    static int REPAIR = envInt("PP_REPAIR", 25);
     auto& own = g_own;
     auto& plSlot = g_plSlot;
     if (REPAIR > 0) {
@@ -761,7 +761,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
     return res;
 }
 
-static int BF_HD = envInt("PP_BFHD", 0); // 0=auto: smaller HD for larger S
+static int BF_HD = envInt("PP_BFHD", 0);
 static vector<uint64_t> bf_occ; static vector<int> bf_colH; static int bf_W;
 static inline int bf_fit(const T& o, int x) {
     int ysky = 0; for (int j = 0; j < o.w; j++) { int v = bf_colH[x + j] - o.lo[j]; if (v > ysky) ysky = v; }
@@ -893,11 +893,11 @@ static R bfSolve(int minW, int base, double deadline) {
     }
     return r;
 }
-
+static R pbex(const R&,const vector<int>&,int,RNG&);
 int main() {
     T0 = chrono::steady_clock::now();
     if (const char* e = getenv("POLYPACK_TL")) { double v = atof(e); if (v > 50 && v < 10000) TL_MS = v; }
-    int ffEnv = envInt("PP_FASTFIT", -1);    // -1 => auto-gate by S below; 0/1 => explicit override
+    int ffEnv = envInt("PP_FASTFIT", -1);
     int BIGBLF = envInt("PP_BIGBLF", 0);     // 1: big cases skip champion pack, BLF-only
     int SMALLBLF = envInt("PP_SMALLBLF", 0); // 1: small cases skip champion sweep
     int JUMP = envInt("PP_JUMP", 15);        // % chance of W jump in restarts
@@ -1030,27 +1030,25 @@ int main() {
     long long BF_N = envInt("PP_BFN", 450);
     bool useBF = (bfEnv < 0) ? (n >= BF_N && base <= 63 && minW <= 63) : (bfEnv > 0);
     if (useBF && !bestR.ok) {
-        bestR = bfSolve(minW, min(base, 63), TL_MS - 40.0); // more leftover for GRASP
-        // BF path previously skipped final crown — multi-row crown can shave BF packings
+        bestR = bfSolve(minW, min(base, 63), TL_MS - 40.0);
         if (bestR.ok) crownRepack(bestR, TL_MS - 5.0);
     }
-    // Post-BF retry: use remaining time for capped packing at best width
     if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < TL_MS - 50) {
         int W = bestR.packW;
         long long tA = bestR.A - 1;
         int Hc = max(1, (int)(tA / W));
         if (Hc >= minW) {
-            // Try largest-first order (different from BF's shape-group order)
             vector<int> o1 = idx;
             stable_sort(o1.begin(), o1.end(), [&](int a, int b) {
                 if (ps[a].k != ps[b].k) return ps[a].k > ps[b].k;
                 return ps[a].id < ps[b].id;
             });
-            for (int s = 0; s < n/4; s++) { int a = rng.rint(n), b = rng.rint(n); swap(o1[a], o1[b]); }
-            R rr = pack_capped(W, Hc, o1, max(1, n/4), TL_MS - 10, rng);
+            for (int s = 0; s < n/2; s++) { int a = rng.rint(n), b = rng.rint(n); swap(o1[a], o1[b]); }
+            R rr = pack_capped(W, Hc, o1, max(1, n/2), TL_MS - 10, rng);
             if (rr.ok && rr.A < bestR.A) { crownRepack(rr, TL_MS - 5.0); if (better(rr, bestR)) bestR = move(rr); }
         }
     }
+    {R e=pbex(bestR,baseOrder,minW,rng);if(e.ok&&e.A<bestR.A)bestR=move(e);}
     if (!bestR.ok) {
     double tFB0 = elapsed_ms();
     bestR = pack(base, baseOrder, rng, false, 1, false, 0.0, -1.0);
@@ -1330,5 +1328,6 @@ int main() {
     }
     fwrite(out.data(), 1, out.size(), stdout);
     fflush(stdout);
-    _Exit(0); // skip destructor teardown of large heaps
+    _Exit(0);
 }
+static R pbex(const R&c,const vector<int>&bo,int m,RNG&r){if(!c.ok||c.packW<=0||c.packW>64)return R{};long long A=c.A-1;int W=c.packW;R b=c;for(int d=-2;d<=2&&elapsed_ms()<TL_MS-30;d++){int w=W+d;if(w<m||w>64)continue;int H=max(1,(int)(A/w));if(H<m)continue;vector<int>o=bo;for(int s=0;s<max(1,n/2);s++){int x=r.rint(n),y=r.rint(n);swap(o[x],o[y]);}R rr=pack_capped(w,H,o,max(1,n/2),TL_MS-10,r);if(rr.ok&&rr.A<b.A){crownRepack(rr,TL_MS-5.0);if(rr.A<b.A)b=move(rr);}}return b;}
