@@ -382,7 +382,7 @@ int main(){
             int s0=q[qi];
             if(dontlook[s0]) continue;
             bool moved=false;
-            for(int L=1; L<=3 && !moved; L++){
+            for(int L=1; L<=4 && !moved; L++){
                 int is=pos[s0];
                 int ie=is; for(int t=1;t<L;t++) ie=nextIdx(ie);
                 int segEnd=order[ie];
@@ -409,7 +409,7 @@ int main(){
                         double add = rev? addedRev: added;
                         if(add+1e-7 < removed){
                             // extract run cities
-                            int seg[3]; { int p=is; for(int u=0;u<L;u++){ seg[u]=order[p]; p=nextIdx(p);} }
+                            int seg[4]; { int p=is; for(int u=0;u<L;u++){ seg[u]=order[p]; p=nextIdx(p);} }
                             if(rev){ for(int a=0,b=L-1;a<b;a++,b--) swap(seg[a],seg[b]); }
                             // Rebuild via shifting the block between the removed run and the anchor.
                             // Work on a linear copy for correctness; N-cost but Or-opt fires far less
