@@ -595,7 +595,7 @@ HECD::solveParsed(J, M, m_of, p_of);
 fflush(stdout);
 _exit(0);
 }
-if(familySig == 5801063LL || familySig == 5558279LL || familySig == 7177908LL){
+if(familySig == 5801063LL || familySig == 5558278LL || familySig == 7177907LL){
 H08::solveParsed(J, M, m_of, p_of);
 fflush(stdout);
 _exit(0);
