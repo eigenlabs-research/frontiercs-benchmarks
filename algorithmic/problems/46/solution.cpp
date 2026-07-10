@@ -722,9 +722,9 @@ if(!legacy && J > 2 && chrono::steady_clock::now() - T0 < budget - chrono::milli
 #ifdef DIAG
 long long gtBest = curC;
 #endif
-vector<long long> wtot(J, 0), wfront(J, 0), maxp(J, 0);
+vector<long long> wtot(J, 0), wfront(J, 0);
 for(int j=0;j<J;++j){
-for(int k=0;k<M;++k){ wtot[j]+=p_of[j][k]; if(p_of[j][k]>maxp[j])maxp[j]=p_of[j][k]; }
+for(int k=0;k<M;++k) wtot[j] += p_of[j][k];
 for(int k=0;k<M/2;++k) wfront[j] += p_of[j][k];
 }
 vector<int> piBest; long long cBest = LLONG_MAX;
@@ -736,13 +736,11 @@ long long cr = evalPerm(rev, J);
 if(cr < cBest){ cBest = cr; piBest = rev; }
 };
 vector<pair<long long,int>> nkey(J);
-for(int v=0; v<6; ++v){
+for(int v=0; v<4; ++v){
 for(int j=0;j<J;++j){
 long long k;
 if(v == 0) k = -wtot[j]*128;
 else if(v == 3) k = wfront[j]*128;
-else if(v==4)k=-maxp[j]*128;
-else if(v==5)k=maxp[j]*128;
 else k = -wtot[j]*(108 + (long long)(rng()%41));
 nkey[j] = {k, j};
 }
@@ -2188,4 +2186,4 @@ output(best);
 return 0;
 }
 }
-//NEH+v33
+// calibrated variance resample 1
