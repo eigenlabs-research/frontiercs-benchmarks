@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <vector>
 using namespace std;
@@ -7,8 +8,14 @@ int main() {
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
 
-    int mode;
-    cin >> mode;
+    // Robust parse: scan whole stdin for the first '0'/'1' character.
+    // Default mode 1: its grid uses digits {1,2,3} only, valid under BOTH modes.
+    int mode = 1;
+    string all((istreambuf_iterator<char>(cin)), istreambuf_iterator<char>());
+    for (char c : all) {
+        if (c == '0') { mode = 0; break; }
+        if (c == '1') { mode = 1; break; }
+    }
     const vector<string> mode0 = {
         "2   1   121 ",
         "11 11  1   1",
