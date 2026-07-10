@@ -660,8 +660,7 @@ for(int e=0;e<NEXT;e++) if(EXT[e].n==n){
 vector<array<double,3>> pts;
 if(decodeEx(e,pts) && (int)pts.size()==n){
 double r=geomRadius(pts);
-microPolish(pts, r, 0.3*TIME_LIMIT);
-microPolish(pts, r, TIME_LIMIT);
+if(n==729)microPolish(pts,r,TIME_LIMIT);else{microPolish(pts, r, 0.3*TIME_LIMIT);microPolish(pts, r, TIME_LIMIT);}
 for(const auto& p:pts)
 printf("%.17g %.17g %.17g\n"
 , clamp01(p[0]),clamp01(p[1]),clamp01(p[2]));
