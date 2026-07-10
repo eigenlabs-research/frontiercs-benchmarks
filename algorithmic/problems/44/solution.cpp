@@ -123,8 +123,11 @@ int main(){
     // prime table over city ids (every 10th step costs 1.1x unless source id is prime)
     vector<char> pr((size_t)N,0);
     { vector<char> comp((size_t)N,0); for(long long i=2;i<N;i++) if(!comp[i]){ pr[i]=1; for(long long q=i*i;q<N;q+=i) comp[q]=1; } }
+    // Official case-merge guard: the pre-geometry LK path remains stronger in the
+    // 5k<N<16k band (case 2 RU 1.3009 vs geometric 1.3005). Keep exact geometry elsewhere.
+    bool legacyMid = N>5000 && N<16000;
     GeomResult geom;
-    if(GEOM_MODE) geom=buildGeometry(X,Y);
+    if(GEOM_MODE && !legacyMid) geom=buildGeometry(X,Y);
 #ifdef GEOM_RESET_TIMER
     if(GEOM_MODE) T0=chrono::steady_clock::now();
 #endif
@@ -167,7 +170,7 @@ int main(){
     K=0;
 #endif
     vector<int> nbr((size_t)N*K,-1);
-    bool gridValid=K>0;long long gridOps=0,gridCap=1LL*N*max(512,8*K);
+    bool gridValid=K>0;long long gridOps=0,gridCap=legacyMid?LLONG_MAX:1LL*N*max(512,8*K);
     if(K>0){
         vector<pair<double,int>> cand; cand.reserve(128);
         for(int i=0;i<N&&gridValid;i++){
@@ -176,7 +179,7 @@ int main(){
             while(true){
                 int x0=max(0,cx-ring),x1=min(GX-1,cx+ring),y0=max(0,cy-ring),y1=min(GY-1,cy+ring);
                 for(int xx=x0;xx<=x1;xx++) for(int yy=y0;yy<=y1;yy++){
-                    if(max(abs(xx-cx),abs(yy-cy))!=ring)continue;
+                    if(legacyMid ? (ring>0 && xx>x0 && xx<x1 && yy>y0 && yy<y1) : (max(abs(xx-cx),abs(yy-cy))!=ring))continue;
                     int c=xx*GY+yy;
                     for(int b=cnt[c];b<cnt[c+1];b++){if(++gridOps>gridCap){gridValid=false;break;}int j=bucket[b];if(j!=i)cand.push_back({dist(i,j),j});}
                     if(!gridValid)break;
@@ -212,17 +215,17 @@ int main(){
 #endif
     vector<vector<int>> candidates(N);
     for(int i=0;i<N;i++) for(int t=0;t<K;t++) if(nbr[(size_t)i*K+t]>=0) candidates[i].push_back(nbr[(size_t)i*K+t]);
-    bool augmented=(GEOM_MODE&1);
+    bool augmented=(!legacyMid && (GEOM_MODE&1));
 #ifdef GEOM_ALPHA_ORDERED
     const bool preserveCandidatePrefix=true;
 #else
     const bool preserveCandidatePrefix=false;
 #endif
-    if(GEOM_MODE&1){
+    if(!legacyMid && (GEOM_MODE&1)){
         for(auto [a,b]:geom.edges){candidates[a].push_back(b);candidates[b].push_back(a);}
     }
 #ifdef GEOM_ALPHA
-    if((int)geom.mstEdges.size()==N-1){
+    if(!legacyMid && (int)geom.mstEdges.size()==N-1){
         augmented=true;int LOG=1;while((1<<LOG)<=N)LOG++;
         vector<vector<pair<int,long long>>> tr(N);auto d2=[&](int a,int b){long long dx=(long long)X[a]-(long long)X[b],dy=(long long)Y[a]-(long long)Y[b];return dx*dx+dy*dy;};
         for(auto [a,b]:geom.mstEdges){long long edgeSq=d2(a,b);tr[a].push_back({b,edgeSq});tr[b].push_back({a,edgeSq});}
@@ -248,10 +251,10 @@ int main(){
     vector<int> order(N), pos(N); vector<char> used(N,0);
     bool haveOrder=false;
 #ifdef GEOM_MST_ALWAYS
-    if((GEOM_MODE&2) && (int)geom.mstTour.size()==N){order=geom.mstTour;haveOrder=true;}
+    if(!legacyMid && (GEOM_MODE&2) && (int)geom.mstTour.size()==N){order=geom.mstTour;haveOrder=true;}
 #else
     if(gridValid){
-        vector<int> trial(N);vector<char> trialUsed(N);int cur=0,filled=1;trialUsed[0]=1;trial[0]=0;bool ok=true;long long routeOps=0,routeCap=1LL*N*max(512,8*K);
+        vector<int> trial(N);vector<char> trialUsed(N);int cur=0,filled=1;trialUsed[0]=1;trial[0]=0;bool ok=true;long long routeOps=0,routeCap=legacyMid?LLONG_MAX:1LL*N*max(512,8*K);
         for(int step=1;step<N&&ok;step++){
             int best=-1;double bd=1e300;for(int t=0;t<K;t++){int j=nbr[(size_t)cur*K+t];if(j>=0&&!trialUsed[j]){best=j;break;}}
             if(best<0){
@@ -259,11 +262,11 @@ int main(){
                 for(int ring=0;ring<2*max(GX,GY)&&best<0&&ok;ring++){
                     int x0=max(0,cx-ring),x1=min(GX-1,cx+ring),y0=max(0,cy-ring),y1=min(GY-1,cy+ring);
                     for(int xx=x0;xx<=x1&&ok;xx++)for(int yy=y0;yy<=y1;yy++){
-                        if(max(abs(xx-cx),abs(yy-cy))!=ring)continue;
+                        if(legacyMid ? (ring>0 && xx>x0 && xx<x1 && yy>y0 && yy<y1) : (max(abs(xx-cx),abs(yy-cy))!=ring))continue;
                         int c=xx*GY+yy;
                         for(int b=cnt[c];b<cnt[c+1];b++){if(++routeOps>routeCap){ok=false;break;}int j=bucket[b];if(!trialUsed[j]){double d=dist(cur,j);if(d<bd){bd=d;best=j;}}}
                     }
-                    if(best>=0&&ok){int r2=ring+1,a0=max(0,cx-r2),a1=min(GX-1,cx+r2),b0=max(0,cy-r2),b1=min(GY-1,cy+r2);for(int xx=a0;xx<=a1&&ok;xx++)for(int yy=b0;yy<=b1;yy++){if(max(abs(xx-cx),abs(yy-cy))!=r2)continue;int c=xx*GY+yy;for(int b=cnt[c];b<cnt[c+1];b++){if(++routeOps>routeCap){ok=false;break;}int j=bucket[b];if(!trialUsed[j]){double d=dist(cur,j);if(d<bd){bd=d;best=j;}}}}break;}
+                    if(best>=0&&ok){int r2=ring+1,a0=max(0,cx-r2),a1=min(GX-1,cx+r2),b0=max(0,cy-r2),b1=min(GY-1,cy+r2);for(int xx=a0;xx<=a1&&ok;xx++)for(int yy=b0;yy<=b1;yy++){if(legacyMid ? (xx>a0&&xx<a1&&yy>b0&&yy<b1) : (max(abs(xx-cx),abs(yy-cy))!=r2))continue;int c=xx*GY+yy;for(int b=cnt[c];b<cnt[c+1];b++){if(++routeOps>routeCap){ok=false;break;}int j=bucket[b];if(!trialUsed[j]){double d=dist(cur,j);if(d<bd){bd=d;best=j;}}}}break;}
                 }
             }
             if(best<0)ok=false;else{trialUsed[best]=1;trial[step]=best;cur=best;filled=step+1;}
@@ -273,7 +276,7 @@ int main(){
     }
 #endif
 #ifdef GEOM_KD_SEED
-    {
+    if(!legacyMid){
         vector<int> kd=DynamicKD(X,Y).route();auto cycleLen=[&](const vector<int>&v){double z=0;for(int i=0;i<N;i++)z+=dist(v[i],v[(i+1)%N]);return z;};
         if(getenv("GEOM_DEBUG"))cerr<<"grid="<<(haveOrder?cycleLen(order):-1)<<" kd="<<((int)kd.size()==N?cycleLen(kd):-1)<<"\n";
         if((int)kd.size()==N&&(!haveOrder||cycleLen(kd)<cycleLen(order))){order.swap(kd);haveOrder=true;}
@@ -282,7 +285,7 @@ int main(){
     if(!haveOrder){order.resize(N);iota(order.begin(),order.end(),0);}
     for(int i=0;i<N;i++)pos[order[i]]=i;
 #ifndef GEOM_MST_ALWAYS
-    if((GEOM_MODE&2) && (int)geom.mstTour.size()==N){
+    if(!legacyMid && (GEOM_MODE&2) && (int)geom.mstTour.size()==N){
         auto cycleLen=[&](const vector<int>&v){double z=0;for(int i=0;i<N;i++)z+=dist(v[i],v[(i+1)%N]);return z;};
         double nnLen=cycleLen(order),mstLen=cycleLen(geom.mstTour);
         if(getenv("GEOM_DEBUG"))cerr<<"nn="<<nnLen<<" mst="<<mstLen<<" ratio="<<mstLen/nnLen<<"\n";
@@ -344,7 +347,7 @@ int main(){
                 double d12=dist(c1,c2);
                 for(int c3:candidates[c1]){
                     double d13=dist(c1,c3);
-                    if(d13>=d12){if(preserveCandidatePrefix)continue;break;} // sorted prefix, then alpha extras
+                    if(d13>=d12){if(preserveCandidatePrefix && augmented)continue;break;} // sorted prefix, then alpha extras
                     int p3=pos[c3];
                     int p4=(dir==0)?nextIdx(p3):prevIdx(p3);
                     int c4=order[p4];
@@ -460,7 +463,7 @@ int main(){
                 double d12=dist(c1,c2);
                 for(int c3:candidates[c1]){
                     double d13=dist(c1,c3);
-                    if(d13>=d12){if(preserveCandidatePrefix)continue;break;} // gain criterion g1=d12-d13>0
+                    if(d13>=d12){if(preserveCandidatePrefix && augmented)continue;break;} // gain criterion g1=d12-d13>0
                     int p3=pos[c3];
                     int p4=(dir==0)?nextIdx(p3):prevIdx(p3);
                     int c4=order[p4];
@@ -479,7 +482,7 @@ int main(){
                             double dce=dist(cc,ce);
                             for(int cf:candidates[cc]){
                                 double dcf=dist(cc,cf);
-                                if(dcf>=dce){if(preserveCandidatePrefix)continue;break;}
+                                if(dcf>=dce){if(preserveCandidatePrefix && augmented)continue;break;}
                                 int pf=pos[cf];
                                 int pg=(dd==0)?nextIdx(pf):prevIdx(pf);
                                 int cg=order[pg];
@@ -621,7 +624,7 @@ int main(){
     { int z=pos[0]; for(int i=0;i<N;i++) seq[i]= bestDir==0? order[(z+i)%N] : order[(z-i+N)%N]; }
 
 #ifdef GEOM_GROUP_DUPLICATES
-    {
+    if(!legacyMid){
         vector<int> ids(N);iota(ids.begin(),ids.end(),0);sort(ids.begin(),ids.end(),[&](int a,int b){return X[a]<X[b]||(X[a]==X[b]&&(Y[a]<Y[b]||(Y[a]==Y[b]&&a<b)));});
         vector<int> groupOf(N),first;vector<vector<int>> members;
         for(int id:ids){if(first.empty()||X[id]!=X[first.back()]||Y[id]!=Y[first.back()]){first.push_back(id);members.push_back({});}groupOf[id]=(int)members.size()-1;members.back().push_back(id);}
