@@ -1469,7 +1469,7 @@ int main(){
 #ifdef DIAG
     g_label="choicemr";
 #endif
-    { int ms[8]={3,6,7,0,4,5,1,2}; for(int ii=0;ii<8&&elapsed()<TIME_LIMIT*0.86;++ii) consider(polish(choiceMaxRects(allowRot,ms[ii],TIME_LIMIT*0.88))); }
+    { int ms[8]={3,6,7,0,4,5,1,2}; for(int ii=0;ii<8&&elapsed()<TIME_LIMIT*0.86;++ii) consider(polish(choiceMaxRects(allowRot,ms[ii],TIME_LIMIT*0.86))); }
 #ifdef DIAG
     g_label="prune";
 #endif
