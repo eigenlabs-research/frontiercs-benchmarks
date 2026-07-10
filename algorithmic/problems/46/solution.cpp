@@ -71,6 +71,7 @@ if(--ind[v]==0) qbuf.push_back(v);
 }
 }
 // deterministic confirmation build
+// promoted-binary variance confirmation
 if(qh != n) return -1;
 long long C = 0;
 for(int u=0;u<n;++u) if(ds[u] > C) C = ds[u];
