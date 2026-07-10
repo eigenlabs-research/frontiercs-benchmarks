@@ -554,43 +554,46 @@ long long C=0; for(long long x:jr) C=max(C,x); return C;
 };
 return min(calc(false), calc(true));
 }
-#ifndef NO_NEH
-static long long evalPerm(const vector<int>& pi, int L){
-static vector<long long> nmf; nmf.assign(M, 0);
-long long mk = 0;
-for(int i=0;i<L;++i){
-int j = pi[i]; long long t = 0;
-const int* mo = m_of[j].data();
-const long long* po = p_of[j].data();
-for(int k=0;k<M;++k){
-int m = mo[k];
-long long s = t > nmf[m] ? t : nmf[m];
-t = s + po[k]; nmf[m] = t;
+// Path relinking between two machine-sequence solutions (i-TSAB diversification).
+static void pathRelink(const vector<vector<int>>& src, const vector<vector<int>>& dst,
+long long& bestC, vector<vector<int>>& best, mt19937& rng,
+chrono::steady_clock::time_point T_end, int maxSteps){
+vector<vector<int>> cur = src;
+long long curC = evalSeq(cur, true);
+if(curC < 0) return;
+static vector<int> posT; posT.resize(J);
+for(int step=0; step<maxSteps; ++step){
+if(chrono::steady_clock::now() >= T_end) break;
+struct Cand { long long est; int m,i; };
+vector<Cand> cands; cands.reserve((size_t)M*J/2);
+for(int m=0;m<M;++m){
+for(int i=0;i<J;++i) posT[dst[m][i]] = i;
+const auto& s = cur[m];
+for(int i=0;i+1<J;++i) if(posT[s[i]] > posT[s[i+1]]){
+Mv mv{m,i,i+1,i+1,true};
+cands.push_back({estMove(cur, mv), m, i});
 }
-if(t > mk) mk = t;
 }
-return mk;
+if(cands.empty()) break;
+int K = (int)min((size_t)10, cands.size());
+partial_sort(cands.begin(), cands.begin()+K, cands.end(),
+[](const Cand&a,const Cand&b){return a.est<b.est;});
+int bm=-1,bi=-1; long long bnc=LLONG_MAX;
+for(int t=0;t<min(K,3);++t){
+int m=cands[t].m,i=cands[t].i;
+swap(cur[m][i], cur[m][i+1]);
+long long nc=evalSeq(cur,false);
+swap(cur[m][i], cur[m][i+1]);
+if(nc>=0 && nc<bnc){ bnc=nc; bm=m; bi=i; }
 }
-static vector<int> nehBuild(const vector<int>& order){
-vector<int> pi; pi.reserve(J);
-vector<int> cand; cand.reserve(J);
-for(int idx=0; idx<(int)order.size(); ++idx){
-int j = order[idx];
-int L = (int)pi.size();
-int bp = 0; long long bc = LLONG_MAX;
-for(int p=0;p<=L;++p){
-cand.clear();
-for(int t=0;t<p;++t) cand.push_back(pi[t]);
-cand.push_back(j);
-for(int t=p;t<L;++t) cand.push_back(pi[t]);
-long long c = evalPerm(cand, L+1);
-if(c < bc){ bc = c; bp = p; }
+if(bm<0){ bm=cands[0].m; bi=cands[0].i; }
+swap(cur[bm][bi], cur[bm][bi+1]);
+curC = evalSeq(cur, true);
+if(curC<0){ swap(cur[bm][bi], cur[bm][bi+1]); evalSeq(cur,true); break; }
+if(curC < bestC){ best=cur; bestC=curC; }
 }
-pi.insert(pi.begin()+bp, j);
 }
-return pi;
-}
-#endif
+
 int main(){
 auto T0 = chrono::steady_clock::now();
 const auto budget = chrono::milliseconds(994);
@@ -660,172 +663,9 @@ int igChk = 0;
 #endif
 trySeed(seedGT(0, rng));
 trySeed(seedGT(1, rng));
-if(chrono::steady_clock::now() - T0 < budget)
 trySeed(seedGT(2, rng));
-#ifndef NO_NEH
-if(J > 2 && chrono::steady_clock::now() - T0 < budget - chrono::milliseconds(120)){
-#ifdef DIAG
-long long gtBest = curC;
-#endif
-vector<long long> wtot(J, 0), wfront(J, 0);
-for(int j=0;j<J;++j){
-for(int k=0;k<M;++k) wtot[j] += p_of[j][k];
-for(int k=0;k<M/2;++k) wfront[j] += p_of[j][k];
-}
-vector<int> piBest; long long cBest = LLONG_MAX;
-auto consider = [&](const vector<int>& pi){
-long long c = evalPerm(pi, J);
-if(c < cBest){ cBest = c; piBest = pi; }
-vector<int> rev(pi.rbegin(), pi.rend());
-long long cr = evalPerm(rev, J);
-if(cr < cBest){ cBest = cr; piBest = rev; }
-};
-vector<pair<long long,int>> nkey(J);
-for(int v=0; v<4; ++v){
-for(int j=0;j<J;++j){
-long long k;
-if(v == 0) k = -wtot[j]*128;
-else if(v == 3) k = wfront[j]*128;
-else k = -wtot[j]*(108 + (long long)(rng()%41));
-nkey[j] = {k, j};
-}
-sort(nkey.begin(), nkey.end());
-vector<int> ord(J);
-for(int j=0;j<J;++j) ord[j] = nkey[j].second;
-consider(nehBuild(ord));
-}
-#ifdef DIAG
-int descPasses = 0;
-#endif
-if(!piBest.empty()){
-auto tD0 = chrono::steady_clock::now();
-long long curP = cBest;
-vector<int> nbase; nbase.reserve(J);
-vector<int> ncand; ncand.reserve(J);
-for(int pass=0; pass<6; ++pass){
-bool imp = false;
-#ifdef DIAG
-descPasses = pass+1;
-#endif
-for(int i=0;i<J;++i){
-if(chrono::steady_clock::now() - tD0 > chrono::milliseconds(25)){ pass = 6; break; }
-int j = piBest[i];
-nbase.clear();
-for(int t=0;t<J;++t) if(t != i) nbase.push_back(piBest[t]);
-int bp = -1; long long bc = curP;
-for(int p=0;p<J;++p){
-ncand.clear();
-for(int t=0;t<p;++t) ncand.push_back(nbase[t]);
-ncand.push_back(j);
-for(int t=p;t<J-1;++t) ncand.push_back(nbase[t]);
-long long c = evalPerm(ncand, J);
-if(c < bc){ bc = c; bp = p; }
-}
-if(bp >= 0){
-nbase.insert(nbase.begin()+bp, j);
-piBest = nbase;
-curP = bc; imp = true;
-}
-}
-if(!imp) break;
-}
-cBest = curP;
-{
-#ifndef IG_DEEP_MS
-#define IG_DEEP_MS 180
-#endif
-#ifndef IG_SHALLOW_MS
-#define IG_SHALLOW_MS 60
-#endif
-long long gtC = curC;
-int sliceMs = (cBest < gtC + gtC/10) ? IG_DEEP_MS : IG_SHALLOW_MS;
-auto igEnd = chrono::steady_clock::now() + chrono::milliseconds(sliceMs);
-auto igCap = T0 + budget - chrono::milliseconds(700);
-if(igEnd > igCap) igEnd = igCap;
-long long sump = 0; for(int j=0;j<J;++j) sump += wtot[j];
-double Temp = 0.4 * (double)sump / (double)(J*M*10);
-vector<int> piCur = piBest, piNew;
-long long cCur = cBest;
-int dMax = J-1 < 6 ? J-1 : 6;
-int rem[6];
-int d = dMax;
-int igIter = 0;
-while(d >= 1 && chrono::steady_clock::now() < igEnd){
-++igIter;
-d = 2 + (int)(rng() % (unsigned)(dMax >= 2 ? dMax - 1 : 1)); if(d > dMax) d = dMax; if(d < 1) d = 1;
-piNew = piCur;
-for(int t=0;t<d;++t){ int i = (int)(rng() % (unsigned)piNew.size()); rem[t] = piNew[i]; piNew.erase(piNew.begin()+i); }
-long long cNew = LLONG_MAX;
-for(int t=0;t<d;++t){
-int j = rem[t]; int L = (int)piNew.size();
-igF.assign((size_t)(L+1)*M, 0);
-for(int p=0;p<L;++p){
-long long* Fp = &igF[(size_t)p*M]; long long* Fn = &igF[(size_t)(p+1)*M];
-for(int m=0;m<M;++m) Fn[m] = Fp[m];
-int jj = piNew[p]; long long cur2 = 0;
-const int* mo = m_of[jj].data();
-const long long* po = p_of[jj].data();
-for(int k=0;k<M;++k){
-int m = mo[k];
-long long s = cur2 > Fn[m] ? cur2 : Fn[m];
-cur2 = s + po[k]; Fn[m] = cur2;
-}
-}
-long long CL = 0; { long long* FL=&igF[(size_t)L*M]; for(int m=0;m<M;++m) if(FL[m]>CL) CL=FL[m]; }
-igQ.assign((size_t)(L+1)*M, 0);
-for(int p=L-1;p>=0;--p){
-long long* Qp = &igQ[(size_t)p*M]; long long* Qn = &igQ[(size_t)(p+1)*M];
-for(int m=0;m<M;++m) Qp[m] = Qn[m];
-int jj = piNew[p]; long long cur2 = 0;
-const int* mo = m_of[jj].data();
-const long long* po = p_of[jj].data();
-for(int k=M-1;k>=0;--k){
-int m = mo[k];
-long long tt = cur2 > Qp[m] ? cur2 : Qp[m];
-cur2 = tt + po[k]; Qp[m] = cur2;
-}
-}
-int bp = 0; long long bc = LLONG_MAX;
-const int* moj = m_of[j].data();
-const long long* poj = p_of[j].data();
-for(int p=0;p<=L;++p){
-const long long* Fp = &igF[(size_t)p*M];
-const long long* Qp = &igQ[(size_t)p*M];
-long long cur2 = 0, mk = CL;
-for(int k=0;k<M;++k){
-int m = moj[k];
-long long s = cur2 > Fp[m] ? cur2 : Fp[m];
-cur2 = s + poj[k];
-long long v = cur2 + Qp[m]; if(v > mk) mk = v;
-}
-if(mk < bc){ bc = mk; bp = p; }
-}
-piNew.insert(piNew.begin()+bp, j);
-cNew = bc;
-#ifdef DIAG
-if(igChk < 50){ long long ref = evalPerm(piNew, L+1); if(ref != bc) fprintf(stderr,"IG-ACCEL MISMATCH %lld vs %lld\n", bc, ref); ++igChk; }
-#endif
-}
-if(cNew <= cCur || (Temp > 0 && (double)(rng() & 0xfffff) * (1.0/1048576.0) < exp(-(double)(cNew - cCur)/Temp))){
-piCur = piNew; cCur = cNew;
-}
-if(cNew < cBest){
-if(cBest < igEliteC){ igEliteC = cBest; igElitePi = piBest; }
-cBest = cNew; piBest = piNew;
-} else if(cNew < igEliteC && piNew != piBest){ igEliteC = cNew; igElitePi = piNew; }
-}
-#ifdef DIAG
-fprintf(stderr, "IG iters=%d slice=%d cPi=%lld gtC=%lld %s\n", igIter, sliceMs, cBest, gtC, cBest < gtC ? "PI-WINS" : "gt-wins");
-#endif
-}
-vector<vector<int>> s(M, piBest);
-trySeed(s);
-#ifdef DIAG
-fprintf(stderr, "NEH C=%lld GTbest=%lld passes=%d %s\n", cBest, gtBest, descPasses, cBest < gtBest ? "NEH-WINS" : "gt-wins");
-#endif
-}
-}
-#endif
+for(int r=0;r<40 && chrono::steady_clock::now()-T0 < budget; ++r)
+trySeed(seedGT(3, rng));
 long long LB = 0;
 {
 vector<long long> mload(M, 0);
@@ -881,7 +721,7 @@ span = spanShort + (spanLong - spanShort)*f/100;
 return tmin + (int)(rng() % (unsigned)span);
 };
 #ifndef RST_MS
-#define RST_MS 400
+#define RST_MS 200
 #endif
 struct Elite { vector<vector<int>> seq; long long C; unsigned long long h; };
 vector<Elite> pool;
@@ -1021,25 +861,8 @@ if(tb && !asp) continue;
 }
 collectTabu(cur, mv);
 applyMove(cur, mv);
-long long nc = incAfterMove(cur, mv);
-#ifdef VERIFY
-{
-static vector<long long> vd, vt; static long long mism = 0; static long long checks = 0;
-vd = dist_; vt = tail_;
-long long fc = evalSeq(cur, true);
-checks++;
-if(nc != -2){
-if(fc != nc || vd != dist_ || vt != tail_){
-mism++;
-fprintf(stderr, "MISMATCH iter=%d inc=%lld full=%lld distOK=%d tailOK=%d\n",
-iter, nc, fc, (int)(vd==dist_), (int)(vt==tail_));
-}
-}
-if(checks % 20000 == 0) fprintf(stderr, "verify checks=%lld mism=%lld\n", checks, mism);
-nc = fc;
-}
-#endif
-if(nc == -2) nc = evalSeq(cur, true);
+// Full topo re-eval: prior "incremental" averaged ~N pops (no win vs full).
+long long nc = evalSeq(cur, true);
 if(nc < 0){
 undoMove(cur, mv);
 evalSeq(cur, true);
@@ -1080,6 +903,19 @@ poolAdd(rb, rbC);
 #ifdef DIAG
 dInsRB++;
 #endif
+}
+// Path-relink elites before reseed (foundational diversification)
+if((int)pool.size() >= 2 && chrono::steady_clock::now() < T_end){
+int bi=0, wi=0;
+for(int z=1;z<(int)pool.size();++z){
+if(pool[z].C < pool[bi].C) bi=z;
+if(pool[z].C > pool[wi].C) wi=z;
+}
+if(bi != wi){
+pathRelink(pool[bi].seq, pool[wi].seq, bestC, best, rng, T_end, 55);
+pathRelink(pool[wi].seq, pool[bi].seq, bestC, best, rng, T_end, 35);
+poolAdd(best, bestC);
+}
 }
 if(pool.empty() || (rng() & 1)){
 cur = best;
