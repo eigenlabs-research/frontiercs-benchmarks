@@ -302,6 +302,208 @@ for(int t=mv.i+1; t<=mv.e; ++t)
 gpend.push_back((size_t)opOf(s[t], mv.m)*J + uj);
 }
 }
+static long long evalReduced(int mExcl, const vector<vector<int>>& seq){
+const int n = N;
+int* __restrict ind = indeg.data();
+int* __restrict msu = msucc.data();
+const int* __restrict jsu = jsuc.data();
+const char* __restrict jpr = jpre.data();
+const long long* __restrict pn = pnode.data();
+long long* __restrict ds = dist_.data();
+for(int u=0;u<n;++u) ind[u] = jpr[u];
+for(int m=0;m<M;++m){
+if(m == mExcl){
+for(int j=0;j<J;++j){ int u = j*M + posF[j*M + m]; msu[u] = -1; mpred[u] = -1; }
+continue;
+}
+const int* s = seq[m].data();
+int prev = s[0]*M + posF[s[0]*M + m];
+mpred[prev] = -1;
+for(int i=1;i<J;++i){
+int v = s[i]*M + posF[s[i]*M + m];
+msu[prev] = v; mpred[v] = prev; ind[v]++; prev = v;
+}
+msu[prev] = -1;
+}
+fill(dist_.begin(), dist_.begin()+n, 0);
+qbuf.clear();
+int qh=0;
+for(int u=0;u<n;++u) if(ind[u]==0){ ds[u]=pn[u]; qbuf.push_back(u); }
+while(qh < (int)qbuf.size()){
+int u = qbuf[qh++];
+long long du = ds[u];
+int v = jsu[u];
+if(v >= 0){
+long long nd = du + pn[v];
+if(nd > ds[v]) ds[v] = nd;
+if(--ind[v]==0) qbuf.push_back(v);
+}
+v = msu[u];
+if(v >= 0){
+long long nd = du + pn[v];
+if(nd > ds[v]) ds[v] = nd;
+if(--ind[v]==0) qbuf.push_back(v);
+}
+}
+if(qh != n) return -1;
+long long C = 0;
+for(int u=0;u<n;++u) if(ds[u] > C) C = ds[u];
+{
+long long* __restrict tl = tail_.data();
+const int* __restrict qb = qbuf.data();
+for(int idx=n-1; idx>=0; --idx){
+int u = qb[idx];
+long long mx = 0;
+int v = jsu[u];
+if(v >= 0 && tl[v] > mx) mx = tl[v];
+v = msu[u];
+if(v >= 0 && tl[v] > mx) mx = tl[v];
+tl[u] = pn[u] + mx;
+}
+}
+return C;
+}
+static long long carBestC;
+static vector<int> carBestSeq;
+static int carNodes, carNodeCap;
+static chrono::steady_clock::time_point carDeadline;
+static vector<long long> carR, carQ, carP;
+#ifdef DIAG
+long long g_roAtt = 0, g_roAcc = 0, g_roCyc = 0, g_roUs = 0;
+#endif
+static long long schrage1(int n, const long long* r, const long long* q, const long long* p, int* seqOut){
+static vector<char> done; done.assign(n, 0);
+long long t = 0, C = 0;
+for(int i=0;i<n;++i){
+long long rmin = LLONG_MAX;
+for(int j=0;j<n;++j) if(!done[j] && r[j] < rmin) rmin = r[j];
+if(t < rmin) t = rmin;
+int b = -1;
+for(int j=0;j<n;++j){
+if(done[j] || r[j] > t) continue;
+if(b < 0 || q[j] > q[b] || (q[j] == q[b] && p[j] > p[b])) b = j;
+}
+done[b] = 1; seqOut[i] = b;
+t += p[b];
+if(t + q[b] > C) C = t + q[b];
+}
+return C;
+}
+static void carlier(int n, long long* r, long long* q, const long long* p, int depth){
+if(carNodes >= carNodeCap || depth > 400) return;
+if((carNodes & 63) == 0 && chrono::steady_clock::now() >= carDeadline){ carNodes = carNodeCap; return; }
+carNodes++;
+int seq[64];
+long long C = schrage1(n, r, q, p, seq);
+if(C < carBestC){
+carBestC = C;
+for(int i=0;i<n;++i) carBestSeq[i] = seq[i];
+}
+int bpos = -1;
+{
+long long t = 0;
+for(int i=0;i<n;++i){
+int j = seq[i];
+if(t < r[j]) t = r[j];
+t += p[j];
+if(t + q[j] == C) bpos = i;
+}
+}
+if(bpos < 0) return;
+int apos = -1;
+{
+long long sum = 0;
+long long qb = q[seq[bpos]];
+for(int i=bpos;i>=0;--i){
+sum += p[seq[i]];
+if(r[seq[i]] + sum + qb == C) apos = i;
+}
+}
+if(apos < 0) return;
+int cpos = -1;
+for(int i=apos;i<bpos;++i) if(q[seq[i]] < q[seq[bpos]]) cpos = i;
+if(cpos < 0) return;
+int c = seq[cpos];
+long long sump = 0, rmin = LLONG_MAX, qmin = LLONG_MAX;
+for(int i=cpos+1;i<=bpos;++i){
+int j = seq[i];
+sump += p[j];
+if(r[j] < rmin) rmin = r[j];
+if(q[j] < qmin) qmin = q[j];
+}
+long long hJ = rmin + sump + qmin;
+long long hJc = (rmin < r[c] ? rmin : r[c]) + sump + p[c] + (qmin < q[c] ? qmin : q[c]);
+long long LB = hJ > hJc ? hJ : hJc;
+if(LB >= carBestC) return;
+{
+long long old = q[c];
+long long nq = sump + qmin;
+if(nq > old){
+q[c] = nq;
+carlier(n, r, q, p, depth+1);
+q[c] = old;
+} else carlier(n, r, q, p, depth+1);
+}
+if(carNodes >= carNodeCap) return;
+{
+long long old = r[c];
+long long nr = rmin + sump;
+if(nr > old){
+r[c] = nr;
+carlier(n, r, q, p, depth+1);
+r[c] = old;
+}
+}
+}
+static vector<int> roOld;
+static bool reoptMachine(int m, vector<vector<int>>& cur, long long& curC, long long& bestC,
+vector<vector<int>>& best, chrono::steady_clock::time_point T_end, chrono::steady_clock::time_point& lastImpT){
+#ifdef DIAG
+g_roAtt++;
+auto diagT0 = chrono::steady_clock::now();
+struct RoTimer { chrono::steady_clock::time_point t0; ~RoTimer(){ g_roUs += chrono::duration_cast<chrono::microseconds>(chrono::steady_clock::now() - t0).count(); } } roTimer{diagT0};
+#endif
+long long Cr = evalReduced(m, cur);
+if(Cr < 0){ evalSeq(cur, true); return false; }
+carR.resize(J); carQ.resize(J); carP.resize(J);
+for(int j=0;j<J;++j){
+int u = j*M + posF[j*M + m];
+carP[j] = pnode[u];
+carR[j] = dist_[u] - pnode[u];
+carQ[j] = tail_[u] - pnode[u];
+}
+carBestC = LLONG_MAX;
+carNodes = 0; carNodeCap = 3000;
+carBestSeq.assign(J, 0);
+auto nowT = chrono::steady_clock::now();
+carDeadline = nowT + chrono::milliseconds(15);
+if(carDeadline > T_end) carDeadline = T_end;
+carlier(J, carR.data(), carQ.data(), carP.data(), 0);
+if(carBestC >= curC || carBestSeq == cur[m]){
+long long cc = evalSeq(cur, true);
+if(cc >= 0) curC = cc;
+return false;
+}
+roOld = cur[m];
+cur[m] = carBestSeq;
+long long nc = evalSeq(cur, true);
+if(nc >= 0 && nc < curC){
+curC = nc;
+if(nc < bestC){ best = cur; bestC = nc; }
+lastImpT = chrono::steady_clock::now();
+#ifdef DIAG
+g_roAcc++;
+#endif
+return true;
+}
+#ifdef DIAG
+if(nc < 0) g_roCyc++;
+#endif
+cur[m] = roOld;
+long long cc = evalSeq(cur, true);
+if(cc >= 0) curC = cc;
+return false;
+}
 namespace HECD { int solveParsed(int, int, const vector<vector<int>>&, const vector<vector<long long>>&); }
 namespace H08 { int solveParsed(int, int, const vector<vector<int>>&, const vector<vector<long long>>&); }
 namespace Alt { int solve(); }
@@ -453,6 +655,24 @@ span = spanShort + (spanLong - spanShort)*f/100;
 }
 return tmin + (int)(rng() % (unsigned)span);
 };
+auto lastReoptT = T0;
+int lastReoptM = -1;
+#ifndef NO_SWEEP
+if(J > 2){
+vector<pair<long long,int>> mord(M);
+{
+vector<long long> mload(M, 0);
+for(int j=0;j<J;++j) for(int k=0;k<M;++k) mload[m_of[j][k]] += p_of[j][k];
+for(int m=0;m<M;++m) mord[m] = {-mload[m], m};
+sort(mord.begin(), mord.end());
+}
+for(int t=0;t<M;++t){
+if(chrono::steady_clock::now() >= T_end) break;
+reoptMachine(mord[t].second, cur, curC, bestC, best, T_end, lastImpT);
+}
+if(bestC <= LB) timeUp = true;
+}
+#endif
 #ifdef DIAG
 int iterLastImp = 0;
 #endif
@@ -464,6 +684,27 @@ if((iter & 16383) == 0){
 long long fc = evalSeq(cur, true);
 if(fc >= 0) curC = fc;
 }
+#ifndef NO_TRIG
+if(J > 2 && nowT - lastImpT > chrono::milliseconds(150) && nowT - lastReoptT > chrono::milliseconds(60)){
+lastReoptT = nowT;
+static vector<long long> critW, loadW;
+critW.assign(M, 0); loadW.assign(M, 0);
+for(int u=0;u<N;++u){
+int mm = m_of[u/M][u%M];
+loadW[mm] += pnode[u];
+if(crit[u]) critW[mm] += pnode[u];
+}
+int pick = -1;
+for(int mm=0;mm<M;++mm){
+if(mm == lastReoptM) continue;
+if(pick < 0 || critW[mm] > critW[pick] || (critW[mm] == critW[pick] && loadW[mm] > loadW[pick])) pick = mm;
+}
+if(pick >= 0){
+lastReoptM = pick;
+reoptMachine(pick, cur, curC, bestC, best, T_end, lastImpT);
+}
+}
+#endif
 genMoves(cur);
 int nmv = (int)gmoves.size();
 #ifdef DIAG
@@ -595,7 +836,8 @@ sinceImp = 0;
 }
 #ifdef DIAG
 extern long long g_pops, g_calls;
-fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d)\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N);
+extern long long g_roAtt, g_roAcc, g_roCyc, g_roUs;
+fprintf(stderr, "iters=%d lastImp=%d bestC=%lld avgPops=%.1f (N=%d) reopt att=%lld acc=%lld cyc=%lld ms=%.1f\n", iter, iterLastImp, bestC, g_calls? (double)g_pops/g_calls : 0.0, N, g_roAtt, g_roAcc, g_roCyc, g_roUs/1000.0);
 #endif
 }
 {
