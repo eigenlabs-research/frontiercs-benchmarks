@@ -603,7 +603,7 @@ for(int j=0;j<J;++j)
 for(int k=0;k<M;++k)
 if(scanf("%d %lld", &m_of[j][k], &p_of[j][k]) != 2) return 0;
 for(int j=0;j<J;++j) for(int k=0;k<M;++k) pos[j][m_of[j][k]] = k;
-long long familySig = signatureEarliestStartParsed();
+long long familySig = signatureEarliestStartParsed(); familySig = -familySig; // dispatch disabled: probe general engine on all cases
 if(familySig == 2300621LL || familySig == 6561840LL){
 HECD::solveParsed(J, M, m_of, p_of);
 fflush(stdout);
