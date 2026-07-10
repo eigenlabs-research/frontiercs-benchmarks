@@ -19,7 +19,7 @@ static chrono::steady_clock::time_point T_START;
 static inline double elapsed(){
     return chrono::duration<double>(chrono::steady_clock::now() - T_START).count();
 }
-static double TIME_LIMIT = 0.96;
+static double TIME_LIMIT = 0.96; // poolside-preview v3
 
 struct JsonParser {
     const string& s;
