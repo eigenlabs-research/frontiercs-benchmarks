@@ -6,6 +6,7 @@
 #include <random>
 #include <climits>
 #include <ctime>
+#include <cmath>
 #include <unistd.h>
 using namespace std;
 #ifdef NO_REOPT
@@ -638,6 +639,7 @@ if(c < bestC){ best = s; bestC = c; }
 }
 };
 mt19937 rng(777u);
+vector<int> igElitePi; long long igEliteC = LLONG_MAX;
 trySeed(seedGT(0, rng));
 trySeed(seedGT(1, rng));
 if(chrono::steady_clock::now() - T0 < budget)
@@ -710,6 +712,55 @@ curP = bc; imp = true;
 if(!imp) break;
 }
 cBest = curP;
+{
+#ifndef IG_DEEP_MS
+#define IG_DEEP_MS 180
+#endif
+#ifndef IG_SHALLOW_MS
+#define IG_SHALLOW_MS 60
+#endif
+long long gtC = curC;
+int sliceMs = (cBest < gtC + gtC/20) ? IG_DEEP_MS : IG_SHALLOW_MS;
+auto igEnd = chrono::steady_clock::now() + chrono::milliseconds(sliceMs);
+auto igCap = T0 + budget - chrono::milliseconds(700);
+if(igEnd > igCap) igEnd = igCap;
+long long sump = 0; for(int j=0;j<J;++j) sump += wtot[j];
+double Temp = 0.4 * (double)sump / (double)(J*M*10);
+vector<int> piCur = piBest, piNew;
+long long cCur = cBest;
+int d = J-1 < 4 ? J-1 : 4;
+int rem[4];
+int igIter = 0;
+while(d >= 1 && chrono::steady_clock::now() < igEnd){
+++igIter;
+piNew = piCur;
+for(int t=0;t<d;++t){ int i = (int)(rng() % (unsigned)piNew.size()); rem[t] = piNew[i]; piNew.erase(piNew.begin()+i); }
+for(int t=0;t<d;++t){
+int j = rem[t]; int L = (int)piNew.size();
+int bp = 0; long long bc = LLONG_MAX;
+for(int p=0;p<=L;++p){
+ncand.clear();
+for(int x=0;x<p;++x) ncand.push_back(piNew[x]);
+ncand.push_back(j);
+for(int x=p;x<L;++x) ncand.push_back(piNew[x]);
+long long c = evalPerm(ncand, L+1);
+if(c < bc){ bc = c; bp = p; }
+}
+piNew.insert(piNew.begin()+bp, j);
+}
+long long cNew = evalPerm(piNew, J);
+if(cNew <= cCur || (Temp > 0 && (double)(rng() & 0xfffff) * (1.0/1048576.0) < exp(-(double)(cNew - cCur)/Temp))){
+piCur = piNew; cCur = cNew;
+}
+if(cNew < cBest){
+if(cBest < igEliteC){ igEliteC = cBest; igElitePi = piBest; }
+cBest = cNew; piBest = piNew;
+} else if(cNew < igEliteC && piNew != piBest){ igEliteC = cNew; igElitePi = piNew; }
+}
+#ifdef DIAG
+fprintf(stderr, "IG iters=%d slice=%d cPi=%lld gtC=%lld %s\n", igIter, sliceMs, cBest, gtC, cBest < gtC ? "PI-WINS" : "gt-wins");
+#endif
+}
 vector<vector<int>> s(M, piBest);
 trySeed(s);
 #ifdef DIAG
@@ -797,6 +848,12 @@ int failCnt = 0;
 bool afterRst = false;
 auto lastReoptT = T0;
 int lastReoptM = -1;
+if(!igElitePi.empty()){
+vector<vector<int>> es(M, igElitePi);
+long long ec = evalSeq(es);
+if(ec > 0) poolAdd(es, ec);
+evalSeq(cur, true);
+}
 #ifndef NO_SWEEP
 if(J > 2){
 vector<pair<long long,int>> mord(M);
