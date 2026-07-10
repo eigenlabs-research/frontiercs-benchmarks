@@ -5,7 +5,7 @@ using namespace std;
 
 
 static chrono::steady_clock::time_point T0;
-static double TL_MS = 1890.0; // Hard global deadline (env POLYPACK_TL override)
+static double TL_MS = 1900.0; // final optimization: use more of 2s budget
 static inline double elapsed_ms() {
     return chrono::duration<double, milli>(chrono::steady_clock::now() - T0).count();
 }
@@ -846,7 +846,7 @@ static R bfSolve(int minW, int base, double deadline) {
     }
     long long bestA = LLONG_MAX; int bestW = 0, bestH = 0; vector<int> bK, bO, bX, bY, tK, tO, tX, tY;
     double lastPass = 0;
-    for (int d = 0; d <= 30; d++) { // v19.5: wider W only
+    for (int d = 0; d <= 30; d++) { // upstream v19.9
         for (int sgn = (d ? -1 : 1); sgn <= 1; sgn += 2) {
             int W = base + sgn * d; if (W < minW || W > 63) continue;
             for (int tie = 1; tie >= 0; tie--) {   // try both tie-break directions, keep best area
@@ -1264,17 +1264,20 @@ int main() {
             }
         }
     }
-    // late restart: try shuffled orderings at best width for fresh diversification
+    // late restart final: BLF3-first with optimal perturbation balance
     static int LATE = envInt("PP_LATE", 4);
     if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30 && LATE > 0) {
         int lateW = bestR.packW;
+        if (lateW < minW || lateW > 63) lateW = max(minW, min(63, lateW));
         int lateHcap = max(1, (int)(bestR.A / lateW) - 1);
         if (lateHcap >= minW) {
             for (int attempt = 0; attempt < LATE && elapsed_ms() < SOFT_END - 10; attempt++) {
                 vector<int> randOrd = idx;
                 int ns = max(1, n / 2);
                 for (int s = 0; s < ns; s++) { int a = rng.rint(n), b = rng.rint(n); swap(randOrd[a], randOrd[b]); }
-                R r = pack_capped(lateW, lateHcap, randOrd, max(1, n / 4), SEARCH_END, rng);
+                // BLF3 is faster (cached) - try first, fall back to capped if it fails
+                R r = pack_blf3(lateW, randOrd, max(1, n / 4), SEARCH_END, rng, attempt > 0);
+                if (!r.ok) r = pack_capped(lateW, lateHcap, randOrd, max(1, n / 4), SEARCH_END, rng);
                 if (r.ok) { crownRepack(r, SEARCH_END); if (better(r, bestR)) bestR = move(r); }
             }
         }
