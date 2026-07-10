@@ -639,7 +639,7 @@ long long familySig = signatureEarliestStartParsed();
 int rstMs = 400, reoptTrig = 150, reoptCd = 60, prSteps = 40;
 int carCap = 3000, carMsLim = 15;
 int kicksBase = 2, kicksSpan = 2, kicksMax = 8;
-unsigned seedMain = 777u;
+unsigned seedMain = 12345u;
 int extraGT = 0;
 if(familySig == 5560711LL){ // c04 main
   rstMs = 270; reoptTrig = 75; reoptCd = 30; prSteps = 110;
@@ -794,7 +794,7 @@ int deepMs = IG_DEEP_MS, shallowMs = IG_SHALLOW_MS;
 if(familySig==5560711LL){ deepMs=240; shallowMs=100; }
 else if(familySig==913027LL){ deepMs=220; shallowMs=90; }
 else if(familySig==2813772LL){ deepMs=200; shallowMs=80; }
-int sliceMs = (cBest < gtC + gtC/10) ? deepMs : shallowMs;
+int sliceMs = (cBest < gtC + gtC/10) ? deepMs : 0;
 auto igEnd = chrono::steady_clock::now() + chrono::milliseconds(sliceMs);
 auto igCap = T0 + budget - chrono::milliseconds(familySig==5560711LL?620:700);
 if(igEnd > igCap) igEnd = igCap;
