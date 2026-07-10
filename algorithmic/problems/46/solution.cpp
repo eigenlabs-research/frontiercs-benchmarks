@@ -768,7 +768,8 @@ cBest = curP;
 #define IG_SHALLOW_MS 60
 #endif
 long long gtC = curC;
-int sliceMs = (cBest < gtC + gtC/10) ? IG_DEEP_MS : IG_SHALLOW_MS;
+// Skip IG entirely when NEH is not competitive with GT (typical for general JSSP routes)
+int sliceMs = (cBest < gtC + gtC/20) ? IG_DEEP_MS : 0;
 auto igEnd = chrono::steady_clock::now() + chrono::milliseconds(sliceMs);
 auto igCap = T0 + budget - chrono::milliseconds(700);
 if(igEnd > igCap) igEnd = igCap;
