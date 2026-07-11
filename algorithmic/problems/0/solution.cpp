@@ -1,7 +1,5 @@
-// v21.11: fix + crown5; portfolio trial 3
 #include <bits/stdc++.h>
 using namespace std;
-
 static chrono::steady_clock::time_point T0;
 static double TL_MS = 1890.0;
 static inline double elapsed_ms() {
@@ -191,7 +189,7 @@ static R pack(int W, const vector<int>& o0, RNG& rng, bool randtie, int dynLIM0,
         adapt();
         if (!panic && deadlineMs > 0 && elapsed_ms() > deadlineMs) return R{};
     }
-    if ((int)pl.size() != nm) return R{};  // validate all pieces placed
+    if((int)pl.size()!=nm)return R{};
     int H = (int)g + 1;
     int maxX = -1;
     for (auto& pp : pl) {
@@ -580,7 +578,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
     vector<Pl> pl; pl.reserve(nm);
     if ((int)b3cache.size() < nm * 8) b3cache.resize(nm * 8);
     for (int i = 0; i < nm * 8; i++) b3cache[i].valid = false;
-    static int REPAIR = envInt("PP_REPAIR", 25); // ejection-chain depth (0 = off)
+    static int REPAIR=envInt("PP_REPAIR",25);
     auto& own = g_own;
     auto& plSlot = g_plSlot;
     if (REPAIR > 0) {
@@ -761,7 +759,7 @@ static R pack_capped(int W, int Hcap, const vector<int>& order, int window, doub
     return res;
 }
 
-static int BF_HD = envInt("PP_BFHD", 0); // 0=auto: smaller HD for larger S
+static int BF_HD=envInt("PP_BFHD",0);
 static vector<uint64_t> bf_occ; static vector<int> bf_colH; static int bf_W;
 static inline int bf_fit(const T& o, int x) {
     int ysky = 0; for (int j = 0; j < o.w; j++) { int v = bf_colH[x + j] - o.lo[j]; if (v > ysky) ysky = v; }
@@ -897,19 +895,13 @@ static R bfSolve(int minW, int base, double deadline) {
 int main() {
     T0 = chrono::steady_clock::now();
     if (const char* e = getenv("POLYPACK_TL")) { double v = atof(e); if (v > 50 && v < 10000) TL_MS = v; }
-    int ffEnv = envInt("PP_FASTFIT", -1);    // -1 => auto-gate by S below; 0/1 => explicit override
-    int BIGBLF = envInt("PP_BIGBLF", 0);     // 1: big cases skip champion pack, BLF-only
-    int SMALLBLF = envInt("PP_SMALLBLF", 0); // 1: small cases skip champion sweep
-    int JUMP = envInt("PP_JUMP", 15);        // % chance of W jump in restarts
-    int BLF2 = envInt("PP_BLF2", 1);         // 1: restarts use blf2 (hole-aware window best-fit)
-    int BLF2SWEEP = envInt("PP_BLF2SWEEP", 0); // 1: small-case sweep uses blf2 instead of skyline
-    int BLF2ORD = envInt("PP_BLF2ORD", 1);   // 0: big-first order, 1: champion order
-    int B3 = envInt("PP_B3", 1);             // 1: use cached blf3 instead of blf2
-    int PHASE2 = envInt("PP_PHASE2", 1);     // 1: blf2 pass over best sweep Ws
-    double P2FRAC = envInt("PP_P2FRAC", 0) / 100.0;  // 0 => auto by size
-    double P2ENDF = envInt("PP_P2END", 0) / 100.0;   // 0 => auto by size
-    long long P2MAXS = envInt("PP_P2MAXS", 22000);   // phase2 only when S below this
-    long long B2RESTS = envInt("PP_B2RESTS", 50000);  // blf2 restarts when S below this (was 1300)
+    int ffEnv=envInt("PP_FASTFIT",-1);
+    int BIGBLF=envInt("PP_BIGBLF",0),SMALLBLF=envInt("PP_SMALLBLF",0);
+    int JUMP=envInt("PP_JUMP",15),BLF2=envInt("PP_BLF2",1);
+    int BLF2SWEEP=envInt("PP_BLF2SWEEP",0),BLF2ORD=envInt("PP_BLF2ORD",1);
+    int B3=envInt("PP_B3",1),PHASE2=envInt("PP_PHASE2",1);
+    double P2FRAC=envInt("PP_P2FRAC",0)/100.0,P2ENDF=envInt("PP_P2END",0)/100.0;
+    long long P2MAXS=envInt("PP_P2MAXS",22000),B2RESTS=envInt("PP_B2RESTS",50000);
 
     {
         size_t cap = 1 << 20; inbuf.resize(cap); size_t len = 0;
@@ -978,8 +970,7 @@ int main() {
     }
 
     vector<int> idx(n); iota(idx.begin(), idx.end(), 0);
-    bool alt = S < 1200 || (S >= 1400 && S < 1600) || (S >= 2000 && S < 6000);
-    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL) ^ (alt ? 123 : 0);
+    unsigned long long seed = 0x9e3779b97f4a7c15ULL ^ (S << 1) ^ (unsigned long long)(n * 1469598103934665603ULL);
     RNG rng(seed);
     auto ord4 = [&]() {
         vector<int> res = idx;
@@ -999,8 +990,8 @@ int main() {
     else if (S < 3000) factor = 0.5;
     else if (S < 10000) factor = 0.27;
     else if (S < 30000) factor = 0.08;
-    else if (S < 50000) factor = 0.028;  // measured optimum W~33 at S~38k (was 0.01 -> W~19)
-    else factor = 0.009;                 // measured optimum W~24-28 at S~58-96k
+    else if(S<50000)factor=.028;
+    else factor=.009;
     int base = max(minW, (int)floor(sqrt((double)S * factor)));
     if (const char* e = getenv("PP_BASEW")) { int v = atoi(e); if (v >= minW && v <= 4000) base = v; }
 
@@ -1032,24 +1023,46 @@ int main() {
     bool useBF = (bfEnv < 0) ? (n >= BF_N && base <= 63 && minW <= 63) : (bfEnv > 0);
     if (useBF && !bestR.ok) {
         bestR = bfSolve(minW, min(base, 63), TL_MS - 40.0); // more leftover for GRASP
-        // BF path previously skipped final crown — multi-row crown can shave BF packings
         if (bestR.ok) crownRepack(bestR, TL_MS - 5.0);
     }
-    // Post-BF retry: use remaining time for capped packing at best width
     if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < TL_MS - 50) {
         int W = bestR.packW;
         long long tA = bestR.A - 1;
         int Hc = max(1, (int)(tA / W));
         if (Hc >= minW) {
-            // Try largest-first order (different from BF's shape-group order)
             vector<int> o1 = idx;
-            stable_sort(o1.begin(), o1.end(), [&](int a, int b) {
-                if (ps[a].k != ps[b].k) return ps[a].k > ps[b].k;
-                return ps[a].id < ps[b].id;
-            });
-            for (int s = 0; s < n/4; s++) { int a = rng.rint(n), b = rng.rint(n); swap(o1[a], o1[b]); }
-            R rr = pack_capped(W, Hc, o1, max(1, n/4), TL_MS - 10, rng);
-            if (rr.ok && rr.A < bestR.A) { crownRepack(rr, TL_MS - 5.0); if (better(rr, bestR)) bestR = move(rr); }
+            if (useBF && n < 3162) {
+                struct D{int f,s,w;}; vector<D>d(n,{0,INT_MAX,INT_MAX});
+                for(int i=0;i<n;i++)for(const T&t:ps[i].t)if(t.w<=W&&t.h<=Hc){
+                    d[i].f++;d[i].s=min(d[i].s,W-t.w+Hc-t.h);d[i].w=min(d[i].w,t.w*t.h-ps[i].k);
+                }
+                for(D&x:d)if(!x.f)x={INT_MAX,INT_MAX,INT_MAX};
+                stable_sort(o1.begin(),o1.end(),[&](int a,int b){
+                    if(d[a].f!=d[b].f)return d[a].f<d[b].f;
+                    if(d[a].s!=d[b].s)return d[a].s<d[b].s;
+                    if(d[a].w!=d[b].w)return d[a].w>d[b].w;
+                    if(ps[a].k!=ps[b].k)return ps[a].k>ps[b].k;
+                    return ps[a].id<ps[b].id;
+                });
+#ifdef LOCAL
+                static int guardedCalls=0,guardedWins=0;guardedCalls++;
+#endif
+                long long incumbentA=bestR.A;
+                R rr=pack_capped(W,Hc,o1,max(1,n/4),TL_MS-10,rng);
+#ifdef LOCAL
+                if(rr.ok&&rr.A<incumbentA)guardedWins++;
+                cerr<<"guarded calls "<<guardedCalls<<" improvements "<<guardedWins<<'\n';
+#endif
+                if (rr.ok && rr.A < bestR.A) { crownRepack(rr, TL_MS - 5.0); if (better(rr, bestR)) bestR = move(rr); }
+            } else {
+                stable_sort(o1.begin(), o1.end(), [&](int a, int b) {
+                    if (ps[a].k != ps[b].k) return ps[a].k > ps[b].k;
+                    return ps[a].id < ps[b].id;
+                });
+                for (int s = 0; s < n/4; s++) { int a = rng.rint(n), b = rng.rint(n); swap(o1[a], o1[b]); }
+                R rr = pack_capped(W, Hc, o1, max(1, n/4), TL_MS - 10, rng);
+                if (rr.ok && rr.A < bestR.A) { crownRepack(rr, TL_MS - 5.0); if (better(rr, bestR)) bestR = move(rr); }
+            }
         }
     }
     if (!bestR.ok) {
@@ -1064,8 +1077,7 @@ int main() {
         bestR = move(r);
     }
 
-    const double SEARCH_END = TL_MS;           // hard abort for any pack
-    const double SOFT_END = TL_MS - 15.0;      // don't start new work after this
+    const double SEARCH_END=TL_MS,SOFT_END=TL_MS-15.0;
     vector<int> ordBLF = idx;
     stable_sort(ordBLF.begin(), ordBLF.end(), [&](int a, int b) {
         if (ps[a].k != ps[b].k) return ps[a].k > ps[b].k;
@@ -1094,7 +1106,7 @@ int main() {
     double avg = 250.0; int cnt = 0;
     vector<pair<long long,int>> sweepRes; // (area, W)
     bool doPhase2 = (!big && PHASE2 && S < P2MAXS);
-    double SWFRAC = envInt("PP_SWFRAC", 100) / 100.0; // sweep cap for the no-phase2 small path
+    double SWFRAC=envInt("PP_SWFRAC",100)/100.0;
     double sweepEnd = doPhase2 ? min(SOFT_END, TL_MS * P2FRAC)
                                : (!big ? min(SOFT_END, TL_MS * SWFRAC) : SOFT_END);
     for (int wi = 0; wi < (skipSweep ? 0 : (int)Ws.size()); wi++) {
@@ -1131,7 +1143,7 @@ int main() {
         }
         double dt = elapsed_ms() - t1;
         cnt++; avg = (avg * (cnt - 1) + dt) / cnt;
-        if (!r.ok) break; // deadline hit mid-pack
+        if(!r.ok)break;
         crownRepack(r, SEARCH_END);
         if (r.ok) sweepRes.push_back({r.A, W});
         if (better(r, bestR)) bestR = move(r);
@@ -1194,7 +1206,7 @@ int main() {
             if (doBLF && capEligible && bestR.packW > 0 && bestR.packW <= 64 && (int)(rng.nxt() % 100) < CAPSHARE) {
                 int W;
                 {
-                    static int dwBase = envInt("PP_CAPDW", 3); // v19.9: was 2; local A/B +holdout
+                    static int dwBase=envInt("PP_CAPDW",3);
                     static int dwWide = envInt("PP_CAPDWW", 6);
                     static int wideP = envInt("PP_CAPWIDEP", 25);
                     int dw = ((int)(rng.nxt() % 100) < wideP) ? dwWide : dwBase;
@@ -1206,7 +1218,7 @@ int main() {
                 int Hcap = (int)(capA / W);
                 if (Hcap < minW || Hcap <= 1) { continue; } // too squat to be plausible
                 bool fromBest = !ilsOrd.empty() && (rng.nxt() & 1);
-                obuf = fromBest ? ilsOrd : ((((cntBLF & 1) != 0) ^ alt) ? ordBLF : ordB2);
+                obuf = fromBest ? ilsOrd : ((cntBLF & 1) ? ordBLF : ordB2);
                 int swaps = 1 + rng.rint(12);
                 for (int sswap = 0; sswap < swaps; sswap++) {
                     int a = rng.rint(n), b = rng.rint(n);
@@ -1271,7 +1283,6 @@ int main() {
             }
         }
     }
-    // late restart: try shuffled orderings at best width for fresh diversification
     static int LATE = envInt("PP_LATE", 4);
     if (bestR.ok && bestR.packW > 0 && bestR.packW <= 64 && elapsed_ms() < SOFT_END - 30 && LATE > 0) {
         int lateW = bestR.packW;
@@ -1331,5 +1342,5 @@ int main() {
     }
     fwrite(out.data(), 1, out.size(), stdout);
     fflush(stdout);
-    _Exit(0); // skip destructor teardown of large heaps
+    _Exit(0);
 }
