@@ -25,7 +25,7 @@ static bool globalGravity(R&r,double deadlineMs){
   auto&grid=c_grid; grid.assign((size_t)H,0ULL);
   for(auto&p:r.pl){auto&t=ps[p.idx].t[p.ti];for(int y=0;y<t.h;y++)grid[p.y+y]|=((uint64_t)t.rmask[y])<<p.x;}
   long long curA=compactArea(r.pl);
-  bool improved=false; int rounds=0; const int K=20;
+  bool improved=false; int rounds=0; const int K=30;
   while(rounds++<2000&&elapsed_ms()<deadlineMs-2){
     int NP=(int)r.pl.size(); int k=K<NP?K:NP;
     vector<int> order(NP); iota(order.begin(),order.end(),0);
