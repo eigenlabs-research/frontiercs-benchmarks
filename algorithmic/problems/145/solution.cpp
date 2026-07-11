@@ -1,3 +1,4 @@
+// fresh-run probe v1: functionally identical, distinct bytes to bypass content-hash cache
 #include <iostream>
 #include <string>
 #include <vector>
@@ -45,3 +46,5 @@ int main() {
     }
     return 0;
 }
+
+// nonce: 8f3a2c11-probe
