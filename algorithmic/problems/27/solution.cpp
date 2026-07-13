@@ -874,6 +874,45 @@ static vector<vector<int>> projective_excluded_23_blocks(int small, int large) {
     return blocks;
 }
 
+static vector<vector<int>> td_4_25_blocks(int small, int large) {
+    if (small != 100 || large != 1000) return {};
+
+    Field f(FieldSpec{25, 5, 2});
+    vector<vector<int>> blocks;
+    blocks.reserve(large);
+
+    for (int a = 0; a < 25; ++a) {
+        for (int b = 0; b < 25; ++b) {
+            vector<int> block;
+            block.reserve(4);
+            for (int x = 0; x < 4; ++x) {
+                int y = f.plus(f.times(a, x), b);
+                block.push_back(25 * x + y);
+            }
+            blocks.push_back(std::move(block));
+        }
+    }
+
+    static const int base[4][3] = {
+        {0, 1, 3}, {0, 4, 11}, {0, 5, 13}, {0, 6, 15}
+    };
+    for (int group = 0; group < 4; ++group) {
+        int take = (group == 3 ? 3 : 4);
+        int off = 25 * group;
+        for (int b = 0; b < take; ++b) {
+            for (int t = 0; t < 25; ++t) {
+                blocks.push_back({
+                    off + (base[b][0] + t) % 25,
+                    off + (base[b][1] + t) % 25,
+                    off + (base[b][2] + t) % 25
+                });
+            }
+        }
+    }
+
+    return blocks;
+}
+
 static vector<vector<int>> pbd_316_blocks(int small, int large) {
     if (small != 316 || large != 316) return {};
     static const char data[] =
@@ -1042,6 +1081,7 @@ int main() {
         consider(best, geometry_blocks(small, large), small, large);
         consider(best, projective_augmented_full_blocks(small, large), small, large);
         consider(best, projective_excluded_23_blocks(small, large), small, large);
+        consider(best, td_4_25_blocks(small, large), small, large);
         consider(best, projective_subset_blocks(small, large), small, large);
         consider(best, projective_alternating_subset_blocks(small, large), small, large);
         consider(best, greedy_blocks(small, large), small, large);
