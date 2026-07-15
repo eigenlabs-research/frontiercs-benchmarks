@@ -1,6 +1,4 @@
-#include <iostream>
-#include <string>
-#include <vector>
+#include <bits/stdc++.h>
 using namespace std;
 
 int main() {
@@ -8,8 +6,11 @@ int main() {
     cin.tie(nullptr);
 
     int mode;
-    cin >> mode;
-    const vector<string> mode0 = {
+    if (!(cin >> mode)) return 0;
+
+    // These are independently constructed: mode 0 can exploit zero-clues,
+    // while mode 1 must keep every clue positive.
+    const array<string, 12> with_zero = {{
         "2   1   121 ",
         "11 11  1   1",
         "1 1 1  1   1",
@@ -22,9 +23,8 @@ int main() {
         "11   3 1 1  ",
         "1 0  1 3 1  ",
         "1  1 111 1  "
-    };
-
-    const vector<string> mode1 = {
+    }};
+    const array<string, 12> positive_only = {{
         "1   1   111 ",
         "12 31  3   1",
         "1 1 3  1   1",
@@ -37,11 +37,8 @@ int main() {
         "12   3 2 1  ",
         "1 1  1 3 1  ",
         "1  1 111 1  "
-    };
+    }};
 
-    const vector<string> &answer = (mode == 0 ? mode0 : mode1);
-    for (const string &row : answer) {
+    for (const string& row : (mode == 0 ? with_zero : positive_only))
         cout << row << '\n';
-    }
-    return 0;
 }
