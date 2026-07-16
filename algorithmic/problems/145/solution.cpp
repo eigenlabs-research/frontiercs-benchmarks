@@ -1,47 +1,30 @@
-#include <iostream>
-#include <string>
-#include <vector>
+#include <bits/stdc++.h>
 using namespace std;
 
 int main() {
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
+    int mode = 0;
+    if (!(cin >> mode)) return 0;
 
-    int mode;
-    cin >> mode;
-    const vector<string> mode0 = {
-        "2   1   121 ",
+    // Candidate A001: maximize the secondary objective while using the same
+    // admissible construction in both modes.  Every clue position is filled
+    // with '1', which is allowed for mode 0 and mode 1; blanks are preserved
+    // exactly from the fixed template.
+    const vector<string> out = {
+        "1   1   111 ",
         "11 11  1   1",
         "1 1 1  1   1",
-        "1 1 1  1101 ",
-        "1 1 3  1    ",
-        "1   0  1    ",
+        "1 1 1  1111 ",
+        "1 1 1  1    ",
+        "1   1  1    ",
         "            ",
-        "1  1   01101",
+        "1  1   11111",
         "1 1      1  ",
-        "11   3 1 1  ",
-        "1 0  1 3 1  ",
+        "11   1 1 1  ",
+        "1 1  1 1 1  ",
         "1  1 111 1  "
     };
-
-    const vector<string> mode1 = {
-        "1   1   111 ",
-        "12 31  3   1",
-        "1 1 3  1   1",
-        "1 1 1  1211 ",
-        "1 1 2  1    ",
-        "1   1  3    ",
-        "            ",
-        "1  1   21311",
-        "3 1      1  ",
-        "12   3 2 1  ",
-        "1 1  1 3 1  ",
-        "1  1 111 1  "
-    };
-
-    const vector<string> &answer = (mode == 0 ? mode0 : mode1);
-    for (const string &row : answer) {
-        cout << row << '\n';
-    }
+    for (const string &s : out) cout << s << '\n';
     return 0;
 }
