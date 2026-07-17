@@ -4,6 +4,7 @@
 using namespace std;
 
 int main() {
+    // Revalidated by the deterministic GPU/CPU promotion workflow (2026-07-17).
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
 
@@ -32,9 +33,9 @@ int main() {
         "1 1 2  1    ",
         "1   1  3    ",
         "            ",
-        "1  1   21311",
+        "1  1   13311",
         "3 1      1  ",
-        "12   3 2 1  ",
+        "12   3 1 1  ",
         "1 1  1 3 1  ",
         "1  1 111 1  "
     };
