@@ -1,22 +1,247 @@
-#include <cstdio>
-#include <cstdint>
-#include <cstring>
-struct E{uint64_t h;const char*s;};static const E a[]={
-{1337409398582560185ULL,"I6ADPKSE120LBF9Q54COTM7JRN8HG3KAHLNOTS04EDRQP1IGF3J86BM7295CNGJA1L7Q9S3C05IFM4HO8RKBTE62PD15K0S4F9IORTQNECP2MAHJ8DBG73L64152LSHPTF763AEGODMNRBK9CI0J8QHEABG84MQJ102KSLOCRT56P7IDF93N29I8AM5LEGSTHKPCJ46N7F1RO0Q3DBQ751CDL0K4JSHP3A2I9ME6TN8GBFORTDE0P32JCQ1F7MOGRN5ILSK84HB69A97MGKJ0H2AI186LPSNOFE3R45TCDBQI7T4DJS9HQF23LA6GRP08M1NKBO5CEEDOMH1G0583RSPKI7A2J9NCBL4Q6TFT07D2M1KEI89LO64NH3BRC5SJAPGFQMJI5G8KC7A20EDL3H4NPOFB6RQT1S9JMBHS32QCP87KAERLO19045GI6FTND4BC5K01HM87AI3DR2TQP9OJLGFENS6A05QIKFRJL2783PC94HED1TGNSO6MB0B6ISM32JQ9LH1FOKN8GEDC4AR75PT78PEM0FDRC4529JG3LQBHTIK1A6NSOLRET0G62S17CBIM94KAOFJHND35Q8P"},
-{1097491252512501470ULL,"cQMF37P2UbDLIB05EJYN4RWdZA16KG8OT9VXCaSHMODU1cZP3IQ5YX2CEHb0a4RWFd7A6KG8T9VLBSJNE8LGPBZ37Q65O2CVSHXbMJ0NY4RWFdcA1KDUT9Ia3G57QODKdZ628PIBULaNYSHECbMJ4RWFcA1T9VX08CEUDdcP1bZM35QOGBINY0SH4RWF7A6K2T9VXLaJZU7QOc2JM0aSX5LEYNH4RWFdPA16K3DG8T9VBbCIaP4ZdOU7KN3L2I8QSB5HJYMRWFcA16DGT9VXEb0C4dDP3Z57XQO02UILBCYSaNHMRWFcA16KG8T9VEbJ52Q1cP68dZDIGEB30bMOYLS4RWF7AKUT9VXCaHJNR4WFd7cZA1P6K3DG8UTO29QVXEbBCI0LaJSHN5YM23OULD0ZB7MQP8X5bICSHY4RWFdcA16KGT9VEaJNP7F26T3LcDUN8OV5B0SEIYM4RWdZA1KGQ9XbCaHJEPKOG7U0D5S2Q6NCLabHBYM4RWFdZcA138T9VXIJ8XVTOcLJD3PUGE2C5IBHMYSN4RWFd7ZA16KQ9b0ab4cD8PGY5O3UL1X2N0IMCSHRWFd7ZA6KQT9VEBaJ"},
-{13064344411517067317ULL,"FS9LDPQ5ETIM7AK01RJ63G4OBN8HC22HSK68T05A94OB7CMLRDF3IJPQNE1G06NS89CDQ51LFMPAT43JBHEOG72IKRIJ25COTMG8BA9PFHRKLQ03D1NE67S48Q1IP2NS3AD4GMC57HLER9BKT0JO6FPEIKO75FTH3A4LMJGNCSQ29180R6DB63GACOBPEL4QMNJ8I51209HF7TDRSKH3DQOC6F84J7T1PLBE5K2S9N0MIRGAAC79BD30T28I6K1RNFH4Q5OGPJLSME8IC36EDKQA1S2MRBGJFPLH95OT4N077ON9AICF1GL3Q64SR0EBMKD285HJTPQ7AJ4605193COBTMRLFDHIG8S2NPEKMH01DFLIKR2AN83P74QOGBJ65T9SECEG1NJ4PA9KC28TH57DSL36MIQB0FRO21L3BN945KM67PES0JC8HQFGOTRADIJ5D2H190CTL48G6QKPRSBEFNIA3MO7D6O895JATS4NC1MKLIEP32FH7QRGB0CTGI7KO950ANHBMP8LREJF146SD32QALIO71JFHBSE90CN2R5QDM84KG6TP3N506Q489GMDSCTA213HORELIPJ7KBFSC54P3LHQRI9A6G1FNOE7JM20KB8DT39TA2C0NFLP7HBM5KQIRG6841DJSEO5FA79QL24DP3G0TONHCKRESMB1I8J61AL53BCKMI2F8H9PR6N0OE47SJGQDTARSGJ457BDTQ6PCL2FN0OHM3EK18I9"},
-{4443467892680442013ULL,"XDCPf2IR9OQcFd3LB5KGJS81HghaA64UWYVNb7ZeEi0TMd7XfLQTWE4H8gNhMJ5DiZ9IGYS1RB23AeP0KO6bFcaVCUBNUP8cd3RXDi2KaFTheVAZOWLHgM5091fC6SQbG7IE4JYVBhCRgSPK31fLX8ZYUHi264OcDET5Q7NdJ0FaGWI9MeAba9LEiIRfhQF73JcBO4KYPg1MZADC2NV8bTXe5SUH6Wd0G74NJS62FVa1QAHEBOKPgcXT3bWZUM95RYGfL8ed0hCIDiRPFc2SIV5WAHdKi3CDM4aTEXU0fGJ8e7b6LQgBY9NhO1ZaVPFRQ47XcEihNCUIeTG16Y0S8ObMB95fgAWZdDJL2K3H1R8a2DdfLgUFT75WSAC9I3PbQBK0eJhZ6VOHEciMNX4YG9SQ7EaKB48cPJU1ibeVf0OWFM32DTHNACGIgLRdY5hXZ6QcgdFWJL9XDNMaG4702S6CbYefI1E5i8UhZKHAVTB3RPOSfWg98iMZBhY0V6GEIRNL7AXdCPb3FKacQOT4DJ21UH5e"},
-{5397184421306091276ULL,"KP4N1M0B8GZ596EF3DRIVQJXHA2COS7WLYTU1KW6PN4AM08BG5Z9JEF3DRVIQXH2SCOLTY7UMPKN140B8GZ569EF3DIRVQJXAH2OSWCLT7YUPKN1M408GBZ965EFD3RIVQJAXH2SWOCLT7YUPKNM140GB8Z695ED3FRVQIJAXH2WSCOLT7YUPKM1N40GBZ869E5FD3IRVQJAHX2SWOTCL7UYPKN140GMZ896B5EDF3RVQIJAHX2SWOLCYT7UPKMN40G1Z869BE5DF3RVIQJAHXSC2WOTL7YUPKN140GMZ869B5EFD3RIJVAQH2XWSOCLT7YUPKN410MGZ869BE5FD3VRQIJAH2XWSOCLT7YUPNK41GM08Z69BE5FD3RJIVQHXA2WOSLCT7YUPNK41GM08Z69BEF5D3RJQIVHAX2SWOCL7TYUPNK41GM08Z96BE5F3DIRJQVHA2XSOCLW7TYUPNK41GM0869BZE5F3RDIJQVHXA2OSCWL7YTUPNK41GM06ZB89E5F3RDIJQVHXA2OSCWLT7UYPNK1G40M6B8Z9E5F3RDIJQVHXA2OSWCL7YTUPN4KG1M06B89ZE5F3RIJQDVHXO2ASWC7LTYUPNK1G4M06B8Z9E5F3IJRQDVHOX2ASWC7LTYUPNK1G40M6B8ZE9F5RJ3IQDHVXOA2SWC7TYLUPNKG1M06B89ZE5F3JRVIQDH4OXA2SCWL7TYUPNK14MG06B8ZE95FJ3RIQHVDXOA2CW7LSYTUPNKG146M0B8ZE95FJ3QRDIHVXOASC2W7LYTU"},
-{16799144620432447045ULL,"Df9aTJdQ2OmMPS3K8Wnb0Vi1jk6X4LIg7eCYEhcNAFlR5ZUBHGMUOED43ZemR87gf9lN1jdT6BXQJWHCYhiac0APF5VSbnkL2GKIhX19dOKRmM4ES328WLG7gflNTU6PQJYIeHCiaDjc0AF5VZbnBk1dlMiELOh7QA2ZWDVf9NTU6B4KSmJIeCY8ajc0PFR5XbgnkH3GJHKMXL1Th8WR2QZ3A0GVf9ilN6B4mOYIeCaDjcPF5dESbUgnk7iVDhR1TmdOP4QEn3Ge07f9lk6BXK2JLIHCYbajcNAF5ZSMUgW8O4E9aRMS820gVflN1dTUmQLIeHCYhiDjcAPF5ZXbJn6BkWG3K7NDfij6XUmOJYhaFR5CHZEMbn8c0APld3VSgBkQL2WGKeI7T1495DiaXMh8W0TARS3G7V9lN1jUB4K2LOIHCYZcfPFdEbmJgnQ6kecV9l1dTkBP4KS2QLWIGg7eYhiaDjNfFR5ZXEMbmUJn6OH80C3A"},
-{15351599476256066243ULL,"ACERJ42IU3FQ019ONDM5H86SKLTVP7GBO1CAF4R2E3JIQ0859DUNMH6SKPLVT7BGQA4R2CJE3F1ID5O09MNU8H6SKVPLT7BGA4R2CJ3FE1Q90I5ODMNU86HSKLVP7BTGA4CJR2FQ3OE1I05DUN9MH86SKVPLT7BGA4CJR2FQ3EO1I9UNM05D8H6SKVPLB7TGACJR2QF3EINOU1DM49085H6VSKPL7TGBAJCRFQ3E2U1IONM405D986SHKVLPB7TGACJ2RFQ3U1ENOM4ID09865HSKVLP7TGBARCQJ32EUNOFI4M8915D06HSVPKL7TGBCJRQA32EUNFO491MDI0856SHKVLP7TGBJRCAQ32EUONFM941D6I805SKHVLP7TGBRCJAQ32EUNO4FM19D608I5KHSVLP7TGBRJCAQ32UENFO4M8D0I6195KLVSP7HTGBRCJAQE23UNOF4DMI86019LVS5PKH7TGBRCJA2QEN3OFU604I8DM5VS1KH7LP9TGBRCJAQ2E3NUFOM4I68D0V51H9KLP7GSTBRCJAQ2E3NFUOM4ID61KS8L5HV9T0P7GB"},
-{2769073518643703594ULL,"P2STBY6bEG4IRA38VN1MH95OXDKaUJ7F0LZWCQR9QZKVS2TUDYHP50XaM4FI6B8WN7OECb13JLGAUJFMAB0XGRQE17bOTY8DNZPKSa523CWLIHV694ARLPTbZC571SJWFIQVX3H6KME8DGY09NBa24OU394FBaM5ZPUHXWJ81SQT0YAEKRD6bIV2NCOG7L4B3WM6a8DCQY9ZJS071HVEFbLUNIK5GTXPORA2BIbDaLQRTE4U635XMKGA98S0NWF1PJHCY2VZ7OQJOP6BKbL3DY8ZSAH5MNEF7a102UCTGXR4VWI9RXL2CA65PHDIYWEQBKMG8TaS1ZF3UN04bO7VJ9MUS65H7A3YXBKQITE1Z9DbRFCJONaVP4GW280LARPL3QDEC14YKMNHXF09S2OWI8a5T6JBV7UZbGW2QA5F14OHSPNCVEKTYDMXBI83LJZba09GRU67TAU0ZFaLbXKDH74Y3EJ1865IP9BMCNQROSG2WVNDAMHWQLaTRUbZX8K3IOSG91EB65PF07J42YCVCRPWM8KQa3A6E5DIbUJ4YN9BGT0LXVFOZS1H72XHU238RBaGDJISbAVK5M07E6YWPCZOFQ9L4TN1C0NHAMSKPRU3W58YBJXLIDF6bZVG4T17OQ92aE2T67ZBJaGCH8SM5YV0DAOXR9UK4EPI3FNLb1WQXHbMaK38DSJZEC7T960YL5BGIPUV4N2Q1ORAWF"},
-{15367604488868639828ULL,"EMDNLC2JF1845697OHG3ABK0IEMNDLC2JF1845967OH3ABGK0IEMNDLC2JF1845967OH3ABGK0IEMNDLC2JF1489567OH3BGAK0IEMNDLCJF2148956O7H3BAG0KIEMNDLCJF2418956O7H3BAGK0IEMNDLCJF2418956O7H3BAGK0IEMNDLCJ2F418956O7H3BGKA0IEMNDLCJ2F489561O7H3BGKA0IEMNDLCJ2F485961O7H3BGKA0IEMNDLJC2F458691O7H3BGKA0IEMNDLJC2F45896O17H3GBKA0IEMNDLJC2F45986O17H3GBKA0IEMDNLJCF245986O17H3GBKA0IEMNLDJCF2495867O1HG3BKA0IEMNLDCJF24985671OHG3BAK0IEMNLDCJF29845671OHG3BAK0IEMNLDCJF29845671OHG3BAK0IEMNLDCJF29846571OHG3BAK0IEMNLDCJF29846517OH3GBAK0IEMNLDCJF29846517OH3GBAK0IEMNLDCJF29846517OH3GBAK0IEMNLDCJF29846517OH3GBAK0IEMNLDCJF29845617OH3BGAK0IEMNLCDJF29854617OH3BGKA0I"},
-{8959737032643399058ULL,"70P56DVN24MYLIE1OFQ9KSCZRUf8BTdbAX3WHcaGJeAZI6DGP2OLcVNBb083CWYEXHJd4SQ9RUe5faK1TMF7OMcdFVSU7ZP1E9CKXTW8JQ4NY5G03LA2HBDebRIfa6PVQJ945LCNcRKFT38SH2G16YAEWZdIDBbMUX0fOa7eLW0McIJY8e3ZRPa4HUdKE1f9GC7XVO6D5N2SQABTFb4fUNEeB7AO3DcQM5VTa0CGFP6KX1WYZIS8LJHd9bR2GVAYKD6Ne7QJ5fF1HCMX2WBS8TI4cbRZ9UaOL30dPEcR5KN2W71FfbT4I0Ue6PHS3VAZ9DXGJEMLCQOdYaB8d74ZB1MAG95LFNKc6SU328aWYERJbH0DQXOVCePTIfdQb5ePDXHWJaCcF03912NOI6G8ZESBT4MLVAUR7YKfVWUMITY1N294JZeK875HOEFaDR0SXGfcdAB3QbLPC6dNELPYM9JZc40Ve81aHKX2WCSOFR7fQ3TUbBAGD5I6P0FCG1SHUTcJBYZ4OfRb26aIWADQe38E97XV5MNKLd0dPaZNAMG2IBc8U71fYVE64KCWLTRDHJ9QFXOS5be3dJGeMOZE6DBUb5179CFVXK8WISfQT4RA23H0NcYLPaaBFPKA621NbDU9Td0XJeWO7ZC4VQERGcM38LYHS5fI"},
-{15096950851723449319ULL,"fKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXflKdEkTCe1jQM8WacOYBiN65I3RF24LJDUHVhS79A0GgZbPXdkTCe1jQMWacYBiN5l3I2RF4LJDHVhS79A0GfgZbPXKE8O6UfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXaV7fPXKdEkTCe1jQM8WcOYBiN65l3IRF24LJDUHhS9A0GgZbfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPX"},
-{17556072703228808712ULL,"Z6F4C7Ba20M5OH3VWDGYUIdTSbAJP8NEQXK9RLc1S1Ad9L7MaIHNXP4CZ8B20QOKcVFWY65Tb3JGDEURHSC7cUMIYGXN6PA4EB1JL05RKOFDZT2ba38QWd9VTMVKOcN6A4ZBa190LRHFD7YCId5S2bJ3P8GEUQWXM0TH1GNKXUcVd6PACEZ8JLQFD7YI5OS2bBa34W9RHdJcVWYMG64CEZ7Ba12b0LQOFDIT5SA3P8NUXK9RV17MHcNdK6A4E8JbLQXFWYCUIZ5TO2SBa3P0GD9R7FcB3SH01KVOd6P4Ca2J9MLRQXWDYUIZ5TbA8GNEPH1EYaMcVKN6AS4Z8B290LQWF7GCUI5TOb3JDXdRH1MSaVT7O9IGcX6A4Cb0LRKFYdZ52B3JP8NDEUQWcVHX1MGdNPFA4ab0LRQ3D7YCI6Z5TOS2BJ8EUWK9B37DMWdVacGKI6S4ET81J290LQHOFYCZ5bAPNUXRTEcWGHVNIPA4CB10LRQO3XFD7YU6dZ5S2baJ8MK9GJECKI1WUHdcX647BaM0LNFDYZ5TO2SbA3P8Q9RV6C7aS0JM1GcIYHdAB9RQKOFDZ5T2b34P8NEUWXVLABSd07TGYOMVKWcNP4CEZ1J295RHFUI6ba38DQXLbPASET81J9LRQKcNXF7C6Z5O2Ba340GMDUWHdYVIFH0c1ONXGK6dA4CZ7Ba2MLQDYI5TSb3JP8EUW9RV78TBWYL1HVMNXRd6P4aJ90QOKcFDGCUIZ52SbA3E4E9QFM7Nc0H1GKId6XPC8JLOVWYUZ5TS2bBAa3DR"},
-{16105635282489783152ULL,"9IRBF4CLDEP8U53VJ6GX1NQTHSWKM2A0O7N7JBF9RCDELP43I86GX1QHSWM2OVU5TA0K94BF86RC7L3DVENU5G2Q1JTAPHS0XKWMIO94B3F8H6WRNC7LDVEU5G2Q1JTAPSX0KMIO94BF86RCL73DVENU5G2Q1JTAPHSX0KWMIO94FB86RCL73DENVUG521QJTAPHSX0KWMOI94BF86RCL73DVENU52GQ1JTAPHSX0WMKOI94FB86CR7LD3VEU5N2GQ1JTAPHSX0MKOWI9BF486RLC37DEVNU52GQ1JTAPHSX0WMKOI9BF486RCL3D7EVUN5G2Q1JTAPXH0SMWOKIF49B86RCL37DEVU5N2GQ1JTAPXHS0MWKIOF49B86RCL37DEVU5NG2Q1JTAPHSX0MWKOIF49B86RLC37DEVU5NGQ21JTAPHXS0MWKOIF49B86CLR37EDVU5NG2Q1JTAPXHS0MWKOIF49B86RLC3DE7VU5NG2Q1JTAPXHS0MWKOIF49B86LRC3E7DVU5NG2Q1JTXAHPSM0WKOIF49B68LRC3ED7VU5NG2Q1JTPXAHS0MWKOIF49B86LRC3DE7U5VN2GQJ1TAXPHS0MWKOIF49B86LRC3ED7VU5N2GQ1JTPXAHSM0WOKIF498B6LRCE3DU7V52NGQJ1TPAH0XWSMIOKF49B86LRCE3DU7V52NGQJT1PAHMX0SWOKI"},
-{9210720080051577033ULL,"R6KFJ31OSB5T47AG0HCDM8P2E9LQNIEIT53QMB4P7SAF98JN0GD2KOL1R6HCRDFB7JOM864TGQ91NA30SECPHKL25IHRSKINTAOL4DB9E1FP58703GQ2CMJ62QJ57PCIO14860NEHD9MBAFK3LRSTG1OBRH62I9J40QK7T8GPSCNAEDFML359N0I35A16SRJP4B72TKFOEMCQGDH8L70FA9DINKS6R52BM13QGLEJP84OHCTCDOIJE0R165M82LH4QTBNGP79A3FKSH07EB5MJL1D6I3G28PRQS9FN4OACTK5H9JBC8OLRGF4037EA2TMND6IKSQ1PB324JEOH8LIRD07A51CSGMKNTF9P6QDGH36JCSFEQP01OR7NM5KB4T8I92LA24MAT3HBIL1DCR0KF9J5OS76EQPNG8IQH9P8M5RNS20K4G6ELCJADBOTF137B62709NRGE8F1JHOMLPACKI45DS3TQJP643M5IC1R8F9OE7QB0LH2DAKNGSTRF9NEO53I1CHAGKBJ8627Q4TSPMDL0T6K3Q21P8FNJ7DHR5M09AEIS4OGBCLB17FSI28RQ64KMOHGT3ELCP590NDJAQP9KTDFCGJ7EM6N4250HLSB38AIRO1RS5D4Q0JHOB16MPIKTLF3CN78EAG924FT61J8ALBR2DMO79PSCNE5KHQI30GJFM7R9CTS136NDKP0OA4GEQLB8I25H"},
-{4661888390002088212ULL,"N7EF15KRMBPU4fXHhiW8SdCADVcJaOLQYb39602GeIgZTN7FKBE5RM41UPXfHhiAWcC8dDSVOJa09LQYbG6eZ23IgTNFE75K1BRPM4fUXhHiAW8dCSDcVOJaQLYb9602Ge3IZgT7NF5K1BE4RMPUfhHXiWA8dCSVcDOJa9Q3YbL60G2IgZeT7FNE5KR41BMfPUhHiWX8dCSDAVcJaQOL9Yb062GeIg3ZT7NFK514RPBMfUEXhiWHdS8VDcCJQAabO9Y6LG20eIZgT3N7RK5F14BMPfUhEWi8XHdSVOcDACJQaY9b0L62GIeZg3TN7K5F14RBMfPUEhXWiHdS8VcDJCAQOa9Yb06L2GIe3ZTgN7K5F14RMPfBEhiUXHWdSV8DcJACOQ9aYLb062IGge3TZN7K5F14RfMUPBhEWHiXd8VScDCQJAOa9bLY062IGgeT3ZN7K51F4MPRBEfhUiXWHdSV8cDCJAOQ9YabL062GIeTg3ZNK7514FMRPBfEhUHiWdSV8cDCXOAJ9QabLY062IGeTg3ZNK75F14MRPUfBEhidHWc8VSDCXOAJ9aYL0b62GQIeTg3ZN75K1F4MRBPfEUHWdhi8SVcDCOJA9baL0Y62GITQe3gXZ"}
+#include <bits/stdc++.h>
+using namespace std;
+
+struct Solver {
+    int J, M, N;
+    vector<vector<int>> mach;
+    vector<vector<long long>> dur;
+    vector<vector<int>> posOfMach;
+    vector<vector<long long>> rem; // remaining work including operation k
+    vector<long long> machineLoad, jobLoad;
+    mt19937_64 rng;
+    chrono::steady_clock::time_point startTime;
+    double timeLimit = 0.92;
+
+    bool timeUp() const {
+        return chrono::duration<double>(chrono::steady_clock::now() - startTime).count() > timeLimit;
+    }
+
+    long long eval(const vector<vector<int>>& ord) const {
+        vector<int> indeg(N, 0);
+        vector<vector<int>> adj(N);
+        adj.reserve(N);
+        auto id = [&](int j, int k){ return j * M + k; };
+        for (int j = 0; j < J; ++j) {
+            for (int k = 0; k + 1 < M; ++k) {
+                adj[id(j,k)].push_back(id(j,k+1));
+                indeg[id(j,k+1)]++;
+            }
+        }
+        for (int m = 0; m < M; ++m) {
+            for (int t = 0; t + 1 < J; ++t) {
+                int a = ord[m][t], b = ord[m][t+1];
+                int ka = posOfMach[a][m], kb = posOfMach[b][m];
+                adj[id(a,ka)].push_back(id(b,kb));
+                indeg[id(b,kb)]++;
+            }
+        }
+        deque<int> q;
+        vector<long long> st(N, 0);
+        for (int i = 0; i < N; ++i) if (!indeg[i]) q.push_back(i);
+        int seen = 0;
+        long long best = 0;
+        while (!q.empty()) {
+            int u = q.front(); q.pop_front(); seen++;
+            int j = u / M, k = u % M;
+            long long fin = st[u] + dur[j][k];
+            if (fin > best) best = fin;
+            for (int v : adj[u]) {
+                if (st[v] < fin) st[v] = fin;
+                if (--indeg[v] == 0) q.push_back(v);
+            }
+        }
+        if (seen != N) return LLONG_MAX / 4;
+        return best;
+    }
+
+    struct Result { long long ms; vector<vector<int>> ord; };
+
+    double priorityScore(int rule, int j, int k, long long s, long long c,
+                         const array<double,6>& w) {
+        long long p = dur[j][k];
+        long long r = rem[j][k];
+        long long tail = r - p;
+        switch (rule) {
+            case 0: return (double)p;                         // SPT
+            case 1: return -(double)p;                        // LPT
+            case 2: return -(double)r;                        // most work remaining
+            case 3: return (double)r;                         // least work remaining
+            case 4: return (double)c;                         // earliest completion
+            case 5: return (double)s * 4.0 - (double)tail;    // early, long tail
+            case 6: return -(double)tail;                     // largest downstream tail
+            case 7: return (double)tail;                      // smallest downstream tail
+            case 8: return -(double)jobLoad[j];
+            case 9: return (double)p - 0.35 * (double)tail;
+            case 11: return (double)s - 0.55 * (double)tail - 0.10 * (double)p; // global long-tail urgency
+            case 12: return (double)c - 0.75 * (double)tail + 0.15 * (double)p; // earliest finish with tail bias
+            case 13: return -(double)machineLoad[mach[j][k]] - 0.25 * (double)tail; // bottleneck first
+            default:
+                return w[0]*(double)s + w[1]*(double)c + w[2]*(double)p
+                     + w[3]*(double)r + w[4]*(double)tail + w[5]*(double)jobLoad[j];
+        }
+    }
+
+    Result serialDispatch(int rule, const array<double,6>& w, bool randomTie) {
+        // Serial schedule generation: choose one globally best next operation at a time.
+        // This is a complementary representation to GT's conflict-set choice and is
+        // especially useful when one bottleneck machine should dominate dispatching.
+        vector<vector<int>> ord(M);
+        for (int m = 0; m < M; ++m) ord[m].reserve(J);
+        vector<int> nxt(J, 0);
+        vector<long long> jr(J, 0), mr(M, 0);
+        uniform_real_distribution<double> tiny(0.0, 1e-7);
+        for (int done = 0; done < N; ++done) {
+            int choose = -1;
+            double bestScore = 1e300;
+            for (int j = 0; j < J; ++j) if (nxt[j] < M) {
+                int k = nxt[j], m = mach[j][k];
+                long long s = max(jr[j], mr[m]);
+                long long c = s + dur[j][k];
+                double sc = priorityScore(rule, j, k, s, c, w);
+                // Keep serial schedules from idling too aggressively unless the
+                // rule strongly asks for it.
+                sc += 1e-6 * (double)s;
+                if (randomTie) sc += tiny(rng);
+                else sc += j * 1e-9;
+                if (sc < bestScore) { bestScore = sc; choose = j; }
+            }
+            int j = choose, k = nxt[j], m = mach[j][k];
+            long long f = max(jr[j], mr[m]) + dur[j][k];
+            ord[m].push_back(j);
+            jr[j] = f; mr[m] = f; nxt[j]++;
+        }
+        return {eval(ord), move(ord)};
+    }
+
+    Result gifflerThompson(int rule, const array<double,6>& w, bool randomTie) {
+        vector<vector<int>> ord(M);
+        for (int m = 0; m < M; ++m) ord[m].reserve(J);
+        vector<int> nxt(J, 0);
+        vector<long long> jr(J, 0), mr(M, 0);
+        uniform_real_distribution<double> tiny(0.0, 1e-7);
+        for (int done = 0; done < N; ++done) {
+            long long bestC = LLONG_MAX;
+            int bestM = -1;
+            for (int j = 0; j < J; ++j) if (nxt[j] < M) {
+                int k = nxt[j], m = mach[j][k];
+                long long s = max(jr[j], mr[m]);
+                long long c = s + dur[j][k];
+                if (c < bestC) { bestC = c; bestM = m; }
+            }
+            int choose = -1;
+            double bestScore = 1e300;
+            for (int j = 0; j < J; ++j) if (nxt[j] < M && mach[j][nxt[j]] == bestM) {
+                int k = nxt[j];
+                long long s = max(jr[j], mr[bestM]);
+                if (s < bestC) {
+                    long long c = s + dur[j][k];
+                    double sc = priorityScore(rule, j, k, s, c, w);
+                    if (randomTie) sc += tiny(rng);
+                    else sc += j * 1e-9;
+                    if (sc < bestScore) { bestScore = sc; choose = j; }
+                }
+            }
+            if (choose < 0) { // Should not happen; fallback to any available operation on bestM.
+                for (int j = 0; j < J; ++j) if (nxt[j] < M && mach[j][nxt[j]] == bestM) { choose = j; break; }
+            }
+            int j = choose, k = nxt[j], m = mach[j][k];
+            long long s = max(jr[j], mr[m]);
+            long long f = s + dur[j][k];
+            ord[m].push_back(j);
+            jr[j] = f; mr[m] = f; nxt[j]++;
+        }
+        return {eval(ord), move(ord)};
+    }
+
+    void tryAdjacentImprove(Result &best) {
+        // A small, safe first-improvement pass over adjacent machine-order swaps.
+        bool improved = true;
+        while (improved && !timeUp()) {
+            improved = false;
+            for (int m = 0; m < M && !timeUp(); ++m) {
+                for (int i = 0; i + 1 < J && !timeUp(); ++i) {
+                    swap(best.ord[m][i], best.ord[m][i+1]);
+                    long long v = eval(best.ord);
+                    if (v < best.ms) {
+                        best.ms = v;
+                        improved = true;
+                    } else {
+                        swap(best.ord[m][i], best.ord[m][i+1]);
+                    }
+                }
+            }
+        }
+    }
+
+    void solve() {
+        cin >> J >> M;
+        N = J * M;
+        mach.assign(J, vector<int>(M));
+        dur.assign(J, vector<long long>(M));
+        posOfMach.assign(J, vector<int>(M));
+        machineLoad.assign(M, 0);
+        jobLoad.assign(J, 0);
+        for (int j = 0; j < J; ++j) {
+            for (int k = 0; k < M; ++k) {
+                cin >> mach[j][k] >> dur[j][k];
+                posOfMach[j][mach[j][k]] = k;
+                machineLoad[mach[j][k]] += dur[j][k];
+                jobLoad[j] += dur[j][k];
+            }
+        }
+        rem.assign(J, vector<long long>(M+1, 0));
+        for (int j = 0; j < J; ++j)
+            for (int k = M-1; k >= 0; --k) rem[j][k] = rem[j][k+1] + dur[j][k];
+
+        startTime = chrono::steady_clock::now();
+        rng.seed(chrono::high_resolution_clock::now().time_since_epoch().count() ^ (uint64_t)J<<32 ^ M);
+
+        Result best{LLONG_MAX/4, {}};
+        array<double,6> zero{0,0,0,0,0,0};
+        for (int r = 0; r < 10 && !timeUp(); ++r) {
+            Result res = gifflerThompson(r, zero, false);
+            if (res.ms < best.ms) best = move(res);
+        }
+        for (int r : {2,4,5,6,9,11,12,13}) if (!timeUp()) {
+            Result res = serialDispatch(r, zero, false);
+            if (res.ms < best.ms) best = move(res);
+        }
+
+        uniform_real_distribution<double> coef(-1.0, 1.0);
+        int iter = 0;
+        while (!timeUp()) {
+            array<double,6> w;
+            // Scaled random linear priorities; signs are allowed to choose either direction.
+            w[0] = coef(rng) * 0.6;   // start time
+            w[1] = coef(rng) * 0.4;   // completion time
+            w[2] = coef(rng) * 1.2;   // processing time
+            w[3] = coef(rng) * 0.9;   // remaining work
+            w[4] = coef(rng) * 0.9;   // downstream tail
+            w[5] = coef(rng) * 0.3;   // total job size
+            Result res = (iter % 3 == 2) ? serialDispatch(10, w, true) : gifflerThompson(10, w, true);
+            if (res.ms < best.ms) best = move(res);
+            if (++iter % 32 == 0 && chrono::duration<double>(chrono::steady_clock::now() - startTime).count() > 0.72) break;
+        }
+        tryAdjacentImprove(best);
+
+        if (best.ord.empty()) {
+            best.ord.assign(M, vector<int>());
+            for (int m = 0; m < M; ++m) for (int j = 0; j < J; ++j) best.ord[m].push_back(j);
+        }
+        for (int m = 0; m < M; ++m) {
+            for (int i = 0; i < J; ++i) {
+                if (i) cout << ' ';
+                cout << best.ord[m][i];
+            }
+            cout << '\n';
+        }
+    }
 };
-static int d(char c){const char*t="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/";return(int)(strchr(t,c)-t);}
-int main(){int J,M;if(scanf("%d%d",&J,&M)!=2)return 0;uint64_t h=1469598103934665603ULL;auto u=[&](long long x){h=(h^(uint64_t)x)*1099511628211ULL;};u(J);u(M);for(int j=0;j<J;++j)for(int k=0;k<M;++k){int m;long long p;if(scanf("%d%lld",&m,&p)!=2)return 1;u(m);u(p);}const char*s=0;for(auto&e:a)if(e.h==h){s=e.s;break;}if(!s)return 1;for(int m=0;m<M;++m)for(int j=0;j<J;++j)printf(j+1<J?"%d ":"%d\n",d(*s++));}
+
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+    Solver s;
+    s.solve();
+    return 0;
+}
