@@ -50,8 +50,179 @@ static void add_unused_vertices_to_one_block(vector<vector<int>>& blocks, int sm
 
 static void consider(Candidate& best, vector<vector<int>> blocks, int small, int large) {
     if ((int)blocks.size() > large) blocks.resize(large);
-    add_unused_vertices_to_one_block(blocks, small, large);
-    fill_singletons(blocks, small, large);
+    if (small <= 0 || large <= 0) {
+        long long score = block_score(blocks);
+        if (score > best.score) {
+            best.score = score;
+            best.blocks = std::move(blocks);
+        }
+        return;
+    }
+
+    // Track used pairs
+    vector<bitset<MAXS>> pairUsed(small);
+    for (const auto& block : blocks) {
+        for (int i = 0; i < (int)block.size(); ++i) {
+            int a = block[i];
+            if (a < 0 || a >= small) continue;
+            for (int j = i + 1; j < (int)block.size(); ++j) {
+                int b = block[j];
+                if (b < 0 || b >= small) continue;
+                pairUsed[a].set(b);
+                pairUsed[b].set(a);
+            }
+        }
+    }
+
+    // Check if any improvement is possible (not all pairs used)
+    long long total_used_pairs = 0;
+    for (int v = 0; v < small; ++v) total_used_pairs += (long long)pairUsed[v].count();
+    total_used_pairs /= 2;
+
+    // Greedy improvement: try to add each vertex to each block
+    if (total_used_pairs < (long long)small * (small - 1) / 2) {
+        for (int bi = 0; bi < (int)blocks.size(); ++bi) {
+            auto& block = blocks[bi];
+            for (int v = 0; v < small; ++v) {
+                bool canAdd = true;
+                for (int u : block) {
+                    if (u == v) { canAdd = false; break; }
+                    if (0 <= u && u < small && pairUsed[v].test(u)) {
+                        canAdd = false;
+                        break;
+                    }
+                }
+                if (canAdd) {
+                    for (int u : block) {
+                        if (0 <= u && u < small) {
+                            pairUsed[v].set(u);
+                            pairUsed[u].set(v);
+                        }
+                    }
+                    block.push_back(v);
+                }
+            }
+        }
+    }
+
+    // Swap improvement: try swapping vertices to free up space
+    if (total_used_pairs < (long long)small * (small - 1) / 2) {
+        for (int iter = 0; iter < 30; ++iter) {
+            bool improved = false;
+            for (int bi = 0; bi < (int)blocks.size() && !improved; ++bi) {
+                auto& B = blocks[bi];
+                if ((int)B.size() <= 1) continue;
+                bitset<MAXS> inB;
+                for (int vv : B) if (vv >= 0 && vv < small) inB.set(vv);
+                for (int v = 0; v < small && !improved; ++v) {
+                    if (inB.test(v)) continue;
+                    bitset<MAXS> conf = pairUsed[v] & inB;
+                    if (conf.count() != 1) continue;
+                    int u = -1;
+                    for (int w : B) {
+                        if (w >= 0 && w < small && pairUsed[v].test(w)) { u = w; break; }
+                    }
+                    if (u < 0) continue;
+                    for (int w : B) {
+                        if (w == u || w < 0 || w >= small) continue;
+                        pairUsed[u].reset(w);
+                        pairUsed[w].reset(u);
+                    }
+                    for (int w : B) {
+                        if (w == u || w < 0 || w >= small) continue;
+                        pairUsed[v].set(w);
+                        pairUsed[w].set(v);
+                    }
+                    bool found = false;
+                    for (int bj = 0; bj < (int)blocks.size(); ++bj) {
+                        if (bj == bi) continue;
+                        auto& B2 = blocks[bj];
+                        bool canAdd = true;
+                        for (int w : B2) {
+                            if (w >= 0 && w < small && pairUsed[u].test(w)) { canAdd = false; break; }
+                        }
+                        if (canAdd) {
+                            for (int w : B2) {
+                                if (w >= 0 && w < small) {
+                                    pairUsed[u].set(w);
+                                    pairUsed[w].set(u);
+                                }
+                            }
+                            B2.push_back(u);
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (found) {
+                        auto it = find(B.begin(), B.end(), u);
+                        if (it != B.end()) B.erase(it);
+                        B.push_back(v);
+                        improved = true;
+                    } else {
+                        for (int w : B) {
+                            if (w == u || w < 0 || w >= small) continue;
+                            pairUsed[v].reset(w);
+                            pairUsed[w].reset(v);
+                        }
+                        for (int w : B) {
+                            if (w == u || w < 0 || w >= small) continue;
+                            pairUsed[u].set(w);
+                            pairUsed[w].set(u);
+                        }
+                    }
+                }
+            }
+            if (!improved) break;
+        }
+    }
+
+    // Second greedy pass: swaps may have freed up pairs
+    for (int bi = 0; bi < (int)blocks.size(); ++bi) {
+        auto& block = blocks[bi];
+        for (int v = 0; v < small; ++v) {
+            bool canAdd = true;
+            for (int u : block) {
+                if (u == v) { canAdd = false; break; }
+                if (0 <= u && u < small && pairUsed[v].test(u)) {
+                    canAdd = false;
+                    break;
+                }
+            }
+            if (canAdd) {
+                for (int u : block) {
+                    if (0 <= u && u < small) {
+                        pairUsed[v].set(u);
+                        pairUsed[u].set(v);
+                    }
+                }
+                block.push_back(v);
+            }
+        }
+    }
+
+    // Track used vertices
+    vector<char> used(small, 0);
+    for (const auto& block : blocks) {
+        for (int v : block) {
+            if (0 <= v && v < small) used[v] = 1;
+        }
+    }
+
+    // Add remaining unused vertices as singleton blocks
+    for (int v = 0; v < small && (int)blocks.size() < large; ++v) {
+        if (!used[v]) {
+            blocks.push_back({v});
+            used[v] = 1;
+        }
+    }
+
+    // Fill remaining block slots with singletons
+    int next = 0;
+    while ((int)blocks.size() < large) {
+        blocks.push_back({next});
+        next = (next + 1) % small;
+    }
+
     long long score = block_score(blocks);
     if (score > best.score) {
         best.score = score;
@@ -276,9 +447,11 @@ static vector<vector<int>> shuffled_clique_blocks(int small, int large) {
         caps.push_back(x);
     };
     add_cap(2);
+    add_cap(max(2, s0 - 1));
     add_cap(s0);
     add_cap(s0 + 1);
     add_cap(s0 + 2);
+    add_cap(s0 + 3);
     add_cap(s0 + 4);
     add_cap(small);
     sort(caps.begin(), caps.end());
@@ -288,7 +461,7 @@ static vector<vector<int>> shuffled_clique_blocks(int small, int large) {
     long long best_score = -1;
     uint64_t base_seed = 0x6a09e667f3bcc909ULL ^ ((uint64_t)small << 32) ^ (uint64_t)large;
     for (int cap : caps) {
-        int runs = (cap == small ? 1 : 4);
+        int runs = (cap == small ? 1 : 12);
         for (int r = 0; r < runs; ++r) {
             int offset = (r == 0 ? 1 : (r == 1 ? 2 : (r == 2 ? 0 : -1)));
             uint64_t seed = base_seed
@@ -1038,12 +1211,15 @@ int main() {
     if (small == 316 && large == 316) {
         consider(best, pbd_316_exact_blocks(small, large), small, large);
     } else {
+        bool rectangular = (large > 3 * small);
         consider(best, pair_blocks(small, large), small, large);
-        consider(best, geometry_blocks(small, large), small, large);
-        consider(best, projective_augmented_full_blocks(small, large), small, large);
-        consider(best, projective_excluded_23_blocks(small, large), small, large);
-        consider(best, projective_subset_blocks(small, large), small, large);
-        consider(best, projective_alternating_subset_blocks(small, large), small, large);
+        if (!rectangular) {
+            consider(best, geometry_blocks(small, large), small, large);
+            consider(best, projective_augmented_full_blocks(small, large), small, large);
+            consider(best, projective_excluded_23_blocks(small, large), small, large);
+            consider(best, projective_subset_blocks(small, large), small, large);
+            consider(best, projective_alternating_subset_blocks(small, large), small, large);
+        }
         consider(best, greedy_blocks(small, large), small, large);
         consider(best, shuffled_clique_blocks(small, large), small, large);
     }
