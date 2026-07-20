@@ -7,22 +7,17 @@
 #include <utility>
 #include <vector>
 using namespace std;
-
 static const int MAXS = 320;
-
 struct Candidate {
     vector<vector<int>> blocks;
     long long score = -1;
 };
-
 static long long block_score(const vector<vector<int>>& blocks) {
     long long total = 0;
     for (const auto& b : blocks) total += (int)b.size();
     return total;
 }
-
 static bool valid_blocks(const vector<vector<int>>& blocks, int small);
-
 static void fill_singletons(vector<vector<int>>& blocks, int small, int large) {
     int next = 0;
     while ((int)blocks.size() < large) {
@@ -31,7 +26,6 @@ static void fill_singletons(vector<vector<int>>& blocks, int small, int large) {
         if (next == small) next = 0;
     }
 }
-
 static void add_unused_vertices_to_one_block(vector<vector<int>>& blocks, int small, int large) {
     if (large <= 0) return;
     if (blocks.empty()) blocks.push_back({});
@@ -47,7 +41,6 @@ static void add_unused_vertices_to_one_block(vector<vector<int>>& blocks, int sm
     sort(blocks[0].begin(), blocks[0].end());
     blocks[0].erase(unique(blocks[0].begin(), blocks[0].end()), blocks[0].end());
 }
-
 static void consider(Candidate& best, vector<vector<int>> blocks, int small, int large) {
     if ((int)blocks.size() > large) blocks.resize(large);
     add_unused_vertices_to_one_block(blocks, small, large);
@@ -58,7 +51,6 @@ static void consider(Candidate& best, vector<vector<int>> blocks, int small, int
         best.blocks = std::move(blocks);
     }
 }
-
 static vector<vector<int>> pair_blocks(int small, int large) {
     vector<vector<int>> blocks;
     blocks.reserve(min<long long>(large, 1LL * small * (small - 1) / 2 + large));
@@ -69,7 +61,6 @@ static vector<vector<int>> pair_blocks(int small, int large) {
     }
     return blocks;
 }
-
 static vector<int> ideal_degrees(int small, int large) {
     long long pairs = 1LL * small * (small - 1) / 2;
     int prev = 1;
@@ -91,34 +82,28 @@ static vector<int> ideal_degrees(int small, int large) {
     }
     return vector<int>(large, small);
 }
-
 static vector<vector<int>> greedy_blocks(int small, int large) {
     vector<int> targets = ideal_degrees(small, large);
     sort(targets.rbegin(), targets.rend());
     while (!targets.empty() && targets.back() <= 1) targets.pop_back();
-
     bitset<MAXS> all;
     for (int i = 0; i < small; ++i) all.set(i);
-
     vector<bitset<MAXS>> avail(small);
     for (int i = 0; i < small; ++i) {
         avail[i] = all;
         avail[i].reset(i);
     }
-
     auto make_clique = [&](int need, int salt) {
         vector<pair<int,int>> ranked;
         ranked.reserve(small);
         for (int v = 0; v < small; ++v) ranked.push_back({(int)avail[v].count(), v});
         sort(ranked.rbegin(), ranked.rend());
-
         vector<int> starts;
         starts.reserve(12);
         for (int i = 0; i < min(8, small); ++i) starts.push_back(ranked[i].second);
         starts.push_back(salt % small);
         starts.push_back((salt * 37 + 11) % small);
         starts.push_back((salt * 97 + 23) % small);
-
         vector<int> best;
         long long best_tiebreak = -1;
         for (int st : starts) {
@@ -153,7 +138,6 @@ static vector<vector<int>> greedy_blocks(int small, int large) {
         if (best.empty()) best.push_back(salt % small);
         return best;
     };
-
     vector<vector<int>> blocks;
     blocks.reserve(min((int)targets.size(), large));
     for (int i = 0; i < (int)targets.size() && (int)blocks.size() < large; ++i) {
@@ -171,7 +155,6 @@ static vector<vector<int>> greedy_blocks(int small, int large) {
     }
     return blocks;
 }
-
 struct Rng {
     uint64_t s;
     explicit Rng(uint64_t seed) : s(seed) {}
@@ -192,27 +175,22 @@ struct Rng {
         }
     }
 };
-
 static long long choose2(long long x) {
     return x * (x - 1) / 2;
 }
-
 static vector<vector<int>> shuffled_clique_run(int small, int large, int base_cap,
                                                bool dynamic_cap, int offset,
                                                uint64_t seed) {
     vector<bitset<MAXS>> used(small);
     vector<int> deg(small, 0);
     vector<vector<int>> blocks(large);
-
     long long total_pairs = choose2(small);
     long long used_pairs = 0;
-
     Rng rng(seed);
     vector<int> order(large), rows(small);
     iota(order.begin(), order.end(), 0);
     iota(rows.begin(), rows.end(), 0);
     rng.shuffle_vec(order);
-
     for (int idx = 0; idx < large; ++idx) {
         int block_id = order[idx];
         int cap = base_cap;
@@ -228,13 +206,11 @@ static vector<vector<int>> shuffled_clique_run(int small, int large, int base_ca
             }
         }
         cap = max(1, min(cap, small));
-
         iota(rows.begin(), rows.end(), 0);
         rng.shuffle_vec(rows);
         stable_sort(rows.begin(), rows.end(), [&](int a, int b) {
             return deg[a] < deg[b];
         });
-
         vector<int> chosen;
         chosen.reserve(cap);
         bitset<MAXS> in_block;
@@ -245,7 +221,6 @@ static vector<vector<int>> shuffled_clique_run(int small, int large, int base_ca
             in_block.set(r);
         }
         if (chosen.empty()) chosen.push_back(rows[0]);
-
         used_pairs += choose2((long long)chosen.size());
         for (int i = 0; i < (int)chosen.size(); ++i) {
             int a = chosen[i];
@@ -261,15 +236,12 @@ static vector<vector<int>> shuffled_clique_run(int small, int large, int base_ca
     }
     return blocks;
 }
-
 static vector<vector<int>> shuffled_clique_blocks(int small, int large) {
     long long pair_budget = choose2(small);
     if (small <= 1 || large >= pair_budget) return {};
-
     double avg_pairs = (double)pair_budget / (double)large;
     int s0 = (int)floor((1.0 + sqrt(1.0 + 8.0 * avg_pairs)) / 2.0);
     s0 = max(2, min(small, s0));
-
     vector<int> caps;
     auto add_cap = [&](int x) {
         x = max(1, min(small, x));
@@ -283,7 +255,6 @@ static vector<vector<int>> shuffled_clique_blocks(int small, int large) {
     add_cap(small);
     sort(caps.begin(), caps.end());
     caps.erase(unique(caps.begin(), caps.end()), caps.end());
-
     vector<vector<int>> best;
     long long best_score = -1;
     uint64_t base_seed = 0x6a09e667f3bcc909ULL ^ ((uint64_t)small << 32) ^ (uint64_t)large;
@@ -302,26 +273,21 @@ static vector<vector<int>> shuffled_clique_blocks(int small, int large) {
             }
         }
     }
-
     int cap = min(small, s0 + 2);
     auto cand = shuffled_clique_run(small, large, cap, false, 0,
                                     base_seed ^ 0x94d049bb133111ebULL);
     long long sc = block_score(cand);
     if (sc > best_score) best = std::move(cand);
-
     return best;
 }
-
 static bool is_prime_int(int x) {
     if (x < 2) return false;
     for (int d = 2; d * d <= x; ++d) if (x % d == 0) return false;
     return true;
 }
-
 struct FieldSpec {
     int q, p, e;
 };
-
 static vector<FieldSpec> field_specs(int limit) {
     vector<FieldSpec> specs;
     for (int p = 2; p <= limit; ++p) {
@@ -340,14 +306,11 @@ static vector<FieldSpec> field_specs(int limit) {
     }), specs.end());
     return specs;
 }
-
 struct Field {
     int q, p, e;
     vector<vector<int>> coeff;
     vector<int> add, mul;
-
     int idx(int a, int b) const { return a * q + b; }
-
     static vector<int> digits(int x, int p, int e) {
         vector<int> d(e);
         for (int i = 0; i < e; ++i) {
@@ -356,7 +319,6 @@ struct Field {
         }
         return d;
     }
-
     static int encode(const vector<int>& d, int p) {
         int mul = 1, x = 0;
         for (int v : d) {
@@ -367,12 +329,10 @@ struct Field {
         }
         return x;
     }
-
     static vector<int> trim(vector<int> a) {
         while (!a.empty() && a.back() == 0) a.pop_back();
         return a;
     }
-
     static vector<int> mod_poly(vector<int> a, const vector<int>& b, int p) {
         a = trim(std::move(a));
         int db = (int)b.size() - 1;
@@ -391,7 +351,6 @@ struct Field {
         }
         return a;
     }
-
     static bool irreducible(const vector<int>& poly, int p, int e) {
         for (int d = 1; d * 2 <= e; ++d) {
             int total = 1;
@@ -404,7 +363,6 @@ struct Field {
         }
         return true;
     }
-
     static vector<int> find_poly(int p, int e) {
         if (e == 1) return {0, 1};
         int total = 1;
@@ -417,21 +375,17 @@ struct Field {
         }
         return {};
     }
-
     explicit Field(FieldSpec spec) : q(spec.q), p(spec.p), e(spec.e) {
         coeff.resize(q);
         for (int x = 0; x < q; ++x) coeff[x] = digits(x, p, e);
-
         add.assign(q * q, 0);
         mul.assign(q * q, 0);
         vector<int> poly = find_poly(p, e);
-
         for (int a = 0; a < q; ++a) {
             for (int b = 0; b < q; ++b) {
                 vector<int> s(e);
                 for (int i = 0; i < e; ++i) s[i] = (coeff[a][i] + coeff[b][i]) % p;
                 add[idx(a, b)] = encode(s, p);
-
                 vector<int> prod(2 * e - 1, 0);
                 for (int i = 0; i < e; ++i) {
                     for (int j = 0; j < e; ++j) {
@@ -451,19 +405,15 @@ struct Field {
             }
         }
     }
-
     int plus(int a, int b) const { return add[idx(a, b)]; }
     int times(int a, int b) const { return mul[idx(a, b)]; }
 };
-
 static vector<vector<int>> all_projective_lines(const Field& f) {
     int q = f.q;
     vector<vector<int>> blocks;
-
     auto affine_id = [q](int x, int y) { return x * q + y; };
     auto inf_slope = [q](int a) { return q * q + a; };
     int inf_vert = q * q + q;
-
     for (int a = 0; a < q; ++a) {
         for (int b = 0; b < q; ++b) {
             vector<int> line;
@@ -488,16 +438,13 @@ static vector<vector<int>> all_projective_lines(const Field& f) {
     for (int a = 0; a < q; ++a) infinity.push_back(inf_slope(a));
     infinity.push_back(inf_vert);
     blocks.push_back(std::move(infinity));
-
     return blocks;
 }
-
 static vector<vector<int>> projective_blocks_for_field(const Field& f, int small) {
     int q = f.q;
     int n_points = q * q + q + 1;
     vector<vector<int>> blocks;
     if (small <= 0) return blocks;
-
     for (auto line : all_projective_lines(f)) {
         vector<int> b;
         b.reserve(line.size());
@@ -510,14 +457,12 @@ static vector<vector<int>> projective_blocks_for_field(const Field& f, int small
     }
     return blocks;
 }
-
 static vector<vector<int>> geometry_blocks(int small, int large) {
     vector<vector<int>> best;
     long long best_score = -1;
     int limit = 1;
     while ((limit + 1) * (limit + 1) <= small + limit + 2) ++limit;
     limit = max(limit + 3, 4);
-
     for (auto spec : field_specs(limit)) {
         Field f(spec);
         auto blocks = projective_blocks_for_field(f, small);
@@ -536,26 +481,21 @@ static vector<vector<int>> geometry_blocks(int small, int large) {
     }
     return best;
 }
-
 static vector<vector<int>> projective_subset_blocks(int small, int large) {
     if (small <= 1) return {};
     long long pair_budget = choose2(small);
     if (large >= pair_budget) return {};
-
     int target = max(small, large);
     int limit = 2;
     while (limit * limit + limit + 1 < target) ++limit;
     limit += 6;
-
     vector<vector<int>> best;
     long long best_score = -1;
-
     for (auto spec : field_specs(limit)) {
         Field f(spec);
         int q = f.q;
         int n_points = q * q + q + 1;
         if (n_points < 2) continue;
-
         auto lines = all_projective_lines(f);
         vector<pair<int,int>> weighted_lines;
         weighted_lines.reserve(lines.size());
@@ -566,7 +506,6 @@ static vector<vector<int>> projective_subset_blocks(int small, int large) {
             weighted_lines.push_back({w, i});
         }
         sort(weighted_lines.rbegin(), weighted_lines.rend());
-
         int selected_line_count = min(large, (int)weighted_lines.size());
         vector<int> selected_lines;
         selected_lines.reserve(selected_line_count);
@@ -576,18 +515,15 @@ static vector<vector<int>> projective_subset_blocks(int small, int large) {
             selected_lines.push_back(id);
             for (int p : lines[id]) ++point_weight[p];
         }
-
         vector<pair<int,int>> weighted_points;
         weighted_points.reserve(n_points);
         for (int p = 0; p < n_points; ++p) weighted_points.push_back({point_weight[p], p});
         sort(weighted_points.rbegin(), weighted_points.rend());
-
         int selected_point_count = min(small, n_points);
         vector<int> point_map(n_points, -1);
         for (int i = 0; i < selected_point_count; ++i) {
             point_map[weighted_points[i].second] = i;
         }
-
         vector<vector<int>> blocks;
         blocks.reserve(selected_line_count);
         for (int id : selected_lines) {
@@ -601,7 +537,6 @@ static vector<vector<int>> projective_subset_blocks(int small, int large) {
             b.erase(unique(b.begin(), b.end()), b.end());
             if ((int)b.size() >= 2) blocks.push_back(std::move(b));
         }
-
         vector<vector<int>> trial = blocks;
         fill_singletons(trial, small, large);
         long long sc = block_score(trial);
@@ -612,25 +547,20 @@ static vector<vector<int>> projective_subset_blocks(int small, int large) {
     }
     return best;
 }
-
 static uint64_t mix_key(uint64_t x) {
     x += 0x9e3779b97f4a7c15ULL;
     x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
     x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
     return x ^ (x >> 31);
 }
-
 static vector<vector<int>> projective_alternating_subset_blocks(int small, int large) {
     if (small <= 1 || large >= choose2(small)) return {};
-
     int target = max(small, large);
     int limit = 2;
     while (limit * limit + limit + 1 < target) ++limit;
     limit += 8;
-
     vector<vector<int>> best;
     long long best_score = -1;
-
     for (auto spec : field_specs(limit)) {
         Field f(spec);
         auto lines = all_projective_lines(f);
@@ -638,18 +568,15 @@ static vector<vector<int>> projective_alternating_subset_blocks(int small, int l
         int want_points = min(small, n_points);
         int want_lines = min(large, (int)lines.size());
         if (want_points <= 0 || want_lines <= 0) continue;
-
         vector<vector<int>> point_to_lines(n_points);
         for (int li = 0; li < (int)lines.size(); ++li) {
             for (int p : lines[li]) point_to_lines[p].push_back(li);
         }
-
         int seed_count = 20;
         for (int seed = 0; seed < seed_count; ++seed) {
             vector<char> selected_points(n_points, 0), selected_lines(lines.size(), 0);
             vector<int> point_ids(n_points);
             iota(point_ids.begin(), point_ids.end(), 0);
-
             if (seed == 0) {
                 for (int i = 0; i < want_points; ++i) selected_points[i] = 1;
             } else {
@@ -659,7 +586,6 @@ static vector<vector<int>> projective_alternating_subset_blocks(int small, int l
                 });
                 for (int i = 0; i < want_points; ++i) selected_points[point_ids[i]] = 1;
             }
-
             for (int iter = 0; iter < 12; ++iter) {
                 vector<pair<int,uint64_t>> ranked_lines;
                 ranked_lines.reserve(lines.size());
@@ -679,7 +605,6 @@ static vector<vector<int>> projective_alternating_subset_blocks(int small, int l
                 });
                 fill(selected_lines.begin(), selected_lines.end(), 0);
                 for (int i = 0; i < want_lines; ++i) selected_lines[line_order[i]] = 1;
-
                 vector<pair<int,uint64_t>> ranked_points;
                 ranked_points.reserve(n_points);
                 for (int p = 0; p < n_points; ++p) {
@@ -697,13 +622,11 @@ static vector<vector<int>> projective_alternating_subset_blocks(int small, int l
                 fill(selected_points.begin(), selected_points.end(), 0);
                 for (int i = 0; i < want_points; ++i) selected_points[point_ids[i]] = 1;
             }
-
             vector<int> point_map(n_points, -1);
             int mapped_count = 0;
             for (int p = 0; p < n_points; ++p) {
                 if (selected_points[p]) point_map[p] = mapped_count++;
             }
-
             vector<vector<int>> blocks;
             blocks.reserve(want_lines);
             for (int li = 0; li < (int)lines.size(); ++li) {
@@ -715,7 +638,6 @@ static vector<vector<int>> projective_alternating_subset_blocks(int small, int l
                 }
                 if ((int)b.size() >= 2) blocks.push_back(std::move(b));
             }
-
             vector<vector<int>> trial = blocks;
             fill_singletons(trial, small, large);
             long long sc = block_score(trial);
@@ -727,7 +649,6 @@ static vector<vector<int>> projective_alternating_subset_blocks(int small, int l
     }
     return best;
 }
-
 static vector<vector<int>> extra_vertex_cliques(int extras, int slots) {
     if (extras <= 0 || slots <= 0) return {};
     if (extras == 9 && slots >= 9) {
@@ -737,7 +658,6 @@ static vector<vector<int>> extra_vertex_cliques(int extras, int slots) {
             {2, 6, 7}, {3, 5, 7}, {3, 6, 8}
         };
     }
-
     vector<vector<int>> best;
     long long best_score = -1;
     auto try_blocks = [&](vector<vector<int>> blocks) {
@@ -750,37 +670,30 @@ static vector<vector<int>> extra_vertex_cliques(int extras, int slots) {
             best = std::move(blocks);
         }
     };
-
     try_blocks(pair_blocks(extras, slots));
     try_blocks(greedy_blocks(extras, slots));
     try_blocks(shuffled_clique_blocks(extras, slots));
     return best;
 }
-
 static vector<vector<int>> projective_augmented_full_blocks(int small, int large) {
     vector<vector<int>> best;
     long long best_score = -1;
-
     int limit = 2;
     while (limit * limit + limit + 1 <= min(small, large)) ++limit;
-
     for (auto spec : field_specs(limit)) {
         int n0 = spec.q * spec.q + spec.q + 1;
         if (n0 > small || n0 > large) continue;
         int extras = small - n0;
         int slots = large - n0;
         if (extras <= 0 || slots <= 0 || extras > n0) continue;
-
         Field f(spec);
         vector<vector<int>> blocks = all_projective_lines(f);
         vector<bitset<MAXS>> used_old(extras);
-
         for (int e = 0; e < extras; ++e) {
             int line_id = e % n0;
             for (int old : blocks[line_id]) used_old[e].set(old);
             blocks[line_id].push_back(n0 + e);
         }
-
         for (const auto& clique : extra_vertex_cliques(extras, slots)) {
             if ((int)blocks.size() >= large) break;
             vector<int> extra_ids;
@@ -791,7 +704,6 @@ static vector<vector<int>> projective_augmented_full_blocks(int small, int large
             sort(extra_ids.begin(), extra_ids.end());
             extra_ids.erase(unique(extra_ids.begin(), extra_ids.end()), extra_ids.end());
             if (extra_ids.empty()) continue;
-
             int old_choice = -1;
             for (int old = 0; old < n0; ++old) {
                 bool ok = true;
@@ -806,7 +718,6 @@ static vector<vector<int>> projective_augmented_full_blocks(int small, int large
                     break;
                 }
             }
-
             vector<int> block;
             if (old_choice >= 0) block.push_back(old_choice);
             for (int e : extra_ids) {
@@ -815,7 +726,6 @@ static vector<vector<int>> projective_augmented_full_blocks(int small, int large
             }
             blocks.push_back(std::move(block));
         }
-
         vector<vector<int>> trial = blocks;
         fill_singletons(trial, small, large);
         if (!valid_blocks(trial, small)) continue;
@@ -827,10 +737,8 @@ static vector<vector<int>> projective_augmented_full_blocks(int small, int large
     }
     return best;
 }
-
 static vector<vector<int>> projective_excluded_23_blocks(int small, int large) {
     if (small != 200 || large != 500) return {};
-
     static const int excluded_ids[] = {
         25, 32, 62, 67, 76, 93, 96, 102, 130, 136, 140, 143, 148,
         177, 178, 182, 186, 189, 211, 217, 227, 237, 238, 239, 268,
@@ -838,28 +746,23 @@ static vector<vector<int>> projective_excluded_23_blocks(int small, int large) {
         368, 374, 394, 403, 410, 421, 424, 436, 465, 476, 506, 514,
         530, 531, 548, 552
     };
-
     Field f(FieldSpec{23, 23, 1});
     vector<vector<int>> lines = all_projective_lines(f);
     int n0 = (int)lines.size();
-
     vector<char> excluded(n0, 0);
     vector<int> excluded_degree(n0, 0);
     for (int id : excluded_ids) {
         excluded[id] = 1;
         for (int p : lines[id]) ++excluded_degree[p];
     }
-
     vector<int> point_order(n0);
     iota(point_order.begin(), point_order.end(), 0);
     sort(point_order.begin(), point_order.end(), [&](int a, int b) {
         if (excluded_degree[a] != excluded_degree[b]) return excluded_degree[a] < excluded_degree[b];
         return a < b;
     });
-
     vector<int> point_map(n0, -1);
     for (int i = 0; i < small; ++i) point_map[point_order[i]] = i;
-
     vector<vector<int>> blocks;
     blocks.reserve(large);
     for (int li = 0; li < n0; ++li) {
@@ -873,7 +776,6 @@ static vector<vector<int>> projective_excluded_23_blocks(int small, int large) {
     }
     return blocks;
 }
-
 static vector<vector<int>> pbd_316_blocks(int small, int large) {
     if (small != 316 || large != 316) return {};
     static const char data[] =
@@ -999,12 +901,10 @@ static vector<vector<int>> pbd_316_blocks(int small, int large) {
     }
     return blocks;
 }
-
 static vector<vector<int>> pbd_316_exact_blocks(int small, int large) {
     if (small == 316 && large == 316) return pbd_316_blocks(small, large);
     return {};
 }
-
 static bool valid_blocks(const vector<vector<int>>& blocks, int small) {
     vector<bitset<MAXS>> seen(small);
     for (const auto& block : blocks) {
@@ -1022,18 +922,206 @@ static bool valid_blocks(const vector<vector<int>>& blocks, int small) {
     }
     return true;
 }
-
-int main() {
-    ios::sync_with_stdio(false);
-    cin.tie(nullptr);
-
-    int n, m;
-    if (!(cin >> n >> m)) return 0;
-
-    bool rows_are_small = (n <= m);
-    int small = min(n, m);
-    int large = max(n, m);
-
+#include <unordered_set>
+#include <unordered_map>
+static vector<vector<int>> greedy_fill_with_order(const vector<vector<int>>& blocks_input,
+                                                  int small, int large,
+                                                  const vector<int>& row_order,
+                                                  const vector<int>& col_order) {
+    vector<vector<int>> blocks = blocks_input;
+    blocks.resize(large);   // ensure we have exactly 'large' rows (pad with empty)
+    int S = small;
+    vector<int> pair_row(S * S, -1);
+    auto set_pair = [&](int c1, int c2, int rid) {
+        if (c1 > c2) swap(c1, c2);
+        pair_row[c1 * S + c2] = rid;
+    };
+    auto get_pair = [&](int c1, int c2) -> int {
+        if (c1 > c2) swap(c1, c2);
+        return pair_row[c1 * S + c2];
+    };
+    vector<vector<bool>> row_has(large, vector<bool>(S, false));
+    for (int i = 0; i < (int)blocks.size(); ++i) {
+        const auto& row = blocks[i];
+        for (size_t a = 0; a < row.size(); ++a) {
+            int ca = row[a];
+            row_has[i][ca] = true;
+            for (size_t b = a + 1; b < row.size(); ++b) {
+                set_pair(ca, row[b], i);
+            }
+        }
+    }
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (int i : row_order) {
+            if (i < 0 || i >= large) continue;
+            for (int c : col_order) {
+                if (c < 0 || c >= S) continue;
+                if (row_has[i][c]) continue;
+                bool ok = true;
+                for (int c2 : blocks[i]) {
+                    if (get_pair(c, c2) != -1) {
+                        ok = false;
+                        break;
+                    }
+                }
+                if (ok) {
+                    for (int c2 : blocks[i]) {
+                        set_pair(c, c2, i);
+                    }
+                    blocks[i].push_back(c);
+                    row_has[i][c] = true;
+                    changed = true;
+                }
+            }
+        }
+    }
+    return blocks;
+}
+vector<vector<int>> greedy_fill_blocks(const vector<vector<int>>& blocks_input,
+                                       int small, int large) {
+    vector<int> row_order(large);
+    iota(row_order.begin(), row_order.end(), 0);
+    vector<int> col_order(small);
+    iota(col_order.begin(), col_order.end(), 0);
+    return greedy_fill_with_order(blocks_input, small, large, row_order, col_order);
+}
+static vector<vector<int>> greedy_fill_randomized(const vector<vector<int>>& blocks_input,
+                                                  int small, int large) {
+    constexpr int TRIALS = 20;            // safe within time budget
+    constexpr unsigned BASE_SEED = 987654321u;
+    vector<vector<int>> best = greedy_fill_blocks(blocks_input, small, large);
+    int best_cells = 0;
+    for (const auto& row : best) best_cells += (int)row.size();
+    struct Rng {
+        unsigned long long state;
+        using result_type = unsigned int;
+        static constexpr result_type min() { return 0; }
+        static constexpr result_type max() { return 0xFFFFFFFFu; }
+        result_type operator()() {
+            state = state * 6364136223846793005ULL + 1442695040888963407ULL;
+            return (result_type)(state >> 32);
+        }
+    };
+    for (int t = 0; t < TRIALS; ++t) {
+        Rng rng{ BASE_SEED + (unsigned long long)t * 17u }; // deterministic variation
+        vector<int> row_order(large);
+        iota(row_order.begin(), row_order.end(), 0);
+        shuffle(row_order.begin(), row_order.end(), rng);
+        vector<int> col_order(small);
+        iota(col_order.begin(), col_order.end(), 0);
+        shuffle(col_order.begin(), col_order.end(), rng);
+        vector<vector<int>> cand = greedy_fill_with_order(blocks_input, small, large,
+                                                          row_order, col_order);
+        int cells = 0;
+        for (const auto& row : cand) cells += (int)row.size();
+        if (cells > best_cells) {
+            best_cells = cells;
+            best = move(cand);
+        }
+    }
+    return best;
+}
+static vector<vector<int>> adaptive_greedy_fill_with_order(
+    const vector<vector<int>>& blocks_input,
+    int small, int large,
+    const vector<int>& row_order) {
+    vector<vector<int>> blocks = blocks_input;
+    blocks.resize(large);
+    int S = small;
+    vector<int> pair_row(S * S, -1);
+    auto set_pair = [&](int c1, int c2, int rid) {
+        if (c1 > c2) swap(c1, c2);
+        pair_row[c1 * S + c2] = rid;
+    };
+    auto get_pair = [&](int c1, int c2) -> int {
+        if (c1 > c2) swap(c1, c2);
+        return pair_row[c1 * S + c2];
+    };
+    vector<vector<bool>> row_has(large, vector<bool>(S, false));
+    vector<int> conflict_count(S, 0);
+    for (int i = 0; i < (int)blocks.size(); ++i) {
+        const auto& row = blocks[i];
+        for (size_t a = 0; a < row.size(); ++a) {
+            int ca = row[a];
+            row_has[i][ca] = true;
+            for (size_t b = a + 1; b < row.size(); ++b) {
+                int cb = row[b];
+                set_pair(ca, cb, i);
+                conflict_count[ca]++;
+                conflict_count[cb]++;
+            }
+        }
+    }
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        vector<int> col_order(S);
+        iota(col_order.begin(), col_order.end(), 0);
+        sort(col_order.begin(), col_order.end(),
+             [&](int a, int b) { return conflict_count[a] < conflict_count[b]; });
+        for (int i : row_order) {
+            if (i < 0 || i >= large) continue;
+            for (int c : col_order) {
+                if (row_has[i][c]) continue;
+                bool ok = true;
+                for (int c2 : blocks[i]) {
+                    if (get_pair(c, c2) != -1) {
+                        ok = false;
+                        break;
+                    }
+                }
+                if (ok) {
+                    for (int c2 : blocks[i]) {
+                        set_pair(c, c2, i);
+                        conflict_count[c]++;
+                        conflict_count[c2]++;
+                    }
+                    blocks[i].push_back(c);
+                    row_has[i][c] = true;
+                    changed = true;
+                }
+            }
+        }
+    }
+    return blocks;
+}
+static vector<vector<int>> adaptive_greedy_fill_randomized(
+    const vector<vector<int>>& blocks_input,
+    int small, int large) {
+    constexpr int TRIALS = 20;
+    constexpr unsigned BASE_SEED = 123456789u;
+    vector<vector<int>> best = greedy_fill_blocks(blocks_input, small, large);
+    int best_cells = 0;
+    for (const auto& row : best) best_cells += (int)row.size();
+    struct Rng {
+        unsigned long long state;
+        using result_type = unsigned int;
+        static constexpr result_type min() { return 0; }
+        static constexpr result_type max() { return 0xFFFFFFFFu; }
+        result_type operator()() {
+            state = state * 6364136223846793005ULL + 1442695040888963407ULL;
+            return (result_type)(state >> 32);
+        }
+    };
+    for (int t = 0; t < TRIALS; ++t) {
+        Rng rng{ BASE_SEED + (unsigned long long)t * 17u };
+        vector<int> row_order(large);
+        iota(row_order.begin(), row_order.end(), 0);
+        shuffle(row_order.begin(), row_order.end(), rng);
+        vector<vector<int>> cand = adaptive_greedy_fill_with_order(
+            blocks_input, small, large, row_order);
+        int cells = 0;
+        for (const auto& row : cand) cells += (int)row.size();
+        if (cells > best_cells) {
+            best_cells = cells;
+            best = move(cand);
+        }
+    }
+    return best;
+}
+static vector<vector<int>> evolve_solve(int small, int large) {
     Candidate best;
     if (small == 316 && large == 316) {
         consider(best, pbd_316_exact_blocks(small, large), small, large);
@@ -1047,20 +1135,55 @@ int main() {
         consider(best, greedy_blocks(small, large), small, large);
         consider(best, shuffled_clique_blocks(small, large), small, large);
     }
-
-    if (!valid_blocks(best.blocks, small)) {
-        best.blocks.clear();
-        for (int i = 0; i < large; ++i) best.blocks.push_back({0});
-    }
-
-    cout << best.score << '\n';
-    for (int b = 0; b < (int)best.blocks.size(); ++b) {
-        for (int v : best.blocks[b]) {
-            if (rows_are_small) {
-                cout << v + 1 << ' ' << b + 1 << '\n';
-            } else {
-                cout << b + 1 << ' ' << v + 1 << '\n';
+    consider(best, greedy_fill_blocks(best.blocks, small, large), small, large);
+    consider(best, greedy_fill_randomized(best.blocks, small, large), small, large);
+    consider(best, adaptive_greedy_fill_randomized(best.blocks, small, large), small, large);
+    return best.blocks;
+}
+static vector<vector<int>> sanitize_blocks(vector<vector<int>> blocks, int small, int large) {
+    if ((int)blocks.size() > large) blocks.resize(large);
+    unordered_set<uint64_t> used_pair;   // column-pairs already consumed by some row
+    used_pair.reserve(1 << 16);
+    vector<vector<int>> out;
+    out.reserve(blocks.size());
+    for (auto& row : blocks) {
+        sort(row.begin(), row.end());
+        row.erase(unique(row.begin(), row.end()), row.end());
+        vector<int> kept;
+        for (int c : row) {
+            if (c < 0 || c >= small) continue;
+            bool ok = true;
+            for (int c2 : kept) {
+                uint64_t key = ((uint64_t)(uint32_t)min(c, c2) << 32) | (uint32_t)max(c, c2);
+                if (used_pair.count(key)) { ok = false; break; }
             }
+            if (!ok) continue;
+            for (int c2 : kept) {
+                uint64_t key = ((uint64_t)(uint32_t)min(c, c2) << 32) | (uint32_t)max(c, c2);
+                used_pair.insert(key);
+            }
+            kept.push_back(c);
+        }
+        out.push_back(std::move(kept));
+    }
+    while ((int)out.size() < large) out.push_back(vector<int>());
+    return out;
+}
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+    int n, m;
+    if (!(cin >> n >> m)) return 0;
+    bool rows_are_small = (n <= m);
+    int small = min(n, m), large = max(n, m);
+    vector<vector<int>> blocks = sanitize_blocks(evolve_solve(small, large), small, large);
+    long long k = 0;
+    for (auto& b : blocks) k += (long long)b.size();
+    cout << k << '\n';
+    for (int b = 0; b < (int)blocks.size(); ++b) {
+        for (int v : blocks[b]) {
+            if (rows_are_small) cout << v + 1 << ' ' << b + 1 << '\n';
+            else cout << b + 1 << ' ' << v + 1 << '\n';
         }
     }
     return 0;
