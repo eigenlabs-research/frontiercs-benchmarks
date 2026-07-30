@@ -48,10 +48,69 @@ static void add_unused_vertices_to_one_block(vector<vector<int>>& blocks, int sm
     blocks[0].erase(unique(blocks[0].begin(), blocks[0].end()), blocks[0].end());
 }
 
+static void saturate_blocks(vector<vector<int>>& blocks, int small) {
+    if (small <= 1) return;
+
+    bitset<MAXS> all;
+    for (int i = 0; i < small; ++i) all.set(i);
+
+    vector<bitset<MAXS>> used(small);
+    for (auto& block : blocks) {
+        sort(block.begin(), block.end());
+        block.erase(unique(block.begin(), block.end()), block.end());
+        for (int i = 0; i < (int)block.size(); ++i) {
+            int a = block[i];
+            if (a < 0 || a >= small) continue;
+            for (int j = i + 1; j < (int)block.size(); ++j) {
+                int b = block[j];
+                if (b < 0 || b >= small || a == b) continue;
+                used[a].set(b);
+                used[b].set(a);
+            }
+        }
+    }
+
+    for (auto& block : blocks) {
+        bitset<MAXS> in;
+        for (int v : block) {
+            if (0 <= v && v < small) in.set(v);
+        }
+        while (true) {
+            bitset<MAXS> cand = all & ~in;
+            for (int v = 0; v < small; ++v) {
+                if (cand.test(v) && (used[v] & in).any()) cand.reset(v);
+            }
+            if (!cand.any()) break;
+
+            int chosen = -1;
+            long long chosen_score = -1;
+            for (int v = 0; v < small; ++v) {
+                if (!cand.test(v)) continue;
+                long long sc = (long long)(cand & ~used[v]).count();
+                if (sc > chosen_score) {
+                    chosen_score = sc;
+                    chosen = v;
+                }
+            }
+            if (chosen < 0) break;
+
+            for (int u : block) {
+                if (0 <= u && u < small) {
+                    used[chosen].set(u);
+                    used[u].set(chosen);
+                }
+            }
+            block.push_back(chosen);
+            in.set(chosen);
+        }
+    }
+}
+
 static void consider(Candidate& best, vector<vector<int>> blocks, int small, int large) {
     if ((int)blocks.size() > large) blocks.resize(large);
     add_unused_vertices_to_one_block(blocks, small, large);
     fill_singletons(blocks, small, large);
+    saturate_blocks(blocks, small);
     long long score = block_score(blocks);
     if (score > best.score) {
         best.score = score;
@@ -1051,6 +1110,7 @@ int main() {
     if (!valid_blocks(best.blocks, small)) {
         best.blocks.clear();
         for (int i = 0; i < large; ++i) best.blocks.push_back({0});
+        best.score = block_score(best.blocks);
     }
 
     cout << best.score << '\n';
