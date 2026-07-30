@@ -21,6 +21,46 @@ static long long block_score(const vector<vector<int>>& blocks) {
     return total;
 }
 
+static void greedy_extend_blocks(vector<vector<int>>& blocks, int small) {
+    vector<bitset<MAXS>> seen(small), in_block(blocks.size());
+    for (int bi = 0; bi < (int)blocks.size(); ++bi) {
+        const auto& block = blocks[bi];
+        for (int v : block) in_block[bi].set(v);
+        for (int i = 0; i < (int)block.size(); ++i) {
+            for (int j = i + 1; j < (int)block.size(); ++j) {
+                int a = block[i], b = block[j];
+                seen[a].set(b);
+                seen[b].set(a);
+            }
+        }
+    }
+
+    vector<int> order(blocks.size());
+    iota(order.begin(), order.end(), 0);
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        sort(order.begin(), order.end(), [&](int a, int b) {
+            if (blocks[a].size() != blocks[b].size()) return blocks[a].size() < blocks[b].size();
+            return a < b;
+        });
+        for (int id : order) {
+            auto& block = blocks[id];
+            for (int v = 0; v < small; ++v) {
+                if (in_block[id].test(v) || (seen[v] & in_block[id]).any()) continue;
+                for (int u : block) {
+                    seen[v].set(u);
+                    seen[u].set(v);
+                }
+                block.push_back(v);
+                in_block[id].set(v);
+                changed = true;
+                break;
+            }
+        }
+    }
+}
+
 static bool valid_blocks(const vector<vector<int>>& blocks, int small);
 
 static void fill_singletons(vector<vector<int>>& blocks, int small, int large) {
@@ -1048,10 +1088,14 @@ int main() {
         consider(best, shuffled_clique_blocks(small, large), small, large);
     }
 
+    if (valid_blocks(best.blocks, small)) {
+        greedy_extend_blocks(best.blocks, small);
+    }
     if (!valid_blocks(best.blocks, small)) {
         best.blocks.clear();
         for (int i = 0; i < large; ++i) best.blocks.push_back({0});
     }
+    best.score = block_score(best.blocks);
 
     cout << best.score << '\n';
     for (int b = 0; b < (int)best.blocks.size(); ++b) {
