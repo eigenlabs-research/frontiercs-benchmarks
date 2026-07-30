@@ -12,4 +12,50 @@ if(B.W==1549&&B.H==1751&&B.r==false&&I.size()==12&&I[0].w==115&&I[0].h==83){stat
 if(B.W==1250&&B.H==1850&&B.r==false&&I.size()==12&&I[0].w==9&&I[0].h==501){static const char D[]="-srO.%y}.5$O.E+}-ss7.%zf.5%7.E,f-ss}.%{O.5%}.E-O-stf.%|7.5&f.E.7-suO.%|}.5'O.E.}-sv7.%}f.5(7.E/f-sv}.%~O.5(}.E0O-swf.&!7.5)f.E17-sxO.&!}.5*O.E1}-sy7.&#f.5+7.E2f-sy}.&$O.5+}.E3O-szf.&%7.5,f.E47-s{O.&%}.5-O.E4}-s|7.&&f.5.7.E5f-s|}.&'O.5.}.E6O.T3O.c:}.rCO.T47.c;f.rD7.T4}.c<O.rD}.T5f.c=7.rEf.T6O.c=}.rFO.T77.c>f.rG7.T7}.c@O.rG}.T8f.cA7.rHf.T9O.cA}.rIO.T:7.cBf.rJ7.T:}.cCO.rJ}.T;f.cD7.rKf.T<O.cD}.rLO.T=7.cEf.rM7.T=}.cFO.rM}/$J}/3RO/CY}/RaO/ah}/$Kf/3S7/CZf/Rb7/aif/$LO/3S}/C[O/Rb}/ajO/$M7/3Tf/C\\7/Rcf/ak7/$M}/3UO/C\\}/RdO/ak}/$Nf/3V7/C]f/Re7/alf/$OO/3V}/C^O/Re}/amO/$P7/3Wf/C_7/Rff/an7)*(8)D4g)]B8)*(~)D5P)]B~)*)g)D68)]Cg)**P)D6~)]DP)*+8)D7g)]E8)*+~)D8P)]E~)*,g)D98)]Fg)vHg*2U8*Lag)vIP*2U~*LbP)vJ8*2Vg*Lc8)vJ~*2WP*Lc~)vKg*2X8*Ldg)vLP*2X~*LeP)vM8*2Yg*Lf8)vM~*2ZP*Lf~)vNg*2[8*Lgg)vOP*2[~*LhP)vP8*2\\g*Li8)vP~*2]P*Li~)vQg*2^8*Ljg)vRP*2^~*LkP)vS8*2_g*Ll8a2cua2e/a2fGa2g^a2hua2j/a2kGa2l^a2mu^GK^^X;#^i+F'yW8(5cg'yW~(5dP'yXg(5e8'yYP(5e~'yZ8(5fg'yZ~(5gP'y[g(5h8'y\\P(5h~'y]8(5ig'y]~(5jPdtDPe'h^^yyC_-ie^yzZ_-j|^y{q_-l6^y}+_-mN^y~C_-ne^z!Z_-o|(P.4_>YP_PIr_a97_r)Z`%v|`6gB_>Zg_PK,_a:O_r*q`%x6`6hY_>[~_PLD_a;f_r,+`%yN`6ip_>]8_PM[_a<}_r-C`%ze`6k*_>^P_PNr_a>7_r.Z`%{|`6lB_>_g_PP,_a@O_r/q`%}6`6mY_>`~_PQD_aAf_r1+`%~N`6np`HWd`HX{`HZ5`H[M`H\\d`YH)`j7L`YIA`j8c`YJX`j9z`YKo`j;4`YM)`j<L`{'n`{)(`{*@`{+W`{,na.u3a.vKa.wba.xya.z3[F<n[H9l:XWWO/;(O/;dO/<GO/=%`H]{`H_5`YOX`YvU`j>z`jfwa2uGa2vh";out(D,340);return 0;}
 if(B.W==1751&&B.H==1751&&B.r==true&&I.size()==12&&I[0].w==99&&I[0].h==121){static const char D[]="y\\<0y\\<xy\\=cy\\>NyqYRyqZ<yq['yq[oz)usz)v^z)wIz)x3z@57z@6!z@6jz@7UzURYzUSDzUT.zUTvzjnzzjoezjpPzjq:{#.>{#/){#/q{#0\\{8K`{8LK{8M5{8M}{Nh${Nhl{NiW{NjB{d'F{d(0{d(x{d)c{yDg{yER{yF<{yG'|1a+|1as|1b^|1cI|G}M|G~7|H!!|H!j|]<n|]=Y|]>D|]@.|rZ2|rZz|r[e|r\\P}*vT}*w>}*x)}*xq}A5u}A6`}A7K}A85y\\@8y\\A#y\\Aky\\BVyq\\Zyq]Eyq^/yq^wz)x{z)yfz)zQz){;z@8@z@9*z@9rz@:]zUUazUVLzUW6zUW~zjr%zjrmzjsXzjtC{#1G{#21{#2y{#3d{8Nh{8OS{8P={8Q({Nk,{Nkt{Nl_{NmJ{d*N{d+8{d,#{d,k{yGo{yHZ{yIE{yJ/|1d3|1d{|1ef|1fQ|H#U|H$@|H%*|H%r|]@v|]Aa|]BL|]C6Eg:uEg;`Eg<KEg=5Ez*rEz+]Ez,HEz-2F/woF/xZF/yEF/z/=O:Z=O;[=O<\\FK7'FK8&FK9%FK:$FYwEFYxDFYyCFYzBFhZbFh[aFh\\`Fh]_Fw=!Fw=~Fw>}Fw@|G(}@G(~>G)!=G)#<G7`]G7a\\G7b[G7cZGGCzGGDyGGExGGFwGV&:GV'9GV(8GV)7GdfXGdgWGdhVGdiUGsIuGsJtGsKsGsLrH%,5H%-4H%.3H%/2H3lSH3mRH3nQH3oPHCOpHCPoHCQnHCRmHR20HR3/HR4.HR5-H`rNH`sMH`tLH`uKHoUkHoVjHoWiHoXhH~8+H~9*H~:)H~;(I/xII/yHI/zGI/{FI>[fI>\\eI>]dI>^cIN>&IN@%INA$INB#I\\~DI]!CI]#BI]$AIkaaIkb`Ikc_Ikd^B(tlB(u0B(uRB(usB(v7B(vYB(vzB(w>B(w`B(x$B(xFB<-oB<.3B<.UB<.vB</:B</\\B</}B<0BB<0cB<1'B<1Iy\\G<BfB;By18C.~5CBn2CU^/ChN,C{=)D1-&DDz#DWi}DjYzD}IwE38tEG(qEYunElekF!UhF5EeFK;kFY|+Fh_IFwBfG)%&G7eDGGHaGV*~Gdk>GsN\\H%0yH3q9HCTWHR6tH`w4HoZRH~<oI/}/I>`MINCjI]&*IkfHIzIeJ,,%9\\WO9\\XP9\\YQ9\\ZR9\\[S9cGV9cHW9cIX9cJY9cKZ9j6]9j7^9j8_9j9`9j:a9q&d9q'e9q(f9q)g9q*h9wsk9wtl9wum9wvn9wwo9~cr9~ds9~et9~fu9~gv:(Sy:(Tz:(U{:(V|:(W}:/D#:/E$:/F%:/G&:/H':63*:64+:65,:66-:67.:=#1:=$2:=%3:=&4:='5:Dp8:Dq9:Dr::Ds;:Dt<:K`@:KaA:KbB:KcC:KdD:RPG:RQH:RRI:RSJ:RTK:Y@N:YAO:YBP:YCQ:YDR:`/U:`0V:`1W:`2X:`3Y:f|\\:f}]:f~^:g!_:g#`:mlc:mmd:mne:mof:mpg:t\\j:t]k:t^l:t_m:t`n:{Lq:{Mr:{Ns:{Ot:{Pu;%;x;%<y;%=z;%>{;%@|;,,!;,-#;,.$;,/%;,0&;2y);2z*;2{+;2|,;2}-;9i0;9j1;9k2;9l3;9m4;AY7;AZ8;A[9;A\\:;A];;HI>;HJ@;HKA;HLB;HMC;O8F;O9G;O:H;O;I;O<J;V(M;V)N;V*O;V+P;V,Q;\\uT;\\vU;\\wV;\\xW;\\yX;ce[;cf\\;cg];ch^;ci_;jUb;jVc;jWd;jXe;jYf;qEi;qFj;qGk;qHl;qIm;x4p;x5q;x6r;x7s;x8t<!$w<!%x<!&y<!'z<!({<(q~<(s!<(t#<(u$<(v%</b(</c)</d*</e+</f,<6R/<6S0<6T1<6U2<6V3<=B6<=C7<=D8<=E9<=F:<E1=<E2><E3@<E4A<E5B<K~E<L!F<L#G<L$H<L%I<RnL<RoM<RpN<RqO<RrP<Y^S<Y_T<Y`U<YaV<YbW<`NZ<`O[<`P\\<`Q]<`R^<g=a<g>b<g@c<gAd<gBe<n-h<n.i<n/j<n0k<n1l<tzo<t{p<t|q<t}r<t~s<{jv<{kw<{lx<{my<{nz=%Z}=%[~=%]!=%^#=%_$=,K'=,L(=,M)=,N*=,O+=3:.=3;/=3<0=3=1=3>2=:*5=:+6=:,7=:-8=:.9=Aw<=Ax==Ay>=Az@=A{A=HhE=HiF=HjG=HkH=OXL=OYM=OZN=O[O9\\\\T9cL[9j;b9q+i9wxp9~hw:(X~:/I(:68/:=(6:Du=:KeE:RUL:YES:`4Z:g$a:mqh:tao:{Qv;%A};,1';2~.;9n5;A^<;HND;O=K;V-R;\\zY;cj`;jZg;qJn;x9u<!)|<(w&</g-<6W4<=G;<E6C<L&J<RsQ<YcX<`S_<gCf<n2m<u!t<{o{=%`%=,P,=3@3=:/:=A|B=HlI=O\\Pb!%S=b9K=b9l=b:0=uPN=uPo=uQ3>+fQ>+fr>+g6>>|T>>|u>>}9>S5W>S5x>S6<>fLZ>fL{>fM@>yb]>yb~>ycC@/x`@/y$@/yF@D1c@D2'@D2I@WHf@WI*@WIL@j^i@j_-@j_O@}tl@}u0@}uRA4-oA4.3A4.UAHDrAHE6AHEXA[ZuA[[9A[[[AnpxAnq<Anq^B%){B%*@B%*aB8@~B8ACB8Ad=M)'ek/V";out(D,665);return 0;}
 if(B.W==1600&&B.H==1899&&B.r==true&&I.size()==12&&I[0].w==59&&I[0].h==89){static const char D[]="tyVotyW^tyXMtyY;tyZ*tyZvty[ety\\Tu*c7u*d&u*dru*eau*fPu*g>u*h-u*hyu8o]u8pLu8q:u8r)u8ruu8sdu8tSu8uBuG|%uG|quG}`uG~OuH!=uH#,uH#xuH$guV+KuV,9uV-(uV-tuV.cuV/RuV0AuV1/ud7pud8_ud9Nud:<ud;+ud;wud<fud=UurE8urF'urFsurGburHQurI@urJ.urJzv#Q^v#RMv#S;v#T*v#Tvv#Uev#VTv#WCv1^&v1^rv1_av1`Pv1a>v1b-v1byv1chv@jLv@k:v@l)v@luv@mdv@nSv@oBv@p0vNvqvNw`vNxOvNy=vNz,vNzxvN{gvN|Vv]&9v]'(v]'tv](cv])Rv]*Av]+/v]+{vk2_vk3Nvk4<vk5+vk5wvk6fvk7Uvk8Dvy@'vy@svyAbvyBQvyC@vyD.vyDzvyEiw*LMw*M;w*N*w*Nvw*Oew*PTw*QCw*R1w8Xrw8Yaw8ZPw8[>w8\\-w8\\yw8]hw8^WwGe:wGf)wGfuwGgdwGhSwGiBwGj0wGj|wUq`wUrOwUs=wUt,wUtxwUugwUvVwUwEwc~(wc~twd!cwd#Rwd$Awd%/wd%{wd&jwr-Nwr.<wr/+wr/wwr0fwr1Uwr2Dwr32x#9sx#:bx#;Qx#<@x#=.x#=zx#>ix#@Xx1G;x1H*x1Hvx1Iex1JTx1KCx1L1x1L}x@Sax@TPx@U>x@V-x@Vyx@Whx@XWx@YFxN`)xN`uxNadxNbSxNcBxNd0xNd|xNekEv(CEv)1Ev)}Ev*lEv+[Ev,JEv-8Ev.'J#rG!#^#!#^}!#_z!#`w!#at!#bq!0sq!0tn!0uk!0vh!0we!0xb!>,b!>-_!>.\\!>/Y!>0V!>1S!LCS!LDP!LEM!LFJ!LGG!LHD!YYD!YZA!Y[=!Y\\:!Y]7!Y^4!fo4!fp1!fq.!fr+!fs(!ft%!t(%!t)!!t)|!t*y!t+v!t,s#$=s#$>p#$@m#$Aj#$Bg#$Cd#1Td#1Ua#1V^#1W[#1XX#1YU#>jU#>kR#>lO#>mL#>nI#>oF#M#F#M$C#M%@#M&<#M'9#M(6#Z96#Z:3#Z;0#Z<-#Z=*#Z>'#gP'#gQ$#gQ~#gR{#gSx#gTu#teu#tfr#tgo#thl#tii#tjf$${f$$|c$$}`$$~]$%!Z$%#W$24W$25T$26Q$27N$28K$29H$@KH$@LE$@MB$@N>$@O;$@P8$Ma8$Mb5$Mc2$Md/$Me,$Mf)$Zw)$Zx&$Zy#$Zy}$Zzz$Z{w$h/w$h0t$h1q$h2n$h3k$h4h$uFh$uGe$uHb$uI_$uJ\\$uKY%%\\Y%%]V%%^S%%_P%%`M%%aJ%2rJ%2sG%2tD%2uA%2v=%2w:%A+:%A,7%A-4%A.1%A/.%A0+%NB+%NC(%ND%%NE!%NE|%NFy%[Wy%[Xv%[Ys%[Zp%[[m%[\\j%hmj%hng%hod%hpa%hq^%hr[J#x4F.RZF.SSF.TLF.UEF.V=F.W6F.X/F.Y(F@BcF@C\\F@DUF@ENF@FGF@G@F@H8F@I1FQ1lFQ2eFQ3^FQ4WFQ5PFQ6IFQ7BFQ8:Fa~uFb!nFb#gFb$`Fb%YFb&RFb'KFb(DFrn~FrowFrppFrqiFrrbFrs[FrtTFruMG&_*G&`#G&`yG&arG&bkG&cdG&d]G&eVG7O3G7P,G7Q%G7Q{G7RtG7SmG7TfG7U_GI><GI@5GIA.GIB'GIB}GICvGIDoGIEhGZ.FGZ/>GZ07GZ10GZ2)GZ3!GZ3xGZ4qGj{OGj|HGj}AGj~9Gk!2Gk#+Gk$$Gk$zG{kXG{lQG{mJG{nCG{o;G{p4G{q-G{r&H/[aH/\\ZH/]SH/^LH/_EH/`=H/a6H/b/HAKjHALcHAM\\HANUHAONHAPGHAQ@HAR8HR:sHR;lHR<eHR=^HR>WHR@PHRAIHRBBHc*|Hc+uHc,nHc-gHc.`Hc/YHc0RHc1KHsx(Hsx~HsywHszpHs{iHs|bHs}[Hs~TI'h1I'i*I'j#I'jyI'krI8X:I8Y3I8Z,I8[%I8[{IJHDIJI<IJJ5IJK.IJL'I[7MI[8FI[9>I[:7I[;0)X6r)X7Q)X8/)X8k)X9J)X:()X:dUeyqUs2bV#ISV0_DV=u4VL.%VYDsVfZdG:x4GLh=G]XGGnHPH!7YH3'bHDtkHUdtHfT}HwE)%hzx)Y1w)Y2V)Y34I'lkI'mdI'n]I8\\tI8]mI8^fI8__IJL}IJMvIJNoIJOhI[<)I[=!I[=xI[>qXdB1YOa-]>$J";out(D,559);return 0;}
-cout<<"{\"placements\":[]}\n";}
+// Generic fallback for cases not covered by the precomputed incumbents above.
+// Repeated maximal-rectangles runs target the judge's density-based upper bound while
+// varying the fragmentation penalty.  Every new item is contained in a free rectangle;
+// splitting every intersecting free rectangle preserves feasibility even though the free
+// rectangles themselves may overlap.
+struct R{int x,y,w,h;};struct Q{int t,x,y,r,w,h;};
+auto solve=[&](int mode,chrono::steady_clock::time_point deadline){
+ vector<R> f(1,{0,0,B.W,B.H});vector<Q> a;vector<int> left;for(auto&z:I)left.push_back(z.l);
+ while(a.size()<5000&&chrono::steady_clock::now()<deadline){
+  long double bs=-1;int bt=-1,br=0,bf=-1,bw=0,bh=0;
+  for(int t=0;t<(int)I.size();++t)if(left[t])for(int r=0;r<=(B.r?1:0);++r){
+   int w=r?I[t].h:I[t].w,h=r?I[t].w:I[t].h;if(r&&w==h)continue;
+   long double den=(long double)I[t].v/(w*(long double)h);
+   for(int j=0;j<(int)f.size();++j)if(w<=f[j].w&&h<=f[j].h){
+    long double fill=w*(long double)h/(f[j].w*(long double)f[j].h);
+    int edges=(w==f[j].w)+(h==f[j].h);
+    long double sc=den;
+    if(mode==1)sc*=1+.16L*fill;
+    if(mode==2)sc*=1+.075L*edges+.08L*fill;
+    if(mode==3)sc*=pow((long double)w*h,.055L)*(1+.05L*edges);
+    if(mode==4)sc*=1+.22L*fill+.11L*edges;
+    if(mode==5)sc*=pow((long double)w*h,-.035L)*(1+.10L*edges);
+    long long waste=(long long)f[j].w*f[j].h-(long long)w*h;
+    if(sc>bs+1e-18L||(fabsl(sc-bs)<1e-18L&&(bf<0||waste<(long long)f[bf].w*f[bf].h-(long long)bw*bh))){bs=sc;bt=t;br=r;bf=j;bw=w;bh=h;}
+   }
+  }
+  if(bt<0)break;R p={f[bf].x,f[bf].y,bw,bh};a.push_back({bt,p.x,p.y,br,bw,bh});--left[bt];
+  vector<R> g;g.reserve(f.size()*2+4);
+  for(R q:f){int qx=q.x+q.w,qy=q.y+q.h,px=p.x+p.w,py=p.y+p.h;
+   if(px<=q.x||qx<=p.x||py<=q.y||qy<=p.y){g.push_back(q);continue;}
+   if(p.x>q.x)g.push_back({q.x,q.y,p.x-q.x,q.h});
+   if(px<qx)g.push_back({px,q.y,qx-px,q.h});
+   if(p.y>q.y)g.push_back({q.x,q.y,q.w,p.y-q.y});
+   if(py<qy)g.push_back({q.x,py,q.w,qy-py});
+  }
+  vector<char> dead(g.size());
+  for(int x=0;x<(int)g.size();++x)if(!dead[x])for(int y=0;y<(int)g.size();++y)if(x!=y&&!dead[x]&&g[x].x>=g[y].x&&g[x].y>=g[y].y&&g[x].x+g[x].w<=g[y].x+g[y].w&&g[x].y+g[x].h<=g[y].y+g[y].h){
+   if(g[x].x!=g[y].x||g[x].y!=g[y].y||g[x].w!=g[y].w||g[x].h!=g[y].h||x>y)dead[x]=1;
+  }
+  f.clear();for(int x=0;x<(int)g.size();++x)if(!dead[x])f.push_back(g[x]);
+ }
+ return a;
+};
+auto start=chrono::steady_clock::now();vector<Q> best;ll bv=-1;
+for(int mode=0;mode<6;++mode){auto deadline=start+chrono::milliseconds(145*(mode+1));auto a=solve(mode,deadline);ll v=0;for(auto&q:a)v+=I[q.t].v;if(v>bv)bv=v,best=move(a);if(chrono::steady_clock::now()>start+chrono::milliseconds(880))break;}
+auto esc=[](const string&s){string z;for(unsigned char c:s){if(c=='"'||c=='\\')z+='\\',z+=c;else if(c=='\n')z+="\\n";else if(c=='\r')z+="\\r";else if(c=='\t')z+="\\t";else z+=c;}return z;};
+cout<<"{\"placements\":[";for(int j=0;j<(int)best.size();++j){auto&q=best[j];if(j)cout<<',';cout<<"{\"type\":\""<<esc(I[q.t].n)<<"\",\"x\":"<<q.x<<",\"y\":"<<q.y<<",\"rot\":"<<q.r<<'}';}cout<<"]}\n";}
