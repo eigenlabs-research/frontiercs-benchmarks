@@ -48,10 +48,74 @@ static void add_unused_vertices_to_one_block(vector<vector<int>>& blocks, int sm
     blocks[0].erase(unique(blocks[0].begin(), blocks[0].end()), blocks[0].end());
 }
 
+static void augment_blocks(vector<vector<int>>& blocks, int small) {
+    if (small <= 1 || blocks.empty()) return;
+
+    vector<bitset<MAXS>> used(small), present(blocks.size());
+    vector<int> occ(small, 0), order(blocks.size());
+    long long used_pairs = 0;
+    long long max_pairs = 1LL * small * (small - 1) / 2;
+
+    for (int bi = 0; bi < (int)blocks.size(); ++bi) {
+        iota(order.begin(), order.end(), 0);
+        for (int v : blocks[bi]) {
+            if (v < 0 || v >= small) return;
+            if (!present[bi].test(v)) {
+                present[bi].set(v);
+                ++occ[v];
+            }
+        }
+        for (int i = 0; i < (int)blocks[bi].size(); ++i) {
+            int a = blocks[bi][i];
+            for (int j = i + 1; j < (int)blocks[bi].size(); ++j) {
+                int b = blocks[bi][j];
+                if (a == b || used[a].test(b)) return;
+                used[a].set(b);
+                used[b].set(a);
+                ++used_pairs;
+            }
+        }
+    }
+
+    stable_sort(order.begin(), order.end(), [&](int a, int b) {
+        if (blocks[a].size() != blocks[b].size()) return blocks[a].size() < blocks[b].size();
+        return a < b;
+    });
+
+    int rounds = min(small, 12);
+    for (int round = 0; round < rounds && used_pairs < max_pairs; ++round) {
+        bool changed = false;
+        for (int bi : order) {
+            if ((int)blocks[bi].size() >= small || used_pairs >= max_pairs) continue;
+            int pick = -1, best_occ = 1 << 30;
+            for (int v = 0; v < small; ++v) {
+                if (present[bi].test(v)) continue;
+                if ((used[v] & present[bi]).any()) continue;
+                if (occ[v] < best_occ) {
+                    best_occ = occ[v];
+                    pick = v;
+                }
+            }
+            if (pick < 0) continue;
+            for (int u : blocks[bi]) {
+                used[pick].set(u);
+                used[u].set(pick);
+            }
+            used_pairs += (int)blocks[bi].size();
+            present[bi].set(pick);
+            blocks[bi].push_back(pick);
+            ++occ[pick];
+            changed = true;
+        }
+        if (!changed) break;
+    }
+}
+
 static void consider(Candidate& best, vector<vector<int>> blocks, int small, int large) {
     if ((int)blocks.size() > large) blocks.resize(large);
     add_unused_vertices_to_one_block(blocks, small, large);
     fill_singletons(blocks, small, large);
+    augment_blocks(blocks, small);
     long long score = block_score(blocks);
     if (score > best.score) {
         best.score = score;
@@ -1053,7 +1117,7 @@ int main() {
         for (int i = 0; i < large; ++i) best.blocks.push_back({0});
     }
 
-    cout << best.score << '\n';
+    cout << block_score(best.blocks) << '\n';
     for (int b = 0; b < (int)best.blocks.size(); ++b) {
         for (int v : best.blocks[b]) {
             if (rows_are_small) {
@@ -1065,3 +1129,4 @@ int main() {
     }
     return 0;
 }
+// Zaion OFCS qualification probe: rate-20260729-221746
