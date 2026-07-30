@@ -48,10 +48,70 @@ static void add_unused_vertices_to_one_block(vector<vector<int>>& blocks, int sm
     blocks[0].erase(unique(blocks[0].begin(), blocks[0].end()), blocks[0].end());
 }
 
+static void augment_blocks(vector<vector<int>>& blocks, int small) {
+    if (small <= 1 || blocks.empty()) return;
+    vector<bitset<MAXS>> used(small);
+    vector<int> deg(small, 0), order(blocks.size());
+    long long used_pairs = 0;
+    for (const auto& block : blocks) {
+        for (int i = 0; i < (int)block.size(); ++i) {
+            int a = block[i];
+            for (int j = i + 1; j < (int)block.size(); ++j) {
+                int b = block[j];
+                used[a].set(b);
+                used[b].set(a);
+                ++deg[a];
+                ++deg[b];
+                ++used_pairs;
+            }
+        }
+    }
+
+    long long budget = 1LL * small * (small - 1) / 2;
+    iota(order.begin(), order.end(), 0);
+    for (int pass = 0; pass < small && used_pairs < budget; ++pass) {
+        stable_sort(order.begin(), order.end(), [&](int a, int b) {
+            if (blocks[a].size() != blocks[b].size()) return blocks[a].size() < blocks[b].size();
+            return a < b;
+        });
+        bool changed = false;
+        for (int id : order) {
+            vector<int>& block = blocks[id];
+            if ((int)block.size() >= small) continue;
+            bitset<MAXS> forbidden;
+            for (int v : block) {
+                forbidden.set(v);
+                forbidden |= used[v];
+            }
+            int pick = -1, pick_deg = small + 1;
+            for (int v = 0; v < small; ++v) {
+                if (!forbidden.test(v) && deg[v] < pick_deg) {
+                    pick = v;
+                    pick_deg = deg[v];
+                }
+            }
+            if (pick < 0) continue;
+            for (int v : block) {
+                used[pick].set(v);
+                used[v].set(pick);
+                ++deg[pick];
+                ++deg[v];
+                ++used_pairs;
+            }
+            block.push_back(pick);
+            changed = true;
+            if (used_pairs >= budget) break;
+        }
+        if (!changed) break;
+    }
+}
+
 static void consider(Candidate& best, vector<vector<int>> blocks, int small, int large) {
     if ((int)blocks.size() > large) blocks.resize(large);
     add_unused_vertices_to_one_block(blocks, small, large);
     fill_singletons(blocks, small, large);
+    if (!valid_blocks(blocks, small)) return;
+    augment_blocks(blocks, small);
     long long score = block_score(blocks);
     if (score > best.score) {
         best.score = score;
@@ -1053,7 +1113,7 @@ int main() {
         for (int i = 0; i < large; ++i) best.blocks.push_back({0});
     }
 
-    cout << best.score << '\n';
+    cout << block_score(best.blocks) << '\n';
     for (int b = 0; b < (int)best.blocks.size(); ++b) {
         for (int v : best.blocks[b]) {
             if (rows_are_small) {
