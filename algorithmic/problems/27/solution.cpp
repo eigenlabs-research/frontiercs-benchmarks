@@ -52,6 +52,47 @@ static void consider(Candidate& best, vector<vector<int>> blocks, int small, int
     if ((int)blocks.size() > large) blocks.resize(large);
     add_unused_vertices_to_one_block(blocks, small, large);
     fill_singletons(blocks, small, large);
+
+    vector<bitset<MAXS>> seen(small), mask(blocks.size());
+    for (int i = 0; i < (int)blocks.size(); ++i) {
+        auto& b = blocks[i];
+        sort(b.begin(), b.end());
+        b.erase(unique(b.begin(), b.end()), b.end());
+        for (int x = 0; x < (int)b.size(); ++x) {
+            int a = b[x];
+            if (a < 0 || a >= small) continue;
+            mask[i].set(a);
+            for (int y = 0; y < x; ++y) {
+                int c = b[y];
+                if (0 <= c && c < small && a != c) seen[a].set(c), seen[c].set(a);
+            }
+        }
+    }
+
+    vector<int> order(blocks.size());
+    iota(order.begin(), order.end(), 0);
+    sort(order.begin(), order.end(), [&](int a, int b) { return blocks[a].size() < blocks[b].size(); });
+    for (int pass = 0; pass < 6 && pass < small; ++pass) {
+        bool changed = false;
+        for (int id : order) {
+            int add = -1, best_free = -1;
+            for (int v = 0; v < small; ++v) {
+                if (mask[id].test(v) || (seen[v] & mask[id]).any()) continue;
+                int free_now = small - 1 - (int)seen[v].count();
+                if (free_now > best_free) best_free = free_now, add = v;
+            }
+            if (add < 0) continue;
+            for (int u = 0; u < small; ++u) {
+                if (mask[id].test(u)) seen[add].set(u), seen[u].set(add);
+            }
+            mask[id].set(add);
+            blocks[id].push_back(add);
+            changed = true;
+        }
+        if (!changed) break;
+    }
+
+    if (!valid_blocks(blocks, small)) return;
     long long score = block_score(blocks);
     if (score > best.score) {
         best.score = score;
@@ -1048,10 +1089,11 @@ int main() {
         consider(best, shuffled_clique_blocks(small, large), small, large);
     }
 
-    if (!valid_blocks(best.blocks, small)) {
+    if (best.score < 0 || !valid_blocks(best.blocks, small)) {
         best.blocks.clear();
         for (int i = 0; i < large; ++i) best.blocks.push_back({0});
     }
+    best.score = block_score(best.blocks);
 
     cout << best.score << '\n';
     for (int b = 0; b < (int)best.blocks.size(); ++b) {
