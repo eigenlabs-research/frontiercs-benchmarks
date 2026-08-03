@@ -644,7 +644,7 @@ static vector<vector<int>> projective_alternating_subset_blocks(int small, int l
             for (int p : lines[li]) point_to_lines[p].push_back(li);
         }
 
-        int seed_count = 20;
+        int seed_count = 5;
         for (int seed = 0; seed < seed_count; ++seed) {
             vector<char> selected_points(n_points, 0), selected_lines(lines.size(), 0);
             vector<int> point_ids(n_points);
@@ -660,7 +660,7 @@ static vector<vector<int>> projective_alternating_subset_blocks(int small, int l
                 for (int i = 0; i < want_points; ++i) selected_points[point_ids[i]] = 1;
             }
 
-            for (int iter = 0; iter < 12; ++iter) {
+            for (int iter = 0; iter < 5; ++iter) {
                 vector<pair<int,uint64_t>> ranked_lines;
                 ranked_lines.reserve(lines.size());
                 for (int li = 0; li < (int)lines.size(); ++li) {
