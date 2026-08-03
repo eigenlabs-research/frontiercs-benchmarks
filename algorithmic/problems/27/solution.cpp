@@ -52,6 +52,46 @@ static void consider(Candidate& best, vector<vector<int>> blocks, int small, int
     if ((int)blocks.size() > large) blocks.resize(large);
     add_unused_vertices_to_one_block(blocks, small, large);
     fill_singletons(blocks, small, large);
+
+    vector<bitset<MAXS>> seen(small);
+    for (auto& b : blocks) {
+        sort(b.begin(), b.end());
+        b.erase(unique(b.begin(), b.end()), b.end());
+        for (int v : b) if (v < 0 || v >= small) return;
+        for (int i = 0; i < (int)b.size(); ++i) {
+            for (int j = i + 1; j < (int)b.size(); ++j) {
+                int a = b[i], c = b[j];
+                if (seen[a].test(c)) return;
+                seen[a].set(c);
+                seen[c].set(a);
+            }
+        }
+    }
+
+    for (auto& b : blocks) {
+        bitset<MAXS> in;
+        for (int v : b) in.set(v);
+        for (;;) {
+            int pick = -1, best_deg = MAXS + 1;
+            for (int v = 0; v < small; ++v) {
+                if (in.test(v) || (seen[v] & in).any()) continue;
+                int deg = (int)seen[v].count();
+                if (deg < best_deg) {
+                    best_deg = deg;
+                    pick = v;
+                }
+            }
+            if (pick < 0) break;
+            for (int u = 0; u < small; ++u) {
+                if (!in.test(u)) continue;
+                seen[pick].set(u);
+                seen[u].set(pick);
+            }
+            in.set(pick);
+            b.push_back(pick);
+        }
+    }
+
     long long score = block_score(blocks);
     if (score > best.score) {
         best.score = score;
@@ -1048,9 +1088,12 @@ int main() {
         consider(best, shuffled_clique_blocks(small, large), small, large);
     }
 
-    if (!valid_blocks(best.blocks, small)) {
+    if (best.score < 0 || !valid_blocks(best.blocks, small)) {
         best.blocks.clear();
         for (int i = 0; i < large; ++i) best.blocks.push_back({0});
+        best.score = large;
+    } else {
+        best.score = block_score(best.blocks);
     }
 
     cout << best.score << '\n';
