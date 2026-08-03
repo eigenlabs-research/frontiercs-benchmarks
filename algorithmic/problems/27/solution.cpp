@@ -48,10 +48,53 @@ static void add_unused_vertices_to_one_block(vector<vector<int>>& blocks, int sm
     blocks[0].erase(unique(blocks[0].begin(), blocks[0].end()), blocks[0].end());
 }
 
+static bool augment_blocks(vector<vector<int>>& blocks, int small) {
+    vector<bitset<MAXS>> seen(small);
+    for (auto& block : blocks) {
+        vector<int> cleaned;
+        cleaned.reserve(block.size());
+        for (int v : block) {
+            if (v < 0 || v >= small) return false;
+            cleaned.push_back(v);
+        }
+        sort(cleaned.begin(), cleaned.end());
+        cleaned.erase(unique(cleaned.begin(), cleaned.end()), cleaned.end());
+        block = std::move(cleaned);
+
+        for (int i = 0; i < (int)block.size(); ++i) {
+            int a = block[i];
+            for (int j = i + 1; j < (int)block.size(); ++j) {
+                int b = block[j];
+                if (seen[a].test(b)) return false;
+                seen[a].set(b);
+                seen[b].set(a);
+            }
+        }
+    }
+
+    for (auto& block : blocks) {
+        bitset<MAXS> in_block;
+        for (int v : block) in_block.set(v);
+        for (int v = 0; v < small; ++v) {
+            if (in_block.test(v)) continue;
+            if ((seen[v] & in_block).any()) continue;
+            for (int u = 0; u < small; ++u) {
+                if (in_block.test(u)) {
+                    seen[v].set(u);
+                    seen[u].set(v);
+                }
+            }
+            in_block.set(v);
+            block.push_back(v);
+        }
+    }
+    return true;
+}
+
 static void consider(Candidate& best, vector<vector<int>> blocks, int small, int large) {
     if ((int)blocks.size() > large) blocks.resize(large);
-    add_unused_vertices_to_one_block(blocks, small, large);
     fill_singletons(blocks, small, large);
+    if (!augment_blocks(blocks, small)) return;
     long long score = block_score(blocks);
     if (score > best.score) {
         best.score = score;
@@ -1048,12 +1091,13 @@ int main() {
         consider(best, shuffled_clique_blocks(small, large), small, large);
     }
 
-    if (!valid_blocks(best.blocks, small)) {
+    if (best.score < 0 || !valid_blocks(best.blocks, small)) {
         best.blocks.clear();
         for (int i = 0; i < large; ++i) best.blocks.push_back({0});
+        best.score = large;
     }
 
-    cout << best.score << '\n';
+    cout << block_score(best.blocks) << '\n';
     for (int b = 0; b < (int)best.blocks.size(); ++b) {
         for (int v : best.blocks[b]) {
             if (rows_are_small) {
