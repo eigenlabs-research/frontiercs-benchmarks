@@ -875,7 +875,7 @@ static vector<vector<int>> projective_excluded_23_blocks(int small, int large) {
 }
 
 static vector<vector<int>> pbd_316_blocks(int small, int large) {
-    if (small != 316 || large != 316) return {};
+    if (small > 316 || large <= 0) return {};
     static const char data[] =
         "0,17,34,51,68,85,93,102,136,153,170,187,204,238,255,272,289,309;10,33,39,62,68,91,114,120,143,166,172,200,218,224,247,270,276,280,295;2,19,36,70,87,104,121,138,155,172,189,206,223,240,257,274,289,314;"
         "4,23,42,61,80,99,118,120,139,140,177,196,234,253,255,274,291,310;4,21,38,53,55,72,89,106,123,157,174,191,208,225,242,259,276,289;5,22,39,56,73,90,107,124,140,141,175,192,209,226,243,260,277,289;6,23,4"
@@ -990,19 +990,25 @@ static vector<vector<int>> pbd_316_blocks(int small, int large) {
             value = value * 10 + (ch - '0');
         } else {
             if (value >= 0) {
-                blocks.back().push_back(value);
+                if (value < small) blocks.back().push_back(value);
                 value = -1;
             }
             if (ch == ';') blocks.push_back({});
             if (ch == '\0') break;
         }
     }
+    blocks.erase(remove_if(blocks.begin(), blocks.end(), [](const vector<int>& b) {
+        return b.empty();
+    }), blocks.end());
+    sort(blocks.begin(), blocks.end(), [](const vector<int>& a, const vector<int>& b) {
+        if (a.size() != b.size()) return a.size() > b.size();
+        return a < b;
+    });
     return blocks;
 }
 
 static vector<vector<int>> pbd_316_exact_blocks(int small, int large) {
-    if (small == 316 && large == 316) return pbd_316_blocks(small, large);
-    return {};
+    return pbd_316_blocks(small, large);
 }
 
 static bool valid_blocks(const vector<vector<int>>& blocks, int small) {
@@ -1038,6 +1044,7 @@ int main() {
     if (small == 316 && large == 316) {
         consider(best, pbd_316_exact_blocks(small, large), small, large);
     } else {
+        consider(best, pbd_316_exact_blocks(small, large), small, large);
         consider(best, pair_blocks(small, large), small, large);
         consider(best, geometry_blocks(small, large), small, large);
         consider(best, projective_augmented_full_blocks(small, large), small, large);
