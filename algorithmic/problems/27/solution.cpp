@@ -511,6 +511,53 @@ static vector<vector<int>> projective_blocks_for_field(const Field& f, int small
     return blocks;
 }
 
+static vector<vector<int>> affine_blocks_for_field(const Field& f, int small) {
+    int q = f.q;
+    if (small < q * q) return {};
+    vector<vector<int>> blocks;
+    blocks.reserve(q * q + q);
+    auto affine_id = [q](int x, int y) { return x * q + y; };
+
+    for (int a = 0; a < q; ++a) {
+        for (int b = 0; b < q; ++b) {
+            vector<int> line;
+            line.reserve(q);
+            for (int x = 0; x < q; ++x) line.push_back(affine_id(x, f.plus(f.times(a, x), b)));
+            blocks.push_back(std::move(line));
+        }
+    }
+    for (int c = 0; c < q; ++c) {
+        vector<int> line;
+        line.reserve(q);
+        for (int y = 0; y < q; ++y) line.push_back(affine_id(c, y));
+        blocks.push_back(std::move(line));
+    }
+    return blocks;
+}
+
+static vector<vector<int>> affine_geometry_blocks(int small, int large) {
+    vector<vector<int>> best;
+    long long best_score = -1;
+    int limit = 1;
+    while ((limit + 1) * (limit + 1) <= small) ++limit;
+    limit = max(limit + 3, 4);
+
+    for (auto spec : field_specs(limit)) {
+        Field f(spec);
+        auto blocks = affine_blocks_for_field(f, small);
+        if (blocks.empty()) continue;
+        if ((int)blocks.size() > large) blocks.resize(large);
+        vector<vector<int>> trial = blocks;
+        fill_singletons(trial, small, large);
+        long long sc = block_score(trial);
+        if (sc > best_score) {
+            best_score = sc;
+            best = std::move(blocks);
+        }
+    }
+    return best;
+}
+
 static vector<vector<int>> geometry_blocks(int small, int large) {
     vector<vector<int>> best;
     long long best_score = -1;
@@ -1040,6 +1087,7 @@ int main() {
     } else {
         consider(best, pair_blocks(small, large), small, large);
         consider(best, geometry_blocks(small, large), small, large);
+        consider(best, affine_geometry_blocks(small, large), small, large);
         consider(best, projective_augmented_full_blocks(small, large), small, large);
         consider(best, projective_excluded_23_blocks(small, large), small, large);
         consider(best, projective_subset_blocks(small, large), small, large);
