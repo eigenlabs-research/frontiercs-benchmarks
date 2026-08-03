@@ -752,6 +752,8 @@ static vector<vector<int>> extra_vertex_cliques(int extras, int slots) {
     };
 
     try_blocks(pair_blocks(extras, slots));
+    try_blocks(geometry_blocks(extras, slots));
+    try_blocks(projective_subset_blocks(extras, slots));
     try_blocks(greedy_blocks(extras, slots));
     try_blocks(shuffled_clique_blocks(extras, slots));
     return best;
