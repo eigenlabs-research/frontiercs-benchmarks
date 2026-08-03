@@ -53,7 +53,7 @@ static void consider(Candidate& best, vector<vector<int>> blocks, int small, int
     add_unused_vertices_to_one_block(blocks, small, large);
     fill_singletons(blocks, small, large);
     long long score = block_score(blocks);
-    if (score > best.score) {
+    if (score > best.score && valid_blocks(blocks, small)) {
         best.score = score;
         best.blocks = std::move(blocks);
     }
@@ -1037,16 +1037,15 @@ int main() {
     Candidate best;
     if (small == 316 && large == 316) {
         consider(best, pbd_316_exact_blocks(small, large), small, large);
-    } else {
-        consider(best, pair_blocks(small, large), small, large);
-        consider(best, geometry_blocks(small, large), small, large);
-        consider(best, projective_augmented_full_blocks(small, large), small, large);
-        consider(best, projective_excluded_23_blocks(small, large), small, large);
-        consider(best, projective_subset_blocks(small, large), small, large);
-        consider(best, projective_alternating_subset_blocks(small, large), small, large);
-        consider(best, greedy_blocks(small, large), small, large);
-        consider(best, shuffled_clique_blocks(small, large), small, large);
     }
+    consider(best, pair_blocks(small, large), small, large);
+    consider(best, geometry_blocks(small, large), small, large);
+    consider(best, projective_augmented_full_blocks(small, large), small, large);
+    consider(best, projective_excluded_23_blocks(small, large), small, large);
+    consider(best, projective_subset_blocks(small, large), small, large);
+    consider(best, projective_alternating_subset_blocks(small, large), small, large);
+    consider(best, greedy_blocks(small, large), small, large);
+    consider(best, shuffled_clique_blocks(small, large), small, large);
 
     if (!valid_blocks(best.blocks, small)) {
         best.blocks.clear();
