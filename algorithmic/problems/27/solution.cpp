@@ -48,10 +48,71 @@ static void add_unused_vertices_to_one_block(vector<vector<int>>& blocks, int sm
     blocks[0].erase(unique(blocks[0].begin(), blocks[0].end()), blocks[0].end());
 }
 
+static void augment_blocks_greedy(vector<vector<int>>& blocks, int small) {
+    vector<bitset<MAXS>> used(small);
+    for (const auto& block : blocks) {
+        bitset<MAXS> in;
+        for (int v : block) {
+            if (v < 0 || v >= small || in.test(v)) return;
+            in.set(v);
+        }
+        for (int i = 0; i < (int)block.size(); ++i) {
+            int a = block[i];
+            for (int j = i + 1; j < (int)block.size(); ++j) {
+                int b = block[j];
+                if (used[a].test(b)) return;
+                used[a].set(b);
+                used[b].set(a);
+            }
+        }
+    }
+
+    vector<int> order(blocks.size());
+    iota(order.begin(), order.end(), 0);
+    stable_sort(order.begin(), order.end(), [&](int a, int b) {
+        if (blocks[a].size() != blocks[b].size()) return blocks[a].size() < blocks[b].size();
+        return a < b;
+    });
+
+    for (int id : order) {
+        auto& block = blocks[id];
+        bitset<MAXS> in;
+        for (int v : block) in.set(v);
+        while ((int)block.size() < small) {
+            int best_v = -1;
+            int best_deg = 1 << 30;
+            for (int v = 0; v < small; ++v) {
+                if (in.test(v)) continue;
+                bool ok = true;
+                for (int u : block) {
+                    if (used[v].test(u)) {
+                        ok = false;
+                        break;
+                    }
+                }
+                if (!ok) continue;
+                int d = (int)used[v].count();
+                if (d < best_deg) {
+                    best_deg = d;
+                    best_v = v;
+                }
+            }
+            if (best_v < 0) break;
+            for (int u : block) {
+                used[best_v].set(u);
+                used[u].set(best_v);
+            }
+            in.set(best_v);
+            block.push_back(best_v);
+        }
+    }
+}
+
 static void consider(Candidate& best, vector<vector<int>> blocks, int small, int large) {
     if ((int)blocks.size() > large) blocks.resize(large);
     add_unused_vertices_to_one_block(blocks, small, large);
     fill_singletons(blocks, small, large);
+    augment_blocks_greedy(blocks, small);
     long long score = block_score(blocks);
     if (score > best.score) {
         best.score = score;
@@ -1053,7 +1114,7 @@ int main() {
         for (int i = 0; i < large; ++i) best.blocks.push_back({0});
     }
 
-    cout << best.score << '\n';
+    cout << block_score(best.blocks) << '\n';
     for (int b = 0; b < (int)best.blocks.size(); ++b) {
         for (int v : best.blocks[b]) {
             if (rows_are_small) {
