@@ -52,6 +52,7 @@ static void consider(Candidate& best, vector<vector<int>> blocks, int small, int
     if ((int)blocks.size() > large) blocks.resize(large);
     add_unused_vertices_to_one_block(blocks, small, large);
     fill_singletons(blocks, small, large);
+    if (!valid_blocks(blocks, small)) return;
     long long score = block_score(blocks);
     if (score > best.score) {
         best.score = score;
@@ -303,11 +304,16 @@ static vector<vector<int>> shuffled_clique_blocks(int small, int large) {
         }
     }
 
-    int cap = min(small, s0 + 2);
-    auto cand = shuffled_clique_run(small, large, cap, false, 0,
-                                    base_seed ^ 0x94d049bb133111ebULL);
-    long long sc = block_score(cand);
-    if (sc > best_score) best = std::move(cand);
+    for (int cap : caps) {
+        auto cand = shuffled_clique_run(small, large, cap, false, 0,
+                                        base_seed ^ 0x94d049bb133111ebULL
+                                                  ^ (uint64_t)cap * 0x2545f4914f6cdd1dULL);
+        long long sc = block_score(cand);
+        if (sc > best_score) {
+            best_score = sc;
+            best = std::move(cand);
+        }
+    }
 
     return best;
 }
@@ -1051,6 +1057,7 @@ int main() {
     if (!valid_blocks(best.blocks, small)) {
         best.blocks.clear();
         for (int i = 0; i < large; ++i) best.blocks.push_back({0});
+        best.score = block_score(best.blocks);
     }
 
     cout << best.score << '\n';
