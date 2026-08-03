@@ -276,10 +276,13 @@ static vector<vector<int>> shuffled_clique_blocks(int small, int large) {
         caps.push_back(x);
     };
     add_cap(2);
+    add_cap(s0 - 1);
     add_cap(s0);
     add_cap(s0 + 1);
     add_cap(s0 + 2);
+    add_cap(s0 + 3);
     add_cap(s0 + 4);
+    add_cap(s0 + 6);
     add_cap(small);
     sort(caps.begin(), caps.end());
     caps.erase(unique(caps.begin(), caps.end()), caps.end());
@@ -288,9 +291,9 @@ static vector<vector<int>> shuffled_clique_blocks(int small, int large) {
     long long best_score = -1;
     uint64_t base_seed = 0x6a09e667f3bcc909ULL ^ ((uint64_t)small << 32) ^ (uint64_t)large;
     for (int cap : caps) {
-        int runs = (cap == small ? 1 : 4);
+        int runs = (cap == small ? 2 : 10);
         for (int r = 0; r < runs; ++r) {
-            int offset = (r == 0 ? 1 : (r == 1 ? 2 : (r == 2 ? 0 : -1)));
+            int offset = (r % 7) - 3;
             uint64_t seed = base_seed
                             ^ (uint64_t)cap * 0x9e3779b97f4a7c15ULL
                             ^ (uint64_t)(r + 1) * 0xbf58476d1ce4e5b9ULL;
