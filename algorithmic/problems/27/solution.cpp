@@ -1001,8 +1001,17 @@ static vector<vector<int>> pbd_316_blocks(int small, int large) {
 }
 
 static vector<vector<int>> pbd_316_exact_blocks(int small, int large) {
-    if (small == 316 && large == 316) return pbd_316_blocks(small, large);
-    return {};
+    if (small < 307 || small > 316 || large < 307) return {};
+    auto blocks = pbd_316_blocks(316, 316);
+    for (auto& b : blocks) {
+        b.erase(remove_if(b.begin(), b.end(), [small](int v){ return v >= small; }), b.end());
+    }
+    sort(blocks.begin(), blocks.end(), [](const vector<int>& a, const vector<int>& b) {
+        return a.size() != b.size() ? a.size() > b.size() : a < b;
+    });
+    while (!blocks.empty() && blocks.back().size() < 2) blocks.pop_back();
+    if ((int)blocks.size() > large) blocks.resize(large);
+    return blocks;
 }
 
 static bool valid_blocks(const vector<vector<int>>& blocks, int small) {
@@ -1039,6 +1048,7 @@ int main() {
         consider(best, pbd_316_exact_blocks(small, large), small, large);
     } else {
         consider(best, pair_blocks(small, large), small, large);
+        consider(best, pbd_316_exact_blocks(small, large), small, large);
         consider(best, geometry_blocks(small, large), small, large);
         consider(best, projective_augmented_full_blocks(small, large), small, large);
         consider(best, projective_excluded_23_blocks(small, large), small, large);
@@ -1053,7 +1063,7 @@ int main() {
         for (int i = 0; i < large; ++i) best.blocks.push_back({0});
     }
 
-    cout << best.score << '\n';
+    cout << block_score(best.blocks) << '\n';
     for (int b = 0; b < (int)best.blocks.size(); ++b) {
         for (int v : best.blocks[b]) {
             if (rows_are_small) {
