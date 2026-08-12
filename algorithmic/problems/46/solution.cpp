@@ -1,215 +1,214 @@
 #include <cstdio>
-#include <cstdint>
-#include <cstring>
 #include <ctime>
 #include <vector>
 #include <algorithm>
+#include <climits>
 using namespace std;
-typedef long long ll;
-struct E{uint64_t h;const char*s;};
-static const E a[]={
-{1337409398582560185ULL,"I6ADPKSE120LBF9Q5C4OTM7RJN8HG3KAHLNOTS04EDRQP1IGF3J86BM72C95NGJA1L7Q9S3C05IFM4HO8RKBTE62PD15K0S4F9IORTQNECP2MAHJ8DBG73L64152LSHPTF763AEGODMNRBKC9IJ08QHEABG84MQJ102KSLOCRT56P7IDF93N29I8AM5LEGSTHKPCJ46N7F1ROQ03DBQ751CDL0K4JSHP3A2I9ME6TN8GBFORTDE0P32JCQ1F7MOGRN5ILSK84HB69A97MGKJ0H2AI186LPSNOFE3R4CT5DBQI7T4DJS9HQF23LA6GRP08M1NCBOK5EEDOMH1G0583RSPKI7A2JCNL9B4Q6TFT07D2M1KEI89LO64NH3CBR5SAJPGFQMJI5G8KC7A20EDL3H4NPOFB6QTR1S9JMBHS32QCP87KAERLO19045GI6FTND4BC5K01HM87AI3DR2TQP9OJLGFENS6A05QIKFRJL2783PC94HED1TGNSO6MB0B6ISM32JQ9LH1FOKN8GECD4AR7P5T78PEM0FDRC4529JG3LQBHTIAK16NSOLRET0G62S17CBIM94KAOFJHND3Q58P"},
-{1097491252512501470ULL,"cQMF37P2UbDLIB05EJYN4RWdZA16KG8OT9VXCaSHMODU1cZP3IQ5YX2CEHb0a4RWFd7A6KG8T9VLBSJNE8LGPBZ37Q65O2CVSHXbMJ0NY4RWFdcA1KDUT9Ia3G57QODKdZ628PIBULaNYSHECbMJ4RWFcA1T9VX08CEUDdcP1bZM35QOGBINY0SH4RWF7A6K2T9VXLaJZU7QOc2JM0aSX5LEYNH4RWFdPA16K3DG8T9VBbCIaP4ZdOU7KN3L2I8QSB5HJYMRWFcA16DGT9VXEb0C4dDP3Z57XQO02UILBCYSaNHMRWFcA16KG8T9VEbJ52Q1cP68dZDIGEB30bMOYLS4RWF7AKUT9VXCaHJNR4WFd7cZA1P6K3DG8UTO29QVXEbBCI0LaJSHN5YM23OULD0ZB7MQP8X5bICSHY4RWFdcA16KGT9VEaJNP7F26T3LcDUN8OV5B0SEIYM4RWdZA1KGQ9XbCaHJEPKOG7U0D5S2Q6NCLabHBYM4RWFdZcA138T9VXIJ8XVTOcLJD3PUGE2C5IBHMYSN4RWFd7ZA16KQ9b0ab4cD8PGY5O3UL1X2N0IMCSHRWFd7ZA6KQT9VEBaJ"},
-{13064344411517067317ULL,"F9LDPQ5TSKM7AI0E1RJ36G4OBNC82HH2KT680A594SORB7CLMF3DIJPQN1EG06N89DCSQ51LFMAPT43JBH7OG2ERIKIJ5CTMOB2G8RA9PFHKLQ03N1D6S7E48Q1INP3A2G4SMC57DHL9RBEKT0OJ6FPKIFOT57H3A4LMJGNECSQ921R806DB6G3ABCOPL4QMNJ8I5E21709HFTDSKRHD3QOF6C84J7T1LPB5S2KE9N0IRGMAABC9730TD8K6I21RNFH4QOG5PSJLME8I3C6RKQA1SEMB2DGJFPLH9OT4705N7ONA9FRIGC1L3Q64S0BM2DEK85JHTPQ7AJ46R05913OCTBMLFHDIG8S2NPKEMRH0F1DLIKNA2837P4QOGBJ6T9SC5EGE1NJ4PAK9C8T27H5SDL36IQBM0FORB21L3N945KM67P0SJC8EHQFRGOTAIDJDH51920TCL48G6QSRKBNPAFIE37OMD6O89JA5TS4NC1MLIK7P3F2REQGHB0CTGIKO7905ANHBM8LPRJF1SE462D3QLAIOF17BJH9S0CN2E5RQM84DKG6TP3N506Q489GMTAC13SH2ODRE7ILPJKBFRC54P3LHQSIA96G1FNO7JEM20KB8DT3T9ACF0N2LPBR7HM5KQIG6841JSDOE5FA79QL42P3G0TONHCDRKSMEBI18J61BAL53RKCMI2F8H9P6N0O74ESJGQDTARGBJ45TS7Q6PCLDF20NOHM3K18E9I"},
-{4443467892680442013ULL,"XDCPf2IR9OQcFd3LB5KGJS81HghaA64UWYVNb7ZeEi0TMd7XfLQTWE4H8gNhMJ5DiZ9IGYS1RB23AeP0KO6bFcaVCUBNUP8cd3RXDi2KaFTheVAZOWLHgM5091fC6SQbG7IE4JYVBhCRgSPK31fLX8ZYUHi264OcDET5Q7NdJ0FaGWI9MeAba9LEiIRfhQF73JcBO4KYPg1MZADC2NV8bTXe5SUH6Wd0G74NJS62FVa1QAHEBOKPgcXT3bWZUM95RYGfL8ed0hCIDiRPFc2SIV5WAHdKi3CDM4aTEXU0fGJ8e7b6LQgBY9NhO1ZaVPFRQ47XcEihNCUIeTG16Y0S8ObMB95fgAWZdDJL2K3H1R8a2DdfLgUFT75WSAC9I3PbQBK0eJhZ6VOHEciMNX4YG9SQ7EaKB48cPJU1ibeVf0OWFM32DTHNACGIgLRdY5hXZ6QcgdFWJL9XDNMaG4702S6CbYefI1E5i8UhZKHAVTB3RPOSfWg98iMZBhY0V6GEIRNL7AXdCPb3FKacQOT4DJ21UH5e"},
-{5397184421306091276ULL,"KP4N1M0B8GZ596EF3DRIVQ2JXHCOAS7WLYTUWK61P4NAM08BG5Z9JEF3DRVIQ2XHSCOLTY7UMPKN140B8GZ569EF3DIRVQ2JXHOASWCLTY7UPKN1M408GBZ965EFD3RIVQ2JXHASOWCLTY7UPKNM140GB8Z695ED3FRVQI2JXHAWSOCLT7YUPKM1N40GBZ869E5FD3IRVQJ2XHASWOTCL7UYPKN140GMZ896B5EDF3RVQIJ2XHASWOLCYT7UPKMN401GZ869BE5DF3RVIQJXH2ASCOWTL7YUPKN140GMZ869B5EFD3R2IJVQHXASWOCLT7YUPKN410MGZ869BE5FD3VRQIJ2HXASOWCLT7YUPNK41GM08Z69BE5FD3RJIVQXH2ASOWLCT7YUPNK41GM08Z69BEF5D3RJQIVHXSA2OCLW7TYUPNK41GM08Z96BE5F3DIRJQVHXAS2OCLW7TYUPNK41GM0869BZE5F3RDIJQVXHA2OSWCL7YTUPNK41GM06ZB89E5F3DRIJQVXHA2OSCWLT7UYPNK1G40M6B89ZE5F3RDIJQVXH2AOSWCL7YTUPN4KG1M06B89ZE5F3RIJQDVHX2OASWC7LTYUPNK1G4M06B8Z9E5F3IJRQDVHOX2ASWC7LTYUPNK1G40M6B8ZE9F5RJ3IQDHVOXA2SCW7TYULPNKG1M06B89ZE5F3JRVIQDH4OXA2SCWL7TYUPNK14MG06B8ZE95FJ3RIQHVDXOA2CW7TYLSUPNKG146M0B8ZE95FJ3QRDIHVXOSAC2W7TYLU"},
-{16799144620432447045ULL,"Df9aTJdQ2OmMPS3K8Wnb0Vi1jk6X4LIg7eCYEhcNAFlR5ZUBHGMUOED43ZemR87gf9lN1jdT6BXQJWHCYhiac0APF5VSbnkL2GKIhX19dOKRmM4ES328WLG7gflNTU6PQJYIeHCiaDjc0AF5VZbnBk1dlMiELOh7QA2ZWDVf9NTU6B4KSmJIeCY8ajc0PFR5XbgnkH3GJHKMXL1Th8WR2QZ3A0GVf9ilN6B4mOYIeCaDjcPF5dESbUgnk7iVDhR1TmdOP4QEn3Ge07f9lk6BXK2JLIHCYbajcNAF5ZSMUgW8O4E9aRMS820gVflN1dTUmQLIeHCYhiDjcAPF5ZXbJn6BkWG3K7NDfij6XUmOJYhaFR5CHZEMbn8c0APld3VSgBkQL2WGKeI7T1495DiaXMh8W0TARS3G7V9lN1jUB4K2LOIHCYZcfPFdEbmJgnQ6kecV9l1dTkBP4KS2QLWIGg7eYhiaDjNfFR5ZXEMbmUJn6OH80C3A"},
-{15351599476256066243ULL,"2AJ4MI3F6OCU01QV5NERS9DH8KTPL7BG32F1J4AOMI6CQ0RNEUVS859DPTHLK7BGQ2AJ3F4MOI16CVNREU0SD598PTHLK7BG2AJ3FOI1Q4MC6N0ERUV9S5D8PLTHK7BG2AJ3FOI1C4QMN6E0RVU5SD98TPHLK7BG2AJ3FOM41CIQN6R0E5U9SVD8PTHLKB7G2AJ3FOC4Q1MNI6RV0EDUS985PTHLK7GB2AJ3FOC41MQN6R0IEU5SVD98PTLKHB7G2JA3OCF14MQNR6I0UESVD598PTLHK7GB23OAJFC1QNRME6UV450DPI8S9TLHK7GB2J3COAF1QNRE6U40VDIMS598PTLHK7GBJ23OACFRQ1N6EUM0VDI4S59PT8LHKG7B23JOCAFQ1RN6EV4U0DSIM59LPTH8K7GB23JOFACQ1R6NUVEI40DSM958PHTLK7GB23JOCAFQR16ENUDVSI40MH98PT5KL7GB23JOCAFQ6NRE0VDSI14UH58PT9MKLG7B32JOCAFRQ6NUIEV0D4MH18P95LKST7GB32OCAFJQRNIS16EDV04HU8T9PMLK57GB"},
-{2769073518643703594ULL,"P2STBY6bEG4IRA38VN1MH95OXDKaUJ7F0LZWCQR9QZKVS2TUDYHP50XaM4FI6B8WN7OECb13JLGAUJFMAB0XGRQE17bOTY8DNZPKSa523CWLIHV694ARLPTbZC571SJWFIQVX3H6KME8DGY09NBa24OU394FBaM5ZPUHXWJ81SQT0YAEKRD6bIV2NCOG7L4B3WM6a8DCQY9ZJS071HVEFbLUNIK5GTXPORA2BIbDaLQRTE4U635XMKGA98S0NWF1PJHCY2VZ7OQJOP6BKbL3DY8ZSAH5MNEF7a102UCTGXR4VWI9RXL2CA65PHDIYWEQBKMG8TaS1ZF3UN04bO7VJ9MUS65H7A3YXBKQITE1Z9DbRFCJONaVP4GW280LARPL3QDEC14YKMNHXF09S2OWI8a5T6JBV7UZbGW2QA5F14OHSPNCVEKTYDMXBI83LJZba09GRU67TAU0ZFaLbXKDH74Y3EJ1865IP9BMCNQROSG2WVNDAMHWQLaTRUbZX8K3IOSG91EB65PF07J42YCVCRPWM8KQa3A6E5DIbUJ4YN9BGT0LXVFOZS1H72XHU238RBaGDJISbAVK5M07E6YWPCZOFQ9L4TN1C0NHAMSKPRU3W58YBJXLIDF6bZVG4T17OQ92aE2T67ZBJaGCH8SM5YV0DAOXR9UK4EPI3FNLb1WQXHbMaK38DSJZEC7T960YL5BGIPUV4N2Q1ORAWF"},
-{15367604488868639828ULL,"EMDNJL94C2873F16H5OAKIBG0EMNDLJ94C2873F16HOKB0GA5IEMNDL94J2C873F1H6OKB0A5GIEMNDL9428CJ3F716HOBK0A5IGEMNDL9428CJ3F716OHBK0A5IGEMNDL9428CJ3F716OH0KA5BGIEMNDL9428CJ3F167OH0KA5GBIEMNDL9428CJF3167OH0KA5BGIEMNDL924C8JF3617OH0KA5BGIEMNDL924CJ8F3617OH0KA5BGIEMNDL924JC8F361O7H0KA5BGIEMDN9L24JC8F361O7H0KA5BGIEMDN9L24JCF86317OH0KA5BGIEDMN9L2J4CF86317O0HKA5BGIEDM9NL2J4CF86137O0HKA5BGIED9MNL2J4CF86137O0HAK5BGIED9MNL2JC4F86137O0HAK5BGIED9MNL2JCF846137O0HA5BGKIED9MNLJC2F864173O0HA5BGKIED9MNLJC2F861743O0HA5BGKIE9DMNLJCF8261734O0HA5BGIKE9DNMLJCF8261734O0HA5BGIKE9DNMLJCF8261734O0H5ABGIKE9NMDLJCF826173405OHABGIKEN9MDJLCF826173405OAHBGIK"},
-{8959737032643399058ULL,"70P56DVN24MYLIE1OFQ9KSCZRUf8BTdbAX3WHcaGJeAZI6DGP2OLcVNBb083CWYEXHJd4SQ9RUe5faK1TMF7OMcdFVSU7ZP1E9CKXTW8JQ4NY5G03LA2HBDebRIfa6PVQJ945LCNcRKFT38SH2G16YAEWZdIDBbMUX0fOa7eLW0McIJY8e3ZRPa4HUdKE1f9GC7XVO6D5N2SQABTFb4fUNEeB7AO3DcQM5VTa0CGFP6KX1WYZIS8LJHd9bR2GVAYKD6Ne7QJ5fF1HCMX2WBS8TI4cbRZ9UaOL30dPEcR5KN2W71FfbT4I0Ue6PHS3VAZ9DXGJEMLCQOdYaB8d74ZB1MAG95LFNKc6SU328aWYERJbH0DQXOVCePTIfdQb5ePDXHWJaCcF03912NOI6G8ZESBT4MLVAUR7YKfVWUMITY1N294JZeK875HOEFaDR0SXGfcdAB3QbLPC6dNELPYM9JZc40Ve81aHKX2WCSOFR7fQ3TUbBAGD5I6P0FCG1SHUTcJBYZ4OfRb26aIWADQe38E97XV5MNKLd0dPaZNAMG2IBc8U71fYVE64KCWLTRDHJ9QFXOS5be3dJGeMOZE6DBUb5179CFVXK8WISfQT4RA23H0NcYLPaaBFPKA621NbDU9Td0XJeWO7ZC4VQERGcM38LYHS5fI"},
-{15096950851723449319ULL,"fKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXflKdEkTCe1jQM8WacOYBiN65I3RF24LJDUHVhS79A0GgZbPXdkTCe1jQMWacYBiN5l3I2RF4LJDHVhS79A0GfgZbPXKE8O6UfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXaV7fPXKdEkTCe1jQM8WcOYBiN65l3IRF24LJDUHhS9A0GgZbfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPXfKdEkTCe1jQM8WacOYBiN65l3IRF24LJDUHVhS79A0GgZbPX"},
-{17556072703228808712ULL,"Z6F4C7Ba20M5OH3VWDGYUIdTSbAJP8NEQXK9RLc1S1Ad9L7MaIHNXP4CZ8B20QOKcVFWY65Tb3JGDEURHSC7cUMIYGXN6PA4EB1JL05RKOFDZT2ba38QWd9VTMVKOcN6A4ZBa190LRHFD7YCId5S2bJ3P8GEUQWXM0TH1GNKXUcVd6PACEZ8JLQFD7YI5OS2bBa34W9RHdJcVWYMG64CEZ7Ba12b0LQOFDIT5SA3P8NUXK9RV17MHcNdK6A4E8JbLQXFWYCUIZ5TO2SBa3P0GD9R7FcB3SH01KVOd6P4Ca2J9MLRQXWDYUIZ5TbA8GNEPH1EYaMcVKN6AS4Z8B290LQWF7GCUI5TOb3JDXdRH1MSaVT7O9IGcX6A4Cb0LRKFYdZ52B3JP8NDEUQWcVHX1MGdNPFA4ab0LRQ3D7YCI6Z5TOS2BJ8EUWK9B37DMWdVacGKI6S4ET81J290LQHOFYCZ5bAPNUXRTEcWGHVNIPA4CB10LRQO3XFD7YU6dZ5S2baJ8MK9GJECKI1WUHdcX647BaM0LNFDYZ5TO2SbA3P8Q9RV6C7aS0JM1GcIYHdAB9RQKOFDZ5T2b34P8NEUWXVLABSd07TGYOMVKWcNP4CEZ1J295RHFUI6ba38DQXLbPASET81J9LRQKcNXF7C6Z5O2Ba340GMDUWHdYVIFH0c1ONXGK6dA4CZ7Ba2MLQDYI5TSb3JP8EUW9RV78TBWYL1HVMNXRd6P4aJ90QOKcFDGCUIZ52SbA3E4E9QFM7Nc0H1GKId6XPC8JLOVWYUZ5TS2bBAa3DR"},
-{16105635282489783152ULL,"9FBD8465LAHMROV2SXJWKPN3UGE0IQCT17FBD8964JLNEH3I7RMPSC1GOQ2WXV5UTAK09BF48D6RCLVE7O35NUTJ1APGQH2SXWK0MI9BF48ND63HRWCLVE7O5UTJ1APGQ2SXK0MI9BF48D6RCLVEO735NUTJ1APGQH2SXWKM0I9FB48D6RCLEV7O3NU5TJ1APGHQSX2WKM0I9B4F8D6RCLVE7O35NUTJ1APGQH2SXWK0MI94FB8D6CRLVE7O53UNTJ1APGQH2XSKW0MI9BF48D6RLCEV73ON5UTJ1APGQ2HWXSK0MI94FBD86RCLEV73O5NUTJ1AGPQX2HWS0MKI9F4B8D6RLCEV7O35NUTJ1APGQ2XHWSK0MI9F4B8D6LRCEV7O35NUTJ1APGQ2HXWSK0MI9F4B8D6LRECV7O35NUTJ1APGQ2HXWSK0MI9F4B86DLCREV7O35NUTJ1APG2QXHWSK0MI9F4B8D6RLCEV7O35NUTJ1APG2QXHWSK0MI49FB8D6LRCE7VO35NUTJ1AG2QPXHWSKM0I94FB86DLRCEV7O35NUTJ1APG2QXHWSK0MI94FB8D6LRCE7O3V5NUTJA1G2QPXHWSK0MI94FB8D6LRCEV7O35NUTJ1APG2QXHWSKM0I9F486LDBRCEU53NO7VJ1ATG2PQWXHS0IKM4D9BF8C6ELRO5UN73T1AJV2GPQXHWSMK0I"},
-{9210720080051577033ULL,"R6KFJ31OSB5T47AGH0CDM2E8P9LQNIEIT53QMB4P7SA9F8JNG0DO2LK16RHCRDFB7JOM864GTQ91NA3SEC0H5PIL2KHSKRINTAOLD49B1EP5F87G302QCM6J2JQ57PCIO14860NHE9DMAB3FLKRSTG1OBRH62I9JQ40K7TG8PSCNAEDFML359N0I35A16SRJPB427TKOFEMCQGDH8L70FA9DINKS65R2BM13GQELJPO84HCTCDIJOE0R165M28LHQ4GPBTN79A3FSKH07B5MJEDL16IG328PQRS9ONFC4ATK5H9JBC8OLRGF4073A2ETMND6ISQK1PB324JEOH8LIRD075A1CSGMNTK9F6PQDGH36JCSFQPE01OR7NM54KTBI892LA24MAT3HBIL1DCR0K9FJ5OS76EQNPG8IQH9P8M5RN2S0K4G6ECLOADJB7TF13B62709NRG8E1FJHOMPLACI4K5DS3TQJP643M5IC1R98FOQE7B0LH2DANGKSTRF9N5OEI13CHGAKBJ8672Q4TSMDPL0T6K3Q21P8FNJ7DHR5M09EAISO4GCBLB7F1SI28RQ64KMOHGT3CLEP95ND0JAQP9KTDFCGJ7ME6N4250LHS3AI8BOR1RS5D4Q0JHOB16MPIKTL3CFN78EAG924TF61JA8LBR2DMO79PSNEC5HIQ3K0GJFM7R9CTS1D63PKN0OA4GEQLBI825H"},
-{4661888390002088212ULL,"N7FEH15UKRBP4fXMWhiD8VdSCAYc6JaOQL0b392GeIgZTN7KEFB5RHU4P1XMfhWiDA8Vc9dCSOJ0a6QLGYbe32IZgTNEF75KB1RPHUfX4MhWi8DAdSVcCJOa6QL0Y9b2Ge3IZgT7NE5KBFH1PRU4XMfWhi8VADdScCJOa69Q0Yb3LG2IgZeT7ENF5KRBH4UP1fMWXihD8dVSAcJCaOLQ690Yb2GeIg3ZT7NE5KFBPR4U1XfMWiHhDdVSc8JC6OAaQ9bLGY20eIZgT3N7E5RKFB4PU1fWMhiHX8DdVScOACJ6aQ90YbL2GIeZg3TN7E5KFBR4PU1fMWXHhiDdVc8SJOCAa6Q90bY2LGIe3ZTgN7E5KFR4B1PfMUiHWhXDdVSc8JACOa69QLY20bIGge3TZN7E5KFR4UB1fPWMHhiXDdVc8SCJAaOQ69LbY02IGgeT3ZNE7K5FRB41PfMUWHihXdDVSc8CJAOa69YQLb02GIeTg3ZN7KE5RF4B1fPMWUhHiXDdVScC8OAa69JQLbY02IGeTg3ZK7FR5N4BfUP1EhiMdDXWVcSC8HOAa69JYL0bGQIe2g3ZT7KR5NFB41fWUhEiMPDdVXSHcC8OaA69JbYL0GQITe32gZ"},
-};
-static const char* AL="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/";
-static int dec(char c){const char*q=strchr(AL,c);return q?(int)(q-AL):0;}
+using ll = long long;
 
-static int J,M,N;
-static vector<int> mch,psn,opat,slt,msc,tpo,idg;
-static vector<ll> pt,hd,tl;
+static int J, M, N;
+static vector<int> machineOf, positionOnJob, orderOnMachine, slotOf, machineNext;
+static vector<int> indegree, topo;
+static vector<ll> duration, headTime, tailTime;
 
-static void relink(int m,int lo,int hi){
-    if(lo<0)lo=0; if(hi>J-1)hi=J-1;
-    for(int i=lo;i<=hi;++i){int u=opat[(size_t)m*J+i];msc[u]=(i+1<J)?opat[(size_t)m*J+i+1]:-1;}
-}
-static void fulllink(){for(int m=0;m<M;++m)relink(m,0,J-1);}
-static inline void swp(int m,int i){
-    size_t A=(size_t)m*J+i,B=A+1;int u=opat[A],v=opat[B];
-    opat[A]=v;opat[B]=u;slt[v]=(int)A;slt[u]=(int)B;relink(m,i-1,i+2);
-}
-static ll comp(bool tails){
-    idg.assign(N,0);
-    for(int u=0;u<N;++u){if(u%M+1<M)idg[u+1]++;if(msc[u]>=0)idg[msc[u]]++;}
-    tpo.clear();
-    for(int u=0;u<N;++u)if(!idg[u])tpo.push_back(u);
-    fill(hd.begin(),hd.end(),0LL);
-    for(size_t x=0;x<tpo.size();++x){
-        int u=tpo[x];ll f=hd[u]+pt[u];
-        if(u%M+1<M){int v=u+1;if(hd[v]<f)hd[v]=f;if(!--idg[v])tpo.push_back(v);}
-        int w=msc[u];
-        if(w>=0){if(hd[w]<f)hd[w]=f;if(!--idg[w])tpo.push_back(w);}
-    }
-    if((int)tpo.size()!=N)return -1;
-    ll C=0;for(int u=0;u<N;++u)C=max(C,hd[u]+pt[u]);
-    if(tails){
-        fill(tl.begin(),tl.end(),0LL);
-        for(int x=N-1;x>=0;--x){
-            int u=tpo[x];ll t=0;
-            if(u%M+1<M)t=max(t,tl[u+1]+pt[u+1]);
-            if(msc[u]>=0)t=max(t,tl[msc[u]]+pt[msc[u]]);
-            tl[u]=t;
-        }
-    }
-    return C;
-}
-static void moves(ll C,vector<int>&mv){
-    mv.clear();
-    int cur=-1;
-    for(int u=0;u<N;++u)if(hd[u]==0&&hd[u]+pt[u]+tl[u]==C){cur=u;break;}
-    if(cur<0)for(int u=0;u<N;++u)if(hd[u]+pt[u]+tl[u]==C){cur=u;break;}
-    static vector<int> path;path.clear();
-    while(cur>=0){
-        path.push_back(cur);int nx=-1;
-        if(cur%M+1<M&&hd[cur]+pt[cur]==hd[cur+1]&&hd[cur+1]+pt[cur+1]+tl[cur+1]==C)nx=cur+1;
-        else if(msc[cur]>=0&&hd[cur]+pt[cur]==hd[msc[cur]]&&hd[msc[cur]]+pt[msc[cur]]+tl[msc[cur]]==C)nx=msc[cur];
-        cur=nx;
-    }
-    size_t i=0;
-    while(i<path.size()){
-        size_t e=i;
-        while(e+1<path.size()&&msc[path[e]]==path[e+1])++e;
-        if(e>i){mv.push_back(slt[path[i]]);if(e-i>=2)mv.push_back(slt[path[e-1]]);}
-        i=e+1;
+static void relink(int m, int lo, int hi) {
+    lo = max(lo, 0); hi = min(hi, J - 1);
+    for (int i = lo; i <= hi; ++i) {
+        int u = orderOnMachine[m * J + i];
+        machineNext[u] = i + 1 < J ? orderOnMachine[m * J + i + 1] : -1;
     }
 }
-static unsigned rs=2463534242u;
-static inline unsigned rnd(){rs^=rs<<13;rs^=rs>>17;rs^=rs<<5;return rs;}
+static void relinkAll() { for (int m = 0; m < M; ++m) relink(m, 0, J - 1); }
+static inline void swapAdjacent(int m, int i) {
+    int a = m * J + i, b = a + 1, u = orderOnMachine[a], v = orderOnMachine[b];
+    swap(orderOnMachine[a], orderOnMachine[b]);
+    slotOf[u] = b; slotOf[v] = a;
+    relink(m, i - 1, i + 2);
+}
 
-int main(){
-    if(scanf("%d %d",&J,&M)!=2)return 0;
-    if(J<=0||M<=0)return 0;
-    N=J*M;
-    mch.assign(N,0);pt.assign(N,0);psn.assign((size_t)J*M,0);
-    uint64_t h=1469598103934665603ULL;
-    bool ok=true;
-    h=(h^(uint64_t)J)*1099511628211ULL;h=(h^(uint64_t)M)*1099511628211ULL;
-    for(int j=0;j<J&&ok;++j)for(int k=0;k<M;++k){
-        int m;ll p;
-        if(scanf("%d %lld",&m,&p)!=2){ok=false;break;}
-        h=(h^(uint64_t)m)*1099511628211ULL;h=(h^(uint64_t)p)*1099511628211ULL;
-        if(m<0||m>=M||p<=0){ok=false;break;}
-        mch[(size_t)j*M+k]=m;pt[(size_t)j*M+k]=p;psn[(size_t)j*M+m]=k;
+// Longest path in the oriented disjunctive graph. A negative result means cycle.
+static ll evaluate(bool computeTails) {
+    fill(indegree.begin(), indegree.end(), 0);
+    for (int u = 0; u < N; ++u) {
+        if (u % M + 1 < M) ++indegree[u + 1];
+        if (machineNext[u] >= 0) ++indegree[machineNext[u]];
     }
-    if(ok){
-        for(size_t e=0;e<sizeof(a)/sizeof(a[0]);++e)if(a[e].h==h){
-            const char*s=a[e].s;
-            for(int m=0;m<M;++m)for(int j=0;j<J;++j)printf(j+1<J?"%d ":"%d\n",dec(*s++));
-            return 0;
+    topo.clear();
+    for (int u = 0; u < N; ++u) if (!indegree[u]) topo.push_back(u);
+    fill(headTime.begin(), headTime.end(), 0);
+    for (size_t qi = 0; qi < topo.size(); ++qi) {
+        int u = topo[qi]; ll finish = headTime[u] + duration[u];
+        if (u % M + 1 < M) {
+            int v = u + 1; headTime[v] = max(headTime[v], finish);
+            if (!--indegree[v]) topo.push_back(v);
+        }
+        int v = machineNext[u];
+        if (v >= 0) {
+            headTime[v] = max(headTime[v], finish);
+            if (!--indegree[v]) topo.push_back(v);
         }
     }
-    if(!ok){
-        /* Unparseable input: identity order on every machine. Machine arcs then only
-           ever run from a lower job index to a higher one, so the disjunctive graph
-           is acyclic by construction and the checker always accepts it. */
-        for(int m=0;m<M;++m)for(int j=0;j<J;++j)printf(j+1<J?"%d ":"%d\n",j);
-        return 0;
-    }
-    /* ---- fallback solver: Giffler-Thompson seed + N5 critical-block tabu ---- */
-    hd.assign(N,0);tl.assign(N,0);msc.assign(N,-1);opat.assign(N,0);slt.assign(N,0);
-    {
-        vector<int> nx(J,0);vector<ll> jr(J,0),mr(M,0),wr(J,0);
-        vector<vector<int> > seq(M);
-        for(int j=0;j<J;++j)for(int k=0;k<M;++k)wr[j]+=pt[(size_t)j*M+k];
-        for(int done=0;done<N;++done){
-            ll bf=-1;int bm=-1;
-            for(int j=0;j<J;++j){
-                if(nx[j]>=M)continue;
-                size_t u=(size_t)j*M+nx[j];int m=mch[u];
-                ll f=max(jr[j],mr[m])+pt[u];
-                if(bf<0||f<bf){bf=f;bm=m;}
+    if ((int)topo.size() != N) return -1;
+    ll makespan = 0;
+    for (int u = 0; u < N; ++u) makespan = max(makespan, headTime[u] + duration[u]);
+    if (computeTails) {
+        fill(tailTime.begin(), tailTime.end(), 0);
+        for (int qi = N - 1; qi >= 0; --qi) {
+            int u = topo[qi]; ll t = 0;
+            if (u % M + 1 < M) t = max(t, tailTime[u + 1] + duration[u + 1]);
+            if (machineNext[u] >= 0) {
+                int v = machineNext[u]; t = max(t, tailTime[v] + duration[v]);
             }
-            int pick=-1;ll bk=-1;
-            for(int j=0;j<J;++j){
-                if(nx[j]>=M)continue;
-                size_t u=(size_t)j*M+nx[j];
-                if(mch[u]!=bm)continue;
-                if(max(jr[j],mr[bm])>=bf)continue;
-                if(wr[j]>bk){bk=wr[j];pick=j;}
-            }
-            if(pick<0){for(int j=0;j<J;++j)if(nx[j]<M&&mch[(size_t)j*M+nx[j]]==bm){pick=j;break;}}
-            size_t u=(size_t)pick*M+nx[pick];
-            ll st=max(jr[pick],mr[bm]);
-            jr[pick]=mr[bm]=st+pt[u];wr[pick]-=pt[u];
-            seq[bm].push_back(pick);nx[pick]++;
-        }
-        for(int m=0;m<M;++m)for(int i=0;i<J;++i){
-            int j=seq[m][i];int u=(int)((size_t)j*M+psn[(size_t)j*M+m]);
-            opat[(size_t)m*J+i]=u;slt[u]=(int)((size_t)m*J+i);
+            tailTime[u] = t;
         }
     }
-    fulllink();
-    ll C=comp(true);
-    vector<int> best=opat;
-    if(C<0){
-        for(int m=0;m<M;++m)for(int j=0;j<J;++j)printf(j+1<J?"%d ":"%d\n",j);
-        return 0;
+    return makespan;
+}
+
+// N5: reverse the first or last arc of each machine block on one critical path.
+static void criticalMoves(ll makespan, vector<int>& moves) {
+    moves.clear();
+    int cur = -1;
+    for (int u = 0; u < N; ++u)
+        if (!headTime[u] && headTime[u] + duration[u] + tailTime[u] == makespan) { cur = u; break; }
+    if (cur < 0) return;
+    vector<int> path;
+    while (cur >= 0) {
+        path.push_back(cur); int next = -1;
+        if (cur % M + 1 < M && headTime[cur] + duration[cur] == headTime[cur + 1]
+            && headTime[cur + 1] + duration[cur + 1] + tailTime[cur + 1] == makespan) next = cur + 1;
+        else if (machineNext[cur] >= 0) {
+            int v = machineNext[cur];
+            if (headTime[cur] + duration[cur] == headTime[v]
+                && headTime[v] + duration[v] + tailTime[v] == makespan) next = v;
+        }
+        cur = next;
     }
-    ll bestC=C;
-    if(J>=2){
-        size_t sq=(size_t)N*N;
-        vector<int> tabu;
-        bool useT = sq<=(size_t)40000000;
-        if(useT)tabu.assign(sq,0);
-        vector<int> mv;
-        int it=0,since=0,ten=10;
-        clock_t t0=clock();
-        const clock_t LIM=(clock_t)(0.70*CLOCKS_PER_SEC);
-        while(true){
-            if((it&31)==0&&clock()-t0>LIM)break;
-            ++it;
-            moves(C,mv);
-            if(mv.empty())break;
-            ll bv=-1;int bmv=-1;
-            for(size_t z=0;z<mv.size();++z){
-                int mvi=mv[z],m=mvi/J,i=mvi%J;
-                if(i+1>=J)continue;
-                int u=opat[mvi],v=opat[mvi+1];
-                swp(m,i);
-                ll c2=comp(false);
-                swp(m,i);
-                if(c2<0)continue;
-                bool ist=useT&&tabu[(size_t)u*N+v]>it;
-                if(ist&&c2>=bestC)continue;
-                if(bv<0||c2<bv){bv=c2;bmv=mvi;}
+    for (size_t i = 0; i < path.size();) {
+        size_t e = i;
+        while (e + 1 < path.size() && machineNext[path[e]] == path[e + 1]) ++e;
+        if (e > i) {
+            moves.push_back(slotOf[path[i]]);
+            if (e - i >= 2) moves.push_back(slotOf[path[e - 1]]);
+        }
+        i = e + 1;
+    }
+}
+
+static unsigned rngState = 0x9e3779b9u;
+static inline unsigned random32() {
+    rngState ^= rngState << 13; rngState ^= rngState >> 17; rngState ^= rngState << 5;
+    return rngState;
+}
+
+// Giffler-Thompson active-schedule generator. Different modes only change the
+// priority inside the conflict set, hence every returned schedule is feasible.
+static vector<int> dispatch(int mode) {
+    vector<int> nextOp(J), result(N), count(M);
+    vector<ll> jobReady(J), machineReady(M), remaining(J);
+    for (int j = 0; j < J; ++j) for (int k = 0; k < M; ++k) remaining[j] += duration[j * M + k];
+    for (int done = 0; done < N; ++done) {
+        ll earliestFinish = LLONG_MAX; int conflictMachine = -1;
+        for (int j = 0; j < J; ++j) if (nextOp[j] < M) {
+            int u = j * M + nextOp[j], m = machineOf[u];
+            ll f = max(jobReady[j], machineReady[m]) + duration[u];
+            if (f < earliestFinish) earliestFinish = f, conflictMachine = m;
+        }
+        int chosen = -1; ll bestPriority = LLONG_MIN;
+        for (int j = 0; j < J; ++j) if (nextOp[j] < M) {
+            int u = j * M + nextOp[j];
+            if (machineOf[u] != conflictMachine || max(jobReady[j], machineReady[conflictMachine]) >= earliestFinish) continue;
+            ll priority;
+            if (mode == 0) priority = remaining[j];
+            else if (mode == 1) priority = duration[u];
+            else if (mode == 2) priority = -duration[u];
+            else priority = (ll)random32();
+            if (chosen < 0 || priority > bestPriority) chosen = j, bestPriority = priority;
+        }
+        int u = chosen * M + nextOp[chosen], m = machineOf[u];
+        ll finish = max(jobReady[chosen], machineReady[m]) + duration[u];
+        result[m * J + count[m]++] = u;
+        jobReady[chosen] = machineReady[m] = finish;
+        remaining[chosen] -= duration[u]; ++nextOp[chosen];
+    }
+    return result;
+}
+
+static void install(const vector<int>& candidate) {
+    orderOnMachine = candidate;
+    for (int i = 0; i < N; ++i) slotOf[orderOnMachine[i]] = i;
+    relinkAll();
+}
+
+int main() {
+    if (scanf("%d %d", &J, &M) != 2 || J <= 0 || M <= 0) return 0;
+    N = J * M;
+    machineOf.resize(N); duration.resize(N); positionOnJob.resize(N);
+    for (int j = 0; j < J; ++j) for (int k = 0; k < M; ++k) {
+        int m; ll p; if (scanf("%d %lld", &m, &p) != 2) return 0;
+        machineOf[j * M + k] = m; duration[j * M + k] = p; positionOnJob[j * M + m] = k;
+    }
+    orderOnMachine.resize(N); slotOf.resize(N); machineNext.assign(N, -1);
+    indegree.resize(N); headTime.resize(N); tailTime.resize(N); topo.reserve(N);
+
+    // Four deterministic general seeds plus two randomized conflict priorities.
+    vector<int> best;
+    ll bestMakespan = LLONG_MAX;
+    for (int mode = 0; mode < 6; ++mode) {
+        vector<int> candidate = dispatch(mode < 3 ? mode : 3);
+        install(candidate); ll c = evaluate(false);
+        if (c >= 0 && c < bestMakespan) bestMakespan = c, best = candidate;
+    }
+    install(best);
+    ll current = evaluate(true);
+
+    if (J >= 2) {
+        vector<int> tabu((size_t)N * N), moves;
+        int iteration = 0, stagnant = 0, tenure = 8 + J / 4;
+        clock_t start = clock();
+        const clock_t limit = (clock_t)(0.78 * CLOCKS_PER_SEC);
+        while (clock() - start < limit) {
+            ++iteration; criticalMoves(current, moves);
+            if (moves.empty()) break;
+            ll chosenValue = LLONG_MAX; int chosenMove = -1;
+            for (int encoded : moves) {
+                int m = encoded / J, i = encoded % J;
+                if (i + 1 >= J) continue;
+                int u = orderOnMachine[encoded], v = orderOnMachine[encoded + 1];
+                swapAdjacent(m, i); ll value = evaluate(false); swapAdjacent(m, i);
+                if (value < 0) continue;
+                bool forbidden = tabu[(size_t)u * N + v] > iteration;
+                if (forbidden && value >= bestMakespan) continue;
+                if (value < chosenValue) chosenValue = value, chosenMove = encoded;
             }
-            if(bmv<0){
-                int m=rnd()%M,i=rnd()%(J-1);
-                swp(m,i);
-                ll c2=comp(true);
-                if(c2<0){swp(m,i);C=comp(true);}else C=c2;
-                continue;
-            }
-            {
-                int m=bmv/J,i=bmv%J,u=opat[bmv],v=opat[bmv+1];
-                swp(m,i);
-                if(useT)tabu[(size_t)v*N+u]=it+ten;
-            }
-            C=comp(true);
-            if(C<0){opat=best;for(int x=0;x<N;++x)slt[opat[x]]=x;fulllink();C=comp(true);continue;}
-            if(C<bestC){bestC=C;best=opat;since=0;}
-            else if(++since>2000){
-                opat=best;for(int x=0;x<N;++x)slt[opat[x]]=x;fulllink();
-                for(int q=0;q<5;++q){int m=rnd()%M,i=rnd()%(J-1);swp(m,i);}
-                ll c2=comp(true);
-                if(c2<0){opat=best;for(int x=0;x<N;++x)slt[opat[x]]=x;fulllink();c2=comp(true);}
-                C=c2;since=0;ten=8+(int)(rnd()%12);
+            if (chosenMove < 0) break;
+            int m = chosenMove / J, i = chosenMove % J;
+            int u = orderOnMachine[chosenMove], v = orderOnMachine[chosenMove + 1];
+            swapAdjacent(m, i);
+            tabu[(size_t)v * N + u] = iteration + tenure + (int)(random32() % 5);
+            current = evaluate(true);
+            if (current < bestMakespan) bestMakespan = current, best = orderOnMachine, stagnant = 0;
+            else ++stagnant;
+
+            // Restart from the incumbent and make a small feasible random walk.
+            if (stagnant > 700) {
+                install(best); current = evaluate(true);
+                for (int tries = 0, accepted = 0; tries < 30 && accepted < 4; ++tries) {
+                    int km = random32() % M, ki = random32() % (J - 1);
+                    swapAdjacent(km, ki); ll value = evaluate(true);
+                    if (value < 0) swapAdjacent(km, ki), current = evaluate(true);
+                    else current = value, ++accepted;
+                }
+                stagnant = 0; tenure = 7 + (int)(random32() % 12);
+                fill(tabu.begin(), tabu.end(), 0);
             }
         }
     }
-    opat=best;
-    for(int m=0;m<M;++m)for(int i=0;i<J;++i)printf(i+1<J?"%d ":"%d\n",opat[(size_t)m*J+i]/M);
+
+    install(best);
+    for (int m = 0; m < M; ++m) for (int i = 0; i < J; ++i) {
+        int u = orderOnMachine[m * J + i];
+        printf(i + 1 < J ? "%d " : "%d\n", u / M);
+    }
     return 0;
 }
