@@ -137,7 +137,7 @@ int main(){
                 size_t u=(size_t)j*M+nx[j];
                 if(mch[u]!=bm)continue;
                 if(max(jr[j],mr[bm])>=bf)continue;
-                if(wr[j]>bk){bk=wr[j];pick=j;}
+                if(pt[u]>bk){bk=pt[u];pick=j;} else if(pt[u]==bk&&wr[j]>wr[pick]){bk=wr[j];pick=j;}
             }
             if(pick<0){for(int j=0;j<J;++j)if(nx[j]<M&&mch[(size_t)j*M+nx[j]]==bm){pick=j;break;}}
             size_t u=(size_t)pick*M+nx[pick];
@@ -166,7 +166,7 @@ int main(){
         vector<int> mv;
         int it=0,since=0,ten=10;
         clock_t t0=clock();
-        const clock_t LIM=(clock_t)(0.70*CLOCKS_PER_SEC);
+        const clock_t LIM=(clock_t)(0.99*CLOCKS_PER_SEC);
         while(true){
             if((it&31)==0&&clock()-t0>LIM)break;
             ++it;
@@ -200,9 +200,10 @@ int main(){
             C=comp(true);
             if(C<0){opat=best;for(int x=0;x<N;++x)slt[opat[x]]=x;fulllink();C=comp(true);continue;}
             if(C<bestC){bestC=C;best=opat;since=0;}
-            else if(++since>2000){
+            else if(++since>5000){
                 opat=best;for(int x=0;x<N;++x)slt[opat[x]]=x;fulllink();
-                for(int q=0;q<5;++q){int m=rnd()%M,i=rnd()%(J-1);swp(m,i);}
+                int m,i;
+                for(int q=0;q<10;++q){m=rnd()%M;i=rnd()%(J-1);swp(m,i);}
                 ll c2=comp(true);
                 if(c2<0){opat=best;for(int x=0;x<N;++x)slt[opat[x]]=x;fulllink();c2=comp(true);}
                 C=c2;since=0;ten=8+(int)(rnd()%12);
